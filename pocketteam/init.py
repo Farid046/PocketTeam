@@ -85,14 +85,26 @@ async def run_init(project_name: str | None, accept_defaults: bool) -> None:
     # Create .env.example
     _create_env_example(project_root)
 
+    # Dynamic next steps based on what was configured
+    next_steps = []
+    next_steps.append("Open Claude Code in this project — it will act as your COO:")
+    next_steps.append("  [bold]claude[/]")
+    next_steps.append("  > Build user auth with OAuth2")
+    next_steps.append("")
+
+    if cfg.telegram.bot_token and not cfg.telegram.bot_token.startswith("$"):
+        next_steps.append("Or send a task via Telegram to your bot!")
+    else:
+        next_steps.append("Want mobile access? Set up Telegram later:")
+        next_steps.append("  [bold]pocketteam init[/]  (re-run, it will ask about Telegram)")
+
+    next_steps.append("")
+    next_steps.append("[dim]Commands: pocketteam status | pocketteam run \"task\" | pocketteam kill[/]")
+
     console.print(Panel(
         "✅ [bold green]PocketTeam initialized![/]\n\n"
-        "Next steps:\n"
-        "  1. Set environment variables (see [bold].env.example[/])\n"
-        "  2. Open project in VS Code: [bold]code .[/]\n"
-        "  3. Claude Code will now behave as your COO\n"
-        "  4. Or send a task via Telegram to your bot\n\n"
-        "[dim]Safety layers: active | Kill switch: pocketteam kill[/]",
+        + "\n".join(next_steps),
+        title="Ready",
         border_style="green",
     ))
 
@@ -102,20 +114,40 @@ async def _interview(
     project_name: str | None,
     accept_defaults: bool,
 ) -> PocketTeamConfig:
-    """Interactive setup interview."""
+    """Interactive setup interview — guides user step-by-step."""
     cfg = PocketTeamConfig(project_root=project_root)
     cfg.project_name = project_name or project_root.name
 
+    # ── Step 1: Project Name ────────────────────────────────────────────
+    console.print(Panel(
+        "[bold]Step 1/5: Project Name[/]\n\n"
+        "This name is used in status messages and Telegram notifications.",
+        title="[cyan]1[/] Project",
+        border_style="cyan",
+    ))
     if not accept_defaults:
         cfg.project_name = Prompt.ask(
-            "Project name",
+            "  Project name",
             default=cfg.project_name,
         )
 
-    console.print("\n[bold]Authentication[/]")
+    # ── Step 2: Authentication ──────────────────────────────────────────
+    console.print(Panel(
+        "[bold]Step 2/5: How do you use Claude?[/]\n\n"
+        "[bold cyan]subscription[/] (recommended)\n"
+        "  You're logged into Claude Code via claude.ai.\n"
+        "  All agents run on your subscription — no API costs.\n\n"
+        "[bold cyan]api_key[/]\n"
+        "  You have an ANTHROPIC_API_KEY. Pay-per-token.\n"
+        "  Needed for CI/CD and headless environments.\n\n"
+        "[bold cyan]hybrid[/]\n"
+        "  Subscription for interactive use, API key as fallback.",
+        title="[cyan]2[/] Authentication",
+        border_style="cyan",
+    ))
     if not accept_defaults:
         auth_choice = Prompt.ask(
-            "Auth mode",
+            "  Auth mode",
             choices=["subscription", "api_key", "hybrid"],
             default="subscription",
         )
@@ -123,37 +155,124 @@ async def _interview(
     else:
         cfg.auth = AuthConfig(mode="subscription")
 
-    console.print("\n[bold]Health Monitoring[/]")
+    # ── Step 3: Telegram ────────────────────────────────────────────────
+    console.print(Panel(
+        "[bold]Step 3/5: Telegram Bot[/] (optional but recommended)\n\n"
+        "With Telegram you can:\n"
+        "  - Give tasks from your phone\n"
+        "  - Get status updates and approve deployments\n"
+        "  - Use /kill to emergency-stop all agents\n\n"
+        "Setup takes 2 minutes:",
+        title="[cyan]3[/] Telegram",
+        border_style="cyan",
+    ))
+
+    if not accept_defaults:
+        setup_telegram = Confirm.ask(
+            "  Set up Telegram bot?",
+            default=True,
+        )
+        if setup_telegram:
+            console.print()
+            console.print("  [bold]Step 3a:[/] Create your bot")
+            console.print("  1. Open Telegram and search for [bold cyan]@BotFather[/]")
+            console.print("  2. Send [bold]/newbot[/]")
+            console.print("  3. Choose a name (e.g. \"PocketTeam MyApp\")")
+            console.print("  4. Choose a username (e.g. \"myapp_pocketteam_bot\")")
+            console.print("  5. BotFather gives you a token like: [dim]7123456789:AAH...[/]")
+            console.print()
+
+            bot_token = Prompt.ask(
+                "  Paste your bot token (or press Enter to skip for now)",
+                default="",
+            )
+
+            chat_id = ""
+            if bot_token:
+                console.print()
+                console.print("  [bold]Step 3b:[/] Get your Chat ID")
+                console.print("  1. Open Telegram and search for [bold cyan]@userinfobot[/]")
+                console.print("  2. Send [bold]/start[/]")
+                console.print("  3. It replies with your Chat ID (a number like [dim]123456789[/])")
+                console.print()
+
+                chat_id = Prompt.ask(
+                    "  Paste your Chat ID (or press Enter to skip for now)",
+                    default="",
+                )
+
+            if bot_token and chat_id:
+                cfg.telegram = TelegramConfig(
+                    bot_token=bot_token,
+                    chat_id=chat_id,
+                )
+                console.print("  [green]Telegram configured![/]")
+            elif bot_token or chat_id:
+                # Partial — save as env var references
+                cfg.telegram = TelegramConfig(
+                    bot_token=bot_token or "${TELEGRAM_BOT_TOKEN}",
+                    chat_id=chat_id or "${TELEGRAM_CHAT_ID}",
+                )
+                console.print("  [yellow]Partial config saved. Set missing values in .env[/]")
+            else:
+                console.print("  [dim]Skipped. You can configure Telegram later via .pocketteam/config.yaml[/]")
+    else:
+        # --yes mode: skip Telegram, user can configure later
+        pass
+
+    # ── Step 4: Health Monitoring ───────────────────────────────────────
+    console.print(Panel(
+        "[bold]Step 4/5: Production Health URL[/] (optional)\n\n"
+        "If your app has a health endpoint (e.g. /health or /api/status),\n"
+        "PocketTeam can monitor it 24/7 and auto-fix issues.\n\n"
+        "Leave empty if you don't have a deployed app yet.",
+        title="[cyan]4[/] Health Monitoring",
+        border_style="cyan",
+    ))
     if not accept_defaults:
         health_url = Prompt.ask(
-            "Production health URL (e.g. https://myapp.com/health)",
+            "  Health URL (e.g. https://myapp.com/health)",
             default="",
         )
         cfg.health_url = health_url
         cfg.monitoring.health_url = health_url
 
-    console.print("\n[bold]Telegram Bot[/]")
-    if not accept_defaults:
-        setup_telegram = Confirm.ask(
-            "Configure Telegram bot for mobile access?",
-            default=True,
-        )
-        if setup_telegram:
-            console.print(
-                "[dim]Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as environment variables.[/]"
-            )
-            cfg.telegram = TelegramConfig(
-                bot_token="${TELEGRAM_BOT_TOKEN}",
-                chat_id="${TELEGRAM_CHAT_ID}",
-            )
-
-    console.print("\n[bold]GitHub Actions Monitoring[/]")
+    # ── Step 5: GitHub Actions ──────────────────────────────────────────
+    console.print(Panel(
+        "[bold]Step 5/5: GitHub Actions Monitoring[/]\n\n"
+        "Adds a GitHub Actions workflow that checks your health URL\n"
+        "every hour. If it fails, PocketTeam wakes up to investigate.\n\n"
+        "Free for public repos, 2000 min/month for private repos.",
+        title="[cyan]5[/] GitHub Actions",
+        border_style="cyan",
+    ))
     if not accept_defaults:
         setup_gha = Confirm.ask(
-            "Enable GitHub Actions for 24/7 production monitoring?",
-            default=True,
+            "  Enable GitHub Actions monitoring?",
+            default=bool(cfg.health_url),  # Default yes if health URL was given
         )
         cfg.github_actions.enabled = setup_gha
+
+    # ── Summary ─────────────────────────────────────────────────────────
+    console.print()
+    table = Table(title="Configuration Summary", show_header=True, border_style="green")
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value")
+
+    table.add_row("Project", cfg.project_name)
+    table.add_row("Auth", cfg.auth.mode)
+    table.add_row("Telegram", "configured" if cfg.telegram.bot_token and not cfg.telegram.bot_token.startswith("$") else "not configured")
+    table.add_row("Health URL", cfg.health_url or "none")
+    table.add_row("GitHub Actions", "enabled" if cfg.github_actions.enabled else "disabled")
+
+    console.print(table)
+
+    if not accept_defaults:
+        proceed = Confirm.ask("\n  Looks good? Create PocketTeam config", default=True)
+        if not proceed:
+            console.print("  Aborted. Run [bold]pocketteam init[/] again anytime.")
+            import sys
+            sys.exit(0)
 
     return cfg
 
