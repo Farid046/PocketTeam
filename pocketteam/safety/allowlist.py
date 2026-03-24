@@ -1,0 +1,146 @@
+"""
+Safety Layer 6: Per-Agent Tool Allowlist
+Each agent may only use the tools explicitly permitted for its role.
+A planner cannot write files. A monitor cannot make destructive changes.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Optional
+
+from ..constants import AGENT_ALLOWED_TOOLS
+
+
+@dataclass
+class AllowlistResult:
+    allowed: bool
+    layer: int = 6
+    reason: str = ""
+    agent_id: str = ""
+    tool_name: str = ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool family mappings
+# Maps Claude Code tool names to their canonical families
+# ─────────────────────────────────────────────────────────────────────────────
+
+TOOL_FAMILIES: dict[str, str] = {
+    # Read family
+    "Read":        "Read",
+    "Glob":        "Glob",
+    "Grep":        "Grep",
+
+    # Write family
+    "Write":       "Write",
+    "Edit":        "Edit",
+
+    # Execution
+    "Bash":        "Bash",
+
+    # Search
+    "WebSearch":   "WebSearch",
+    "WebFetch":    "WebFetch",
+
+    # Agent spawning (always allowed for COO, blocked for others by default)
+    "Agent":       "Agent",
+
+    # Task management
+    "TodoWrite":   "TodoWrite",
+    "TodoRead":    "TodoRead",
+
+    # Notebooks
+    "NotebookRead":  "NotebookRead",
+    "NotebookEdit":  "NotebookEdit",
+}
+
+
+def check_agent_allowlist(agent_id: str, tool_name: str) -> AllowlistResult:
+    """
+    Layer 6: Is this agent allowed to use this tool?
+    MCP tools (mcp__*) are checked separately in mcp_rules.py
+    """
+    if not agent_id:
+        # Unknown agent — allow all (safety applied by other layers)
+        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+
+    # MCP tools: checked by Layer 3, not here
+    if tool_name.startswith("mcp__"):
+        return AllowlistResult(
+            allowed=True,
+            reason="MCP tools checked by Layer 3",
+            agent_id=agent_id,
+            tool_name=tool_name,
+        )
+
+    # COO: delegates only — but needs Agent tool and read tools to understand context
+    if agent_id == "coo":
+        coo_allowed = {"Agent", "Read", "Glob", "Grep", "TodoWrite", "TodoRead"}
+        if tool_name in coo_allowed:
+            return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+        return AllowlistResult(
+            allowed=False,
+            reason=f"COO is not allowed to use {tool_name} directly — delegate to specialized agents",
+            agent_id=agent_id,
+            tool_name=tool_name,
+        )
+
+    allowed_tools = AGENT_ALLOWED_TOOLS.get(agent_id)
+
+    if allowed_tools is None:
+        # Unknown agent type — default deny Write/Bash, allow read
+        read_only = {"Read", "Glob", "Grep", "WebSearch", "WebFetch"}
+        if tool_name in read_only:
+            return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+        return AllowlistResult(
+            allowed=False,
+            reason=f"Unknown agent '{agent_id}' — only read-only tools allowed",
+            agent_id=agent_id,
+            tool_name=tool_name,
+        )
+
+    # Empty list means no tools (COO delegates)
+    if not allowed_tools:
+        return AllowlistResult(
+            allowed=False,
+            reason=f"Agent '{agent_id}' has no direct tool access — it delegates to sub-agents",
+            agent_id=agent_id,
+            tool_name=tool_name,
+        )
+
+    # Check if tool is in allowlist
+    if tool_name in allowed_tools:
+        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+
+    # Agent-specific tool permissions
+    if agent_id == "qa" and tool_name in ("browser_tools", "playwright"):
+        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+
+    if agent_id == "devops" and tool_name in ("deploy_tools", "health_check"):
+        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+
+    if agent_id == "monitor" and tool_name in ("health_check",):
+        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+
+    # TodoWrite/TodoRead: allowed for all agents (task tracking)
+    if tool_name in ("TodoWrite", "TodoRead"):
+        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+
+    return AllowlistResult(
+        allowed=False,
+        reason=(
+            f"Agent '{agent_id}' is not allowed to use {tool_name}.\n"
+            f"Allowed tools: {', '.join(sorted(allowed_tools))}"
+        ),
+        agent_id=agent_id,
+        tool_name=tool_name,
+    )
+
+
+def get_agent_permissions_summary() -> dict[str, list[str]]:
+    """Return a human-readable summary of all agent permissions."""
+    return {
+        agent: tools if tools else ["(delegates only — no direct tools)"]
+        for agent, tools in AGENT_ALLOWED_TOOLS.items()
+    }
