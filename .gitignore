@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# PocketTeam runtime artifacts
+.pocketteam/sessions/
+.pocketteam/events/
+.pocketteam/KILL
+.pocketteam/artifacts/audit/
+.pocketteam/artifacts/budget_*
+.pocketteam/autoresearch/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# ruff
+.ruff_cache/
