@@ -7,6 +7,7 @@ Uses merge-not-overwrite strategy to avoid destroying existing .claude/ configs.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -115,8 +116,19 @@ async def _interview(
     accept_defaults: bool,
 ) -> PocketTeamConfig:
     """Interactive setup interview — guides user step-by-step."""
+    from .config import load_config
+
+    # Load existing config as defaults (so re-init preserves previous answers)
+    existing = load_config(project_root)
     cfg = PocketTeamConfig(project_root=project_root)
-    cfg.project_name = project_name or project_root.name
+    cfg.project_name = project_name or existing.project_name or project_root.name
+    cfg.health_url = existing.health_url
+    cfg.auth = existing.auth
+    cfg.telegram = existing.telegram
+    cfg.monitoring = existing.monitoring
+    cfg.budget = existing.budget
+    cfg.github_actions = existing.github_actions
+    cfg.network = existing.network
 
     # ── Step 1: Project Name ────────────────────────────────────────────
     console.print(Panel(
@@ -131,108 +143,133 @@ async def _interview(
             default=cfg.project_name,
         )
 
-    # ── Step 2: Authentication ──────────────────────────────────────────
+    # ── Step 2: API Key ─────────────────────────────────────────────────
+    has_env_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    current_key = cfg.auth.api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+    key_display = f"{current_key[:10]}...{current_key[-4:]}" if len(current_key) > 20 else ("set" if current_key else "not set")
+
     console.print(Panel(
-        "[bold]Step 2/5: How do you use Claude?[/]\n\n"
-        "[bold cyan]subscription[/] (recommended)\n"
-        "  You're logged into Claude Code via claude.ai.\n"
-        "  All agents run on your subscription — no API costs.\n\n"
-        "[bold cyan]api_key[/]\n"
-        "  You have an ANTHROPIC_API_KEY. Pay-per-token.\n"
-        "  Needed for CI/CD and headless environments.\n\n"
-        "[bold cyan]hybrid[/]\n"
-        "  Subscription for interactive use, API key as fallback.",
-        title="[cyan]2[/] Authentication",
+        "[bold]Step 2/5: Anthropic API Key[/]\n\n"
+        "The Claude Agent SDK needs an API key to run agents.\n"
+        "Get one at: [bold cyan]https://console.anthropic.com/settings/keys[/]\n\n"
+        f"Current: [{'green' if current_key else 'red'}]{key_display}[/]\n"
+        + ("  (detected from ANTHROPIC_API_KEY env var)\n" if has_env_key else "") +
+        "\n"
+        "[dim]The key is stored in .pocketteam/config.yaml (gitignored).\n"
+        "You can also set it as ANTHROPIC_API_KEY environment variable.[/]",
+        title="[cyan]2[/] API Key",
         border_style="cyan",
     ))
     if not accept_defaults:
-        auth_choice = Prompt.ask(
-            "  Auth mode",
-            choices=["subscription", "api_key", "hybrid"],
-            default="subscription",
-        )
-        cfg.auth = AuthConfig(mode=auth_choice)
-    else:
-        cfg.auth = AuthConfig(mode="subscription")
+        if current_key:
+            change_key = Confirm.ask(
+                f"  API key is set ({key_display}). Change it?",
+                default=False,
+            )
+            if change_key:
+                new_key = Prompt.ask("  Paste your API key", default="")
+                if new_key:
+                    cfg.auth.api_key = new_key
+        else:
+            new_key = Prompt.ask(
+                "  Paste your API key (or Enter to skip — set ANTHROPIC_API_KEY env var later)",
+                default="",
+            )
+            if new_key:
+                cfg.auth.api_key = new_key
+
+        # Auth mode is derived: if key exists, hybrid; else subscription-only
+        if cfg.auth.api_key or has_env_key:
+            cfg.auth.mode = "hybrid"
+        else:
+            cfg.auth.mode = "subscription"
 
     # ── Step 3: Telegram ────────────────────────────────────────────────
+    tg_configured = bool(cfg.telegram.bot_token and cfg.telegram.chat_id
+                         and not cfg.telegram.bot_token.startswith("$"))
+    tg_display = f"Bot: ...{cfg.telegram.bot_token[-6:]}" if tg_configured else "not configured"
+
     console.print(Panel(
         "[bold]Step 3/5: Telegram Bot[/] (optional but recommended)\n\n"
-        "With Telegram you can:\n"
-        "  - Give tasks from your phone\n"
-        "  - Get status updates and approve deployments\n"
-        "  - Use /kill to emergency-stop all agents\n\n"
-        "Setup takes 2 minutes:",
+        "Control PocketTeam from your phone:\n"
+        "  - Give tasks and get status updates\n"
+        "  - Approve deployments with one tap\n"
+        "  - Emergency stop with /kill\n\n"
+        f"Current: [{'green' if tg_configured else 'yellow'}]{tg_display}[/]",
         title="[cyan]3[/] Telegram",
         border_style="cyan",
     ))
 
     if not accept_defaults:
-        setup_telegram = Confirm.ask(
-            "  Set up Telegram bot?",
-            default=True,
-        )
-        if setup_telegram:
-            console.print()
-            console.print("  [bold]Step 3a:[/] Create your bot")
-            console.print("  1. Open Telegram and search for [bold cyan]@BotFather[/]")
-            console.print("  2. Send [bold]/newbot[/]")
-            console.print("  3. Choose a name (e.g. \"PocketTeam MyApp\")")
-            console.print("  4. Choose a username (e.g. \"myapp_pocketteam_bot\")")
-            console.print("  5. BotFather gives you a token like: [dim]7123456789:AAH...[/]")
-            console.print()
-
-            bot_token = Prompt.ask(
-                "  Paste your bot token (or press Enter to skip for now)",
-                default="",
+        if tg_configured:
+            change_tg = Confirm.ask(
+                f"  Telegram is configured. Reconfigure?",
+                default=False,
             )
-
-            chat_id = ""
-            if bot_token:
-                console.print()
-                console.print("  [bold]Step 3b:[/] Get your Chat ID")
-                console.print("  1. Open Telegram and search for [bold cyan]@userinfobot[/]")
-                console.print("  2. Send [bold]/start[/]")
-                console.print("  3. It replies with your Chat ID (a number like [dim]123456789[/])")
-                console.print()
-
-                chat_id = Prompt.ask(
-                    "  Paste your Chat ID (or press Enter to skip for now)",
-                    default="",
-                )
-
-            if bot_token and chat_id:
-                cfg.telegram = TelegramConfig(
-                    bot_token=bot_token,
-                    chat_id=chat_id,
-                )
-                console.print("  [green]Telegram configured![/]")
-            elif bot_token or chat_id:
-                # Partial — save as env var references
-                cfg.telegram = TelegramConfig(
-                    bot_token=bot_token or "${TELEGRAM_BOT_TOKEN}",
-                    chat_id=chat_id or "${TELEGRAM_CHAT_ID}",
-                )
-                console.print("  [yellow]Partial config saved. Set missing values in .env[/]")
+            if not change_tg:
+                pass  # Keep existing
             else:
-                console.print("  [dim]Skipped. You can configure Telegram later via .pocketteam/config.yaml[/]")
-    else:
-        # --yes mode: skip Telegram, user can configure later
-        pass
+                tg_configured = False  # Fall through to setup
+
+        if not tg_configured:
+            setup_telegram = Confirm.ask(
+                "  Set up Telegram bot?",
+                default=True,
+            )
+            if setup_telegram:
+                console.print()
+                console.print("  [bold]Step 3a:[/] Create your bot")
+                console.print("  1. Open Telegram and search for [bold cyan]@BotFather[/]")
+                console.print("  2. Send [bold]/newbot[/]")
+                console.print("  3. Choose a name (e.g. \"PocketTeam MyApp\")")
+                console.print("  4. Choose a username (e.g. \"myapp_pocketteam_bot\")")
+                console.print("  5. BotFather gives you a token like: [dim]7123456789:AAH...[/]")
+                console.print()
+
+                bot_token = Prompt.ask(
+                    "  Paste your bot token (or Enter to skip)",
+                    default=cfg.telegram.bot_token if not cfg.telegram.bot_token.startswith("$") else "",
+                )
+
+                chat_id = ""
+                if bot_token:
+                    console.print()
+                    console.print("  [bold]Step 3b:[/] Get your Chat ID")
+                    console.print("  1. Open Telegram and search for [bold cyan]@userinfobot[/]")
+                    console.print("  2. Send [bold]/start[/]")
+                    console.print("  3. It replies with your Chat ID (a number like [dim]123456789[/])")
+                    console.print()
+
+                    chat_id = Prompt.ask(
+                        "  Paste your Chat ID (or Enter to skip)",
+                        default=cfg.telegram.chat_id if not cfg.telegram.chat_id.startswith("$") else "",
+                    )
+
+                if bot_token and chat_id:
+                    cfg.telegram = TelegramConfig(bot_token=bot_token, chat_id=chat_id)
+                    console.print("  [green]Telegram configured![/]")
+                elif bot_token or chat_id:
+                    cfg.telegram = TelegramConfig(
+                        bot_token=bot_token or "",
+                        chat_id=chat_id or "",
+                    )
+                    console.print("  [yellow]Partial config — finish later with pocketteam init[/]")
+                else:
+                    console.print("  [dim]Skipped.[/]")
 
     # ── Step 4: Health Monitoring ───────────────────────────────────────
     console.print(Panel(
         "[bold]Step 4/5: Production Health URL[/] (optional)\n\n"
-        "If your app has a health endpoint (e.g. /health or /api/status),\n"
-        "PocketTeam can monitor it 24/7 and auto-fix issues.\n\n"
-        "Leave empty if you don't have a deployed app yet.",
+        "If your app has a health endpoint, PocketTeam can monitor it\n"
+        "24/7 and auto-fix issues.\n\n"
+        f"Current: [{'green' if cfg.health_url else 'dim'}]{cfg.health_url or 'none'}[/]",
         title="[cyan]4[/] Health Monitoring",
         border_style="cyan",
     ))
     if not accept_defaults:
         health_url = Prompt.ask(
             "  Health URL (e.g. https://myapp.com/health)",
-            default="",
+            default=cfg.health_url or "",
         )
         cfg.health_url = health_url
         cfg.monitoring.health_url = health_url
@@ -240,35 +277,46 @@ async def _interview(
     # ── Step 5: GitHub Actions ──────────────────────────────────────────
     console.print(Panel(
         "[bold]Step 5/5: GitHub Actions Monitoring[/]\n\n"
-        "Adds a GitHub Actions workflow that checks your health URL\n"
-        "every hour. If it fails, PocketTeam wakes up to investigate.\n\n"
-        "Free for public repos, 2000 min/month for private repos.",
+        "Adds a workflow that checks your health URL every hour.\n"
+        "If it fails, PocketTeam wakes up to investigate.\n\n"
+        f"Current: [{'green' if cfg.github_actions.enabled else 'dim'}]{'enabled' if cfg.github_actions.enabled else 'disabled'}[/]",
         title="[cyan]5[/] GitHub Actions",
         border_style="cyan",
     ))
     if not accept_defaults:
         setup_gha = Confirm.ask(
             "  Enable GitHub Actions monitoring?",
-            default=bool(cfg.health_url),  # Default yes if health URL was given
+            default=cfg.github_actions.enabled or bool(cfg.health_url),
         )
         cfg.github_actions.enabled = setup_gha
 
     # ── Summary ─────────────────────────────────────────────────────────
+    tg_final = bool(cfg.telegram.bot_token and cfg.telegram.chat_id
+                     and not cfg.telegram.bot_token.startswith("$"))
+    api_final = bool(cfg.auth.api_key or os.environ.get("ANTHROPIC_API_KEY"))
+
     console.print()
     table = Table(title="Configuration Summary", show_header=True, border_style="green")
     table.add_column("Setting", style="cyan")
     table.add_column("Value")
+    table.add_column("Status")
 
-    table.add_row("Project", cfg.project_name)
-    table.add_row("Auth", cfg.auth.mode)
-    table.add_row("Telegram", "configured" if cfg.telegram.bot_token and not cfg.telegram.bot_token.startswith("$") else "not configured")
-    table.add_row("Health URL", cfg.health_url or "none")
-    table.add_row("GitHub Actions", "enabled" if cfg.github_actions.enabled else "disabled")
+    table.add_row("Project", cfg.project_name, "")
+    table.add_row("API Key", cfg.auth.mode, "[green]ready[/]" if api_final else "[red]needed for agents[/]")
+    table.add_row("Telegram", "configured" if tg_final else "not configured", "[green]ready[/]" if tg_final else "[dim]optional[/]")
+    table.add_row("Health URL", cfg.health_url or "none", "[dim]optional[/]")
+    table.add_row("GitHub Actions", "enabled" if cfg.github_actions.enabled else "disabled", "")
 
     console.print(table)
 
+    if not api_final:
+        console.print()
+        console.print("  [yellow]Warning:[/] No API key set. Agents won't work until you either:")
+        console.print("    - Run [bold]pocketteam init[/] again and paste your key")
+        console.print("    - Or set [bold]export ANTHROPIC_API_KEY=sk-ant-...[/]")
+
     if not accept_defaults:
-        proceed = Confirm.ask("\n  Looks good? Create PocketTeam config", default=True)
+        proceed = Confirm.ask("\n  Looks good? Save configuration", default=True)
         if not proceed:
             console.print("  Aborted. Run [bold]pocketteam init[/] again anytime.")
             import sys

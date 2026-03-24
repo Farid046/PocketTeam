@@ -164,12 +164,11 @@ def save_config(cfg: PocketTeamConfig) -> None:
         },
         "auth": {
             "mode": cfg.auth.mode,
-            # Never store raw keys in config — use ${ENV_VAR} references
-            "api_key": "${ANTHROPIC_API_KEY}" if cfg.auth.api_key else "",
+            "api_key": cfg.auth.api_key or "",
         },
         "telegram": {
-            "bot_token": "${TELEGRAM_BOT_TOKEN}",
-            "chat_id": "${TELEGRAM_CHAT_ID}",
+            "bot_token": cfg.telegram.bot_token or "",
+            "chat_id": cfg.telegram.chat_id or "",
             "persistent_sessions": cfg.telegram.persistent_sessions,
             "auto_resume": cfg.telegram.auto_resume,
         },
@@ -186,7 +185,7 @@ def save_config(cfg: PocketTeamConfig) -> None:
         },
         "github_actions": {
             "enabled": cfg.github_actions.enabled,
-            "api_key": "${ANTHROPIC_API_KEY}",
+            "api_key": cfg.github_actions.api_key or "",
             "model": cfg.github_actions.model,
             "schedule": cfg.github_actions.schedule,
         },
