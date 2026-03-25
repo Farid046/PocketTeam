@@ -107,19 +107,22 @@ async def run_init(project_name: str | None, accept_defaults: bool) -> None:
 
     # Dynamic next steps based on what was configured
     next_steps = []
-    next_steps.append("Open Claude Code in this project — it will act as your COO:")
-    next_steps.append("  [bold]claude[/]")
-    next_steps.append("  > Build user auth with OAuth2")
-    next_steps.append("")
 
     if cfg.telegram.bot_token and not cfg.telegram.bot_token.startswith("$"):
-        next_steps.append("Or send a task via Telegram to your bot!")
+        next_steps.append("Start Claude Code with Telegram channel:")
+        next_steps.append("  [bold]claude --channels plugin:telegram@claude-plugins-official[/]")
+        next_steps.append("")
+        next_steps.append("Or without Telegram:")
+        next_steps.append("  [bold]claude[/]")
     else:
-        next_steps.append("Want mobile access? Set up Telegram later:")
-        next_steps.append("  [bold]pocketteam init[/]  (re-run, it will ask about Telegram)")
+        next_steps.append("Open Claude Code — it will act as your COO:")
+        next_steps.append("  [bold]claude[/]")
 
     next_steps.append("")
-    next_steps.append("[dim]Commands: pocketteam status | pocketteam run \"task\" | pocketteam kill[/]")
+    next_steps.append("Then give it a task:")
+    next_steps.append("  > Build user auth with OAuth2")
+    next_steps.append("")
+    next_steps.append("[dim]Commands: pocketteam status | pocketteam kill | pocketteam logs[/]")
 
     console.print(Panel(
         "✅ [bold green]PocketTeam initialized![/]\n\n"
@@ -203,18 +206,25 @@ async def _interview(
         else:
             cfg.auth.mode = "subscription"
 
-    # ── Step 3: Telegram ────────────────────────────────────────────────
-    tg_configured = bool(cfg.telegram.bot_token and cfg.telegram.chat_id
+    # ── Step 3: Telegram via Claude Code Channels ─────────────────────
+    tg_configured = bool(cfg.telegram.bot_token
                          and not cfg.telegram.bot_token.startswith("$"))
     tg_display = f"Bot: ...{cfg.telegram.bot_token[-6:]}" if tg_configured else "not configured"
 
+    # Check prerequisites
+    has_bun = shutil.which("bun") is not None
+
     console.print(Panel(
-        "[bold]Step 3/5: Telegram Bot[/] (optional but recommended)\n\n"
-        "Control PocketTeam from your phone:\n"
-        "  - Give tasks and get status updates\n"
-        "  - Approve deployments with one tap\n"
-        "  - Emergency stop with /kill\n\n"
-        f"Current: [{'green' if tg_configured else 'yellow'}]{tg_display}[/]",
+        "[bold]Step 3/5: Telegram via Claude Code Channels[/]\n\n"
+        "Send tasks to your AI team from your phone via Telegram.\n"
+        "Uses Claude Code's native Channel system (research preview).\n\n"
+        "How it works:\n"
+        "  1. You create a Telegram bot (@BotFather)\n"
+        "  2. Install the Telegram plugin in Claude Code\n"
+        "  3. Start Claude Code with [bold]--channels[/] flag\n"
+        "  4. Messages to your bot go directly into your Claude Code session\n\n"
+        f"Current: [{'green' if tg_configured else 'yellow'}]{tg_display}[/]\n"
+        f"Bun (required): [{'green' if has_bun else 'red'}]{'installed' if has_bun else 'NOT installed'}[/]",
         title="[cyan]3[/] Telegram",
         border_style="cyan",
     ))
@@ -228,53 +238,87 @@ async def _interview(
             if not change_tg:
                 pass  # Keep existing
             else:
-                tg_configured = False  # Fall through to setup
+                tg_configured = False
 
         if not tg_configured:
             setup_telegram = Confirm.ask(
-                "  Set up Telegram bot?",
+                "  Set up Telegram?",
                 default=True,
             )
             if setup_telegram:
+                # Check Bun prerequisite
+                if not has_bun:
+                    console.print()
+                    console.print("  [yellow]Bun is required for Claude Code Channels.[/]")
+                    console.print("  Install it: [bold]curl -fsSL https://bun.sh/install | bash[/]")
+                    console.print("  Then re-run [bold]pocketteam init[/]")
+                    console.print()
+                    install_bun = Confirm.ask("  Try to install Bun now?", default=True)
+                    if install_bun:
+                        console.print("  Installing Bun...")
+                        result = subprocess.run(
+                            ["bash", "-c", "curl -fsSL https://bun.sh/install | bash"],
+                            capture_output=True, text=True,
+                        )
+                        if result.returncode == 0:
+                            console.print("  [green]Bun installed![/]")
+                            has_bun = True
+                        else:
+                            console.print(f"  [red]Bun install failed. Install manually.[/]")
+
                 console.print()
-                console.print("  [bold]Step 3a:[/] Create your bot")
+                console.print("  [bold]Step 3a:[/] Create your Telegram bot")
                 console.print("  1. Open Telegram and search for [bold cyan]@BotFather[/]")
                 console.print("  2. Send [bold]/newbot[/]")
-                console.print("  3. Choose a name (e.g. \"PocketTeam MyApp\")")
+                console.print("  3. Choose a name (e.g. \"PocketTeam\")")
                 console.print("  4. Choose a username (e.g. \"myapp_pocketteam_bot\")")
                 console.print("  5. BotFather gives you a token like: [dim]7123456789:AAH...[/]")
                 console.print()
 
                 bot_token = Prompt.ask(
                     "  Paste your bot token (or Enter to skip)",
-                    default=cfg.telegram.bot_token if not cfg.telegram.bot_token.startswith("$") else "",
+                    default=cfg.telegram.bot_token if tg_configured else "",
                 )
 
-                chat_id = ""
                 if bot_token:
-                    console.print()
-                    console.print("  [bold]Step 3b:[/] Get your Chat ID")
-                    console.print("  1. Open Telegram and search for [bold cyan]@userinfobot[/]")
-                    console.print("  2. Send [bold]/start[/]")
-                    console.print("  3. It replies with your Chat ID (a number like [dim]123456789[/])")
-                    console.print()
-
-                    chat_id = Prompt.ask(
-                        "  Paste your Chat ID (or Enter to skip)",
-                        default=cfg.telegram.chat_id if not cfg.telegram.chat_id.startswith("$") else "",
-                    )
-
-                if bot_token and chat_id:
-                    cfg.telegram = TelegramConfig(bot_token=bot_token, chat_id=chat_id)
-                    console.print("  [green]Telegram configured![/]")
-                elif bot_token or chat_id:
                     cfg.telegram = TelegramConfig(
-                        bot_token=bot_token or "",
-                        chat_id=chat_id or "",
+                        bot_token=bot_token,
+                        chat_id=cfg.telegram.chat_id or "",
                     )
-                    console.print("  [yellow]Partial config — finish later with pocketteam init[/]")
+
+                    console.print()
+                    console.print("  [green]Token saved![/]")
+                    console.print()
+                    console.print("  [bold]Step 3b:[/] Connect to Claude Code")
+                    console.print("  Run these commands in Claude Code (after init finishes):")
+                    console.print()
+                    console.print("  [bold cyan]1.[/] Install the Telegram plugin:")
+                    console.print("     [bold]/plugin install telegram@claude-plugins-official[/]")
+                    console.print()
+                    console.print("  [bold cyan]2.[/] Configure with your token:")
+                    console.print(f"     [bold]/telegram:configure {bot_token}[/]")
+                    console.print()
+                    console.print("  [bold cyan]3.[/] Restart Claude Code with channels:")
+                    console.print("     [bold]claude --channels plugin:telegram@claude-plugins-official[/]")
+                    console.print()
+                    console.print("  [bold cyan]4.[/] DM your bot on Telegram, then pair:")
+                    console.print("     [bold]/telegram:access pair <code-from-bot>[/]")
+                    console.print()
+                    console.print("  [bold cyan]5.[/] Lock down access (recommended):")
+                    console.print("     [bold]/telegram:access policy allowlist[/]")
+                    console.print()
+
+                    # Also save chat_id if user has it
+                    chat_id = Prompt.ask(
+                        "  Paste your Chat ID for alerts (optional, from @userinfobot)",
+                        default=cfg.telegram.chat_id or "",
+                    )
+                    if chat_id:
+                        cfg.telegram.chat_id = chat_id
+
+                    console.print("  [green]Telegram setup saved! Follow steps 3b above after init.[/]")
                 else:
-                    console.print("  [dim]Skipped.[/]")
+                    console.print("  [dim]Skipped. Run pocketteam init again anytime.[/]")
 
     # ── Step 4: Health Monitoring ───────────────────────────────────────
     console.print(Panel(
