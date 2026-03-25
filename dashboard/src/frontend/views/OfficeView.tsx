@@ -26,8 +26,10 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
 
   // COO is the main session (parent) — always active when subagents exist
   if (hasAnyActive && !agentsByRole.has("coo")) {
-    const anyWorking = agents.some((a) => a.status === "working");
-    const cooStatus = anyWorking ? "working" : "done";
+    // COO is "working" when the SESSION is active (parent JSONL being written)
+    // not just when subagents are working — COO works between agent spawns too
+    const sessionIsActive = agents.some((a) => a.sessionActive);
+    const cooStatus = sessionIsActive ? "working" : "done";
     agentsByRole.set("coo", {
       id: "coo-main-session",
       role: "coo",
