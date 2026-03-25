@@ -398,34 +398,19 @@ def wait_for_healthy(port: int, timeout: int = 30) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _write_auth_token(project_root: Path) -> str:
+def _write_auth_token(compose_dir: Path) -> str:
     """
-    Generate a 64-char hex auth token and write to .pocketteam/.env.
+    Generate a 64-char hex auth token and write to compose_dir/.env.
+    Separate file from .pocketteam/.env to avoid leaking API keys to container.
     NEVER logs the token.
     Returns the token for use in this session only.
     """
     token = secrets.token_hex(32)  # 64 hex chars
-    env_path = project_root / ".pocketteam" / ".env"
-    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path = compose_dir / ".env"
+    compose_dir.mkdir(parents=True, exist_ok=True)
 
-    # Preserve existing lines, update or append DASHBOARD_AUTH_TOKEN
-    existing_lines: list[str] = []
-    if env_path.exists():
-        existing_lines = env_path.read_text().splitlines()
-
-    updated = False
-    new_lines = []
-    for line in existing_lines:
-        if line.startswith("DASHBOARD_AUTH_TOKEN="):
-            new_lines.append(f"DASHBOARD_AUTH_TOKEN={token}")
-            updated = True
-        else:
-            new_lines.append(line)
-
-    if not updated:
-        new_lines.append(f"DASHBOARD_AUTH_TOKEN={token}")
-
-    env_path.write_text("\n".join(new_lines) + "\n")
+    # Write only AUTH_TOKEN — nothing else goes into this file
+    env_path.write_text(f"AUTH_TOKEN={token}\n")
     os.chmod(env_path, 0o600)
     return token
 
@@ -472,7 +457,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
 
     # Step 4: Auto-compute paths + validate
     claude_home = Path.home() / ".claude"
-    claude_project_hash = str(project_root).replace("/", "-").lstrip("-")
+    claude_project_hash = str(project_root).replace("/", "-")
     claude_project_dir = claude_home / "projects" / claude_project_hash
 
     if not claude_project_dir.exists():
@@ -525,7 +510,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
     compose_command = " ".join(compose_cmd_list)
 
     # Step 7b: Generate auth token — write to .pocketteam/.env (Errata S2, S3)
-    _write_auth_token(project_root)
+    _write_auth_token(compose_dir)
 
     # Step 7c: Write .pocketteam/.gitignore (Errata S2)
     ensure_pocketteam_gitignore(project_root)
@@ -549,7 +534,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
 
     # Step 7e: Generate and write compose file
     compose_dir.mkdir(parents=True, exist_ok=True)
-    env_file_path = project_root / ".pocketteam" / ".env"
+    env_file_path = compose_dir / ".env"
     compose_content = generate_compose(
         dash=cfg.dashboard,
         claude_project_dir=claude_project_dir,
@@ -823,7 +808,7 @@ def dashboard_configure_cmd(
 
         cfg.dashboard.project_root = str(resolved)
         cfg.dashboard.claude_project_hash = (
-            str(resolved).replace("/", "-").lstrip("-")
+            str(resolved).replace("/", "-")
         )
         changed = True
 

@@ -49,9 +49,10 @@ try {
   process.exit(1);
 }
 
-server.httpServer.listen(PORT, "127.0.0.1", () => {
-  console.log(`[startup] Listening on http://127.0.0.1:${PORT}`);
-  console.log(`[startup] Health: http://127.0.0.1:${PORT}/api/v1/health`);
+// Bind to 0.0.0.0 INSIDE container — the 127.0.0.1 restriction is at Docker port-mapping level
+server.httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`[startup] Listening on http://0.0.0.0:${PORT}`);
+  console.log(`[startup] Health: http://localhost:${PORT}/api/v1/health`);
 });
 
 server.httpServer.on("error", (err: NodeJS.ErrnoException) => {

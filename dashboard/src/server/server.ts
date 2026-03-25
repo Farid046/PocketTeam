@@ -191,7 +191,7 @@ export function createServer(config: ServerConfig): PocketTeamServer {
 
       try {
         let html = fs.readFileSync(indexPath, "utf-8");
-        html = html.replace(/__AUTH_TOKEN__/g, authToken);
+        html = html.replace(/%%POCKETTEAM_TOKEN%%/g, authToken);
         res.type("html").send(html);
       } catch (err) {
         console.error("[server] index.html read error:", err instanceof Error ? err.message : String(err));
