@@ -181,7 +181,7 @@ class TestCLICommands:
         from click.testing import CliRunner
         runner = CliRunner()
 
-        for cmd in ["init", "status", "kill", "resume", "retro", "logs", "run", "sessions", "uninstall"]:
+        for cmd in ["init", "status", "kill", "resume", "retro", "logs", "run-headless", "sessions", "uninstall"]:
             result = runner.invoke(main, [cmd, "--help"])
             assert result.exit_code == 0, f"Command '{cmd}' failed: {result.output}"
 

@@ -239,16 +239,19 @@ async def _logs(follow: bool, lines: int, agent_filter: str | None) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# pocketteam run
+# pocketteam run-headless (for CI/GitHub Actions — NOT the normal flow)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@main.command()
+@main.command("run-headless")
 @click.argument("task")
 @click.option("--skip-product", is_flag=True, default=True,
               help="Skip product validation (default: True).")
 @click.option("--no-telegram", is_flag=True, help="Disable Telegram notifications.")
-def run(task: str, skip_product: bool, no_telegram: bool) -> None:
-    """Run a task through the full PocketTeam pipeline."""
+def run_headless(task: str, skip_product: bool, no_telegram: bool) -> None:
+    """Headless pipeline via Agent SDK (for CI/GitHub Actions). Requires ANTHROPIC_API_KEY.
+
+    For normal use, open Claude Code instead: claude
+    """
     asyncio.run(_run(task, skip_product, no_telegram))
 
 

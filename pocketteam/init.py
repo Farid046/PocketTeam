@@ -86,6 +86,25 @@ async def run_init(project_name: str | None, accept_defaults: bool) -> None:
     # Create .env.example
     _create_env_example(project_root)
 
+    # Send Telegram confirmation if configured
+    tg_ok = False
+    if cfg.telegram.bot_token and cfg.telegram.chat_id and not cfg.telegram.bot_token.startswith("$"):
+        try:
+            from .channels.setup import TelegramChannel
+            ch = TelegramChannel(project_root, config=cfg)
+            tg_ok = await ch.send_message(
+                f"🚀 <b>PocketTeam initialized!</b>\n\n"
+                f"Project: {cfg.project_name}\n"
+                f"Send me a task to get started.\n"
+                f"Use /kill for emergency stop."
+            )
+            if tg_ok:
+                console.print("  [green]✅ Telegram test message sent! Check your bot.[/]")
+            else:
+                console.print("  [yellow]⚠️ Could not reach Telegram. Check your bot token and chat ID.[/]")
+        except Exception:
+            console.print("  [yellow]⚠️ Telegram test failed. You can fix this later.[/]")
+
     # Dynamic next steps based on what was configured
     next_steps = []
     next_steps.append("Open Claude Code in this project — it will act as your COO:")
@@ -394,44 +413,84 @@ def _get_pocketteam_claude_md_section(cfg: PocketTeamConfig) -> str:
 You are the **COO** of {cfg.project_name}. PocketTeam is active.
 
 ## Your Role
-- Orchestrate the team of specialized agents
-- Delegate tasks to the right agents (never do implementation yourself)
-- Ensure all work follows the PocketTeam pipeline
-- Communicate status to the CEO (human) via Telegram or Claude Code
+- You are the orchestrator. You NEVER implement code yourself.
+- You delegate ALL work to specialized agents using Claude Code's built-in Agent tool.
+- You coordinate the pipeline, enforce human gates, and keep the CEO informed.
 
-## Agent Pipeline (ALWAYS follow this order)
-1. **Product Advisor** → Validate demand (optional, for new features)
-2. **Planner** → Create detailed plan, ask ALL questions upfront
-3. **Reviewer** → Review plan for completeness, risks, architecture
-4. ⛔ **HUMAN GATE**: CEO approves plan before any code is written
-5. **Engineer** → Implement (feature branch, never touch main directly)
-6. **Reviewer** → Code review
-7. **QA** → All tests must pass
-8. **Security** → OWASP audit before deploy
-9. **Documentation** → Update docs
-10. ⛔ **HUMAN GATE**: CEO approves production deploy
-11. **DevOps** → Deploy to staging first, then production
-12. **Monitor** → Watch for 15 min post-deploy
+## How to Delegate (CRITICAL — use the Agent tool)
 
-## Safety Rules (ABSOLUTE - never override)
-- Safety hooks run on EVERY tool call - you cannot bypass them
-- Destructive operations require D-SAC approval flow
-- Kill switch in .pocketteam/KILL stops everything immediately
+Use Claude Code's built-in **Agent tool** to spawn specialized agents.
+Each agent is defined in `.claude/agents/pocketteam/` with its own prompt, model, and tool permissions.
+
+| When you need to... | Use this agent |
+|---|---|
+| Validate demand for a new feature | **product** agent |
+| Create an implementation plan | **planner** agent |
+| Review a plan or code | **reviewer** agent |
+| Implement code from an approved plan | **engineer** agent |
+| Run tests and verify quality | **qa** agent |
+| Audit security (OWASP, CVEs) | **security** agent |
+| Deploy to staging or production | **devops** agent |
+| Debug a production issue | **investigator** agent |
+| Update documentation | **documentation** agent |
+| Check production health | **monitor** agent |
+| Analyze team performance after a task | **observer** agent |
+
+Example delegation:
+> "Use the **planner** agent to create an implementation plan for: [task description]"
+
+## Pipeline (ALWAYS follow this order)
+
+### For NEW features:
+1. (Optional) Use **product** agent → validate demand
+2. Use **planner** agent → create detailed plan, ask ALL questions upfront
+3. Use **reviewer** agent → review plan for completeness and risks
+4. **HUMAN GATE**: Ask CEO to approve the plan before any code is written
+5. Use **engineer** agent → implement on feature branch
+6. Use **reviewer** agent → code review
+7. Use **qa** agent → run all tests
+8. Use **security** agent → OWASP audit + dependency scan
+9. Use **documentation** agent → update docs
+10. **HUMAN GATE**: Ask CEO to approve production deploy
+11. Use **devops** agent → deploy staging first, then production
+12. Use **monitor** agent → watch for 15 min post-deploy
+13. Use **observer** agent → analyze task and update learnings
+
+### For BUGS / urgent fixes:
+1. Use **investigator** agent → root cause analysis
+2. Use **engineer** agent → minimal fix
+3. Use **qa** agent → test the fix
+4. **HUMAN GATE**: CEO approves deploy
+5. Use **devops** agent → staging first, then production
+
+## Human Gate Protocol
+
+At human gates, present a clear summary and ask for approval:
+- "Plan ready: [N] files to change. Risks: [list]. Approve? (y/n)"
+- "Tests passed. Security clean. Deploy to production? (y/n)"
+
+If CEO says no → ask what to change. Never proceed without approval.
+
+## Safety Rules (ABSOLUTE — enforced by hooks, not prompts)
+- Safety hooks in `.claude/settings.json` run on EVERY tool call automatically
+- You cannot bypass them — they are runtime hooks, not conversation instructions
+- Kill switch: `.pocketteam/KILL` file stops everything immediately
 - Never write to .env, .ssh, .aws, *.pem, *.key files
-- Never run: rm -rf /, DROP DATABASE, TRUNCATE, fork bombs, disk format
+- Never run: rm -rf /, DROP DATABASE, TRUNCATE, fork bombs
 - Always staging-first for production fixes
 
-## Communication
-- Keep CEO informed with brief status updates
-- Batch all questions before starting work
-- Telegram updates: 📋 Plan ready | 🔨 Working | ✅ Done | ⚠️ Problem
-- If blocked after 3 attempts → escalate to CEO
+## Communication Style
+- Keep CEO informed concisely
+- Batch all questions before starting work (never ask one at a time)
+- Status format: "📋 Plan ready" | "🔨 Working on X" | "✅ Done" | "⚠️ Problem"
+- If blocked after 3 attempts → escalate to CEO immediately
 
 ## Artifact Locations
-- Plans: .pocketteam/artifacts/plans/
-- Reviews: .pocketteam/artifacts/reviews/
-- Audit logs: .pocketteam/artifacts/audit/
-- Event stream: .pocketteam/events/stream.jsonl
+- Plans: `.pocketteam/artifacts/plans/`
+- Reviews: `.pocketteam/artifacts/reviews/`
+- Audit logs: `.pocketteam/artifacts/audit/`
+- Agent learnings: `.pocketteam/learnings/`
+- Event stream: `.pocketteam/events/stream.jsonl`
 {POCKETTEAM_END}
 """
 
@@ -447,7 +506,7 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python .claude/skills/pocketteam/safety/guardian.py pre",
+                        "command": "python -m pocketteam.safety pre",
                     }
                 ],
             }
@@ -458,7 +517,7 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python .claude/skills/pocketteam/safety/activity_logger.py",
+                        "command": "python -m pocketteam.tools.activity_logger",
                     }
                 ],
             }
@@ -499,17 +558,26 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
 
 
 def _setup_agent_definitions(project_root: Path) -> None:
-    """Copy agent .md definitions to .claude/agents/pocketteam/."""
-    # Agent definitions are templates in the package
+    """Copy agent .md definitions and skills to .claude/ directories."""
+    # Agent prompts → .claude/agents/pocketteam/
     templates_dir = Path(__file__).parent / "agents" / "prompts"
     target_dir = project_root / AGENTS_DIR
 
-    if not templates_dir.exists():
-        return  # Will be populated in Phase 5
+    if templates_dir.exists():
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for md_file in templates_dir.glob("*.md"):
+            target = target_dir / md_file.name
+            # Always overwrite — agent prompts may have been updated
+            shutil.copy2(md_file, target)
 
-    for md_file in templates_dir.glob("*.md"):
-        target = target_dir / md_file.name
-        if not target.exists():
+    # Skills → .claude/skills/pocketteam/
+    skills_dir = Path(__file__).parent / "skills"
+    skills_target = project_root / SKILLS_DIR
+
+    if skills_dir.exists():
+        skills_target.mkdir(parents=True, exist_ok=True)
+        for md_file in skills_dir.glob("*.md"):
+            target = skills_target / md_file.name
             shutil.copy2(md_file, target)
 
 
