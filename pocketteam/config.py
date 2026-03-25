@@ -60,7 +60,6 @@ class DashboardConfig:
     port: int = DASHBOARD_PORT
     image: str = DASHBOARD_IMAGE
     image_version: str = DASHBOARD_VERSION
-    image_digest: str = ""
     domain: str = ""
     compose_dir: str = ""
     docker_context: str = "default"
@@ -179,7 +178,6 @@ def load_config(project_root: Optional[Path] = None) -> PocketTeamConfig:
             port=dash.get("port", DASHBOARD_PORT),
             image=dash.get("image", DASHBOARD_IMAGE),
             image_version=dash.get("image_version", DASHBOARD_VERSION),
-            image_digest=dash.get("image_digest", ""),
             domain=dash.get("domain", ""),
             compose_dir=dash.get("compose_dir", ""),
             docker_context=dash.get("docker_context", "default"),
@@ -238,7 +236,6 @@ def save_config(cfg: PocketTeamConfig) -> None:
             "port": cfg.dashboard.port,
             "image": cfg.dashboard.image,
             "image_version": cfg.dashboard.image_version,
-            "image_digest": cfg.dashboard.image_digest,
             "domain": cfg.dashboard.domain,
             "compose_dir": cfg.dashboard.compose_dir,
             "docker_context": cfg.dashboard.docker_context,
