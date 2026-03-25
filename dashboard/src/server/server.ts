@@ -156,6 +156,18 @@ export function createServer(config: ServerConfig): PocketTeamServer {
     }
   }
 
+  // === Periodic status refresh (30s) ===
+  // Without this, mtime-based status transitions (working→done) never fire
+  // when no agent files are being written. The status depends on current time
+  // (Date.now() - mtimeMs), so it must be re-evaluated periodically.
+  const statusRefreshInterval = setInterval(() => {
+    const agents = subagentReader.readAll();
+    for (const agent of agents) {
+      wsHub.broadcastAgentUpdate(agent);
+      knownAgentIds.add(agent.id);
+    }
+  }, 30_000);
+
   // === REST routes ===
   app.use(
     "/api/v1",
@@ -219,6 +231,7 @@ export function createServer(config: ServerConfig): PocketTeamServer {
   });
 
   const close = async (): Promise<void> => {
+    clearInterval(statusRefreshInterval);
     await Promise.all([
       watcher.close(),
       killSwitchReader.close(),

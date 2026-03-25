@@ -3,113 +3,126 @@ import React from "react";
 interface Props {
   x: number;
   y: number;
-  /** If true, the desk faces up; false = faces down (chair below). Default: true. */
-  facingUp?: boolean;
-  color?: string;
 }
 
-const DESK_W = 72;
-const DESK_H = 40;
-const DESK_DEPTH = 10;
-const MONITOR_W = 22;
-const MONITOR_H = 14;
-const MONITOR_BASE_W = 6;
-const MONITOR_BASE_H = 3;
+// Isometric desk dimensions
+const DESK_W = 40;   // width of the top diamond face
+const DESK_H = 20;   // height of the top diamond face (half of DESK_W in iso)
+const DESK_DEPTH = 14; // vertical face height
+
+// Colors — warm wood tones
+const COLOR_TOP   = "#8B7355";
+const COLOR_LEFT  = "#6B5B45";
+const COLOR_RIGHT = "#5B4B35";
+const COLOR_MONITOR_FRAME = "#2a2a2a";
+const COLOR_MONITOR_SCREEN = "#4488cc";
 
 /**
- * Isometric-flavoured top-down desk.
- * Origin (x, y) is the center of the desk surface.
+ * Isometric desk with 3 visible faces: top, left, right.
+ * (x, y) is the screen-space center of the top face.
  */
-export function Desk({ x, y, color = "#2d3748" }: Props): React.ReactElement {
-  const halfW = DESK_W / 2;
-  const halfH = DESK_H / 2;
+export function Desk({ x, y }: Props): React.ReactElement {
+  const hw = DESK_W / 2;   // half-width
+  const hh = DESK_H / 2;   // half-height of the top diamond face
 
-  // Surface
-  const surfaceX = x - halfW;
-  const surfaceY = y - halfH;
+  // Top face — diamond shape
+  const topPoints = `${x},${y - hh} ${x + hw},${y} ${x},${y + hh} ${x - hw},${y}`;
 
-  // Front panel (bottom edge, gives a sense of depth)
-  const panelX = x - halfW;
-  const panelY = y + halfH;
+  // Left face — trapezoid going down-left
+  const leftPoints = `${x - hw},${y} ${x},${y + hh} ${x},${y + hh + DESK_DEPTH} ${x - hw},${y + DESK_DEPTH}`;
 
-  // Monitor center
-  const monX = x - MONITOR_W / 2;
-  const monY = y - halfH + 5;
+  // Right face — trapezoid going down-right
+  const rightPoints = `${x},${y + hh} ${x + hw},${y} ${x + hw},${y + DESK_DEPTH} ${x},${y + hh + DESK_DEPTH}`;
 
-  // Keyboard hint
-  const kbX = x - 14;
-  const kbY = y + 2;
+  // Monitor sits on the top face, toward the back (upper-left of the diamond)
+  const monX = x - 6;
+  const monY = y - hh - 14;
+  const monW = 14;
+  const monH = 10;
+
+  // Keyboard — a small flat rectangle on the top face
+  const kbX = x - 8;
+  const kbY = y - 2;
 
   return (
     <g>
-      {/* Front depth panel */}
-      <rect
-        x={panelX}
-        y={panelY}
-        width={DESK_W}
-        height={DESK_DEPTH}
-        rx={2}
-        fill={adjustBrightness(color, -30)}
+      {/* Shadow beneath desk */}
+      <ellipse
+        cx={x}
+        cy={y + hh + DESK_DEPTH + 3}
+        rx={hw + 2}
+        ry={5}
+        fill="#000"
+        opacity={0.18}
       />
-      {/* Desktop surface */}
-      <rect
-        x={surfaceX}
-        y={surfaceY}
-        width={DESK_W}
-        height={DESK_H}
-        rx={3}
-        fill={color}
-        stroke={adjustBrightness(color, -50)}
-        strokeWidth={1}
-      />
-      {/* Monitor stand */}
-      <rect
-        x={x - MONITOR_BASE_W / 2}
-        y={monY + MONITOR_H}
-        width={MONITOR_BASE_W}
-        height={MONITOR_BASE_H}
-        fill={adjustBrightness(color, -20)}
-      />
-      {/* Monitor screen */}
+
+      {/* Right face (darkest) */}
+      <polygon points={rightPoints} fill={COLOR_RIGHT} />
+
+      {/* Left face (medium) */}
+      <polygon points={leftPoints} fill={COLOR_LEFT} />
+
+      {/* Top face (lightest) */}
+      <polygon points={topPoints} fill={COLOR_TOP} />
+
+      {/* Top face edge lines for crispness */}
+      <polygon points={topPoints} fill="none" stroke="#3d2d1a" strokeWidth={0.6} />
+
+      {/* Monitor frame */}
       <rect
         x={monX}
         y={monY}
-        width={MONITOR_W}
-        height={MONITOR_H}
-        rx={2}
-        fill="#0d1117"
-        stroke="#374151"
+        width={monW}
+        height={monH}
+        rx={1}
+        fill={COLOR_MONITOR_FRAME}
+        stroke="#111"
         strokeWidth={0.5}
       />
-      {/* Screen glow (subtle) */}
+
+      {/* Monitor screen with blue glow */}
       <rect
-        x={monX + 2}
-        y={monY + 2}
-        width={MONITOR_W - 4}
-        height={MONITOR_H - 4}
-        rx={1}
-        fill="#1a2a4a"
-        opacity={0.8}
+        x={monX + 1.5}
+        y={monY + 1.5}
+        width={monW - 3}
+        height={monH - 3}
+        rx={0.5}
+        fill={COLOR_MONITOR_SCREEN}
+        opacity={0.85}
       />
-      {/* Keyboard hint */}
+
+      {/* Screen glow effect */}
+      <rect
+        x={monX - 1}
+        y={monY - 1}
+        width={monW + 2}
+        height={monH + 2}
+        rx={2}
+        fill={COLOR_MONITOR_SCREEN}
+        opacity={0.12}
+      />
+
+      {/* Monitor stand */}
+      <rect
+        x={monX + monW / 2 - 1}
+        y={monY + monH}
+        width={2}
+        height={3}
+        fill="#333"
+      />
+
+      {/* Keyboard */}
       <rect
         x={kbX}
         y={kbY}
-        width={28}
-        height={10}
-        rx={2}
-        fill={adjustBrightness(color, -15)}
-        stroke={adjustBrightness(color, -40)}
-        strokeWidth={0.5}
+        width={16}
+        height={6}
+        rx={1}
+        fill="#5a4a30"
+        stroke="#3d2d1a"
+        strokeWidth={0.4}
+        opacity={0.9}
       />
     </g>
   );
-}
-
-function adjustBrightness(hex: string, amount: number): string {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const r = Math.max(0, Math.min(255, (num >> 16) + amount));
-  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + amount));
-  const b = Math.max(0, Math.min(255, (num & 0xff) + amount));
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }

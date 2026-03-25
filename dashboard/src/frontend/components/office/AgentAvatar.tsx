@@ -1,21 +1,26 @@
 import React from "react";
-import type { AvatarData, HairStyle } from "./avatarGenerator";
+import type { AvatarStyle, HairStyle } from "./avatarGenerator";
 
 interface Props {
   x: number;
   y: number;
-  avatar: AvatarData;
+  avatar: AvatarStyle;
   role: string;
   status: "idle" | "working" | "done";
   description?: string;
   toolCallCount?: number;
 }
 
-const HEAD_R = 12;
-const BODY_W = 18;
-const BODY_H = 16;
-const MAX_BUBBLE_CHARS = 28;
+const HEAD_W = 10;
+const HEAD_H = 10;
+const BODY_W = 12;
+const BODY_H = 14;
+const MAX_BUBBLE_CHARS = 25;
 
+/**
+ * Pixel-art isometric character sitting at a desk.
+ * (x, y) is the screen-space anchor — roughly where the character sits.
+ */
 export function AgentAvatar({
   x,
   y,
@@ -29,56 +34,91 @@ export function AgentAvatar({
   const isDone = status === "done";
   const isIdle = status === "idle";
 
-  const opacity = isIdle ? 0.35 : 1;
+  const opacity = isIdle ? 0.3 : isDone ? 0.7 : 1;
 
   const truncatedDesc =
     description && description.length > MAX_BUBBLE_CHARS
       ? `${description.slice(0, MAX_BUBBLE_CHARS)}…`
       : (description ?? "");
 
+  // Character is rendered from center-bottom
+  // Body center
+  const bx = x - BODY_W / 2;
+  const by = y - BODY_H;
+  // Head center
+  const hx = x - HEAD_W / 2;
+  const hy = by - HEAD_H - 1;
+
   return (
-    <g transform={`translate(${x}, ${y})`} opacity={opacity}>
-      {/* Working: pulsing status ring */}
+    <g opacity={opacity}>
+      {/* Working: pulsing green ring around character */}
       {isWorking && (
-        <circle
-          r={HEAD_R + 5}
+        <ellipse
+          cx={x}
+          cy={y - BODY_H / 2 - HEAD_H / 2}
+          rx={16}
+          ry={16}
           fill="none"
           stroke="#22c55e"
           strokeWidth={1.5}
-          opacity={0.7}
+          opacity={0.65}
           style={{ animation: "pulse-ring 1.4s ease-in-out infinite" }}
         />
       )}
 
-      {/* Hair */}
-      <HairShape style={avatar.hairStyle} color={avatar.hairColor} r={HEAD_R} />
-
-      {/* Head */}
-      <circle r={HEAD_R} fill={avatar.faceColor} />
-
-      {/* Eyes */}
-      <circle cx={-4} cy={-2} r={1.8} fill="#222" />
-      <circle cx={4} cy={-2} r={1.8} fill="#222" />
-
       {/* Body / shirt */}
       <rect
-        x={-BODY_W / 2}
-        y={HEAD_R - 2}
+        x={bx}
+        y={by}
         width={BODY_W}
         height={BODY_H}
-        rx={4}
+        rx={2}
         fill={avatar.shirtColor}
-        opacity={0.9}
       />
 
-      {/* Done: checkmark badge */}
+      {/* Body shading — right side darker for iso feel */}
+      <rect
+        x={bx + BODY_W * 0.6}
+        y={by}
+        width={BODY_W * 0.4}
+        height={BODY_H}
+        rx={2}
+        fill="#000"
+        opacity={0.18}
+      />
+
+      {/* Head */}
+      <rect
+        x={hx}
+        y={hy}
+        width={HEAD_W}
+        height={HEAD_H}
+        rx={2}
+        fill={avatar.skinColor}
+      />
+
+      {/* Hair */}
+      <HairShape
+        style={avatar.hairStyle}
+        color={avatar.hairColor}
+        hx={hx}
+        hy={hy}
+        hw={HEAD_W}
+        hh={HEAD_H}
+      />
+
+      {/* Eyes — two small dark pixels */}
+      <rect x={hx + 2} y={hy + 3} width={2} height={2} fill="#1a1a1a" rx={0.5} />
+      <rect x={hx + 6} y={hy + 3} width={2} height={2} fill="#1a1a1a" rx={0.5} />
+
+      {/* Done: green checkmark badge */}
       {isDone && (
-        <g transform={`translate(${HEAD_R - 2}, ${-HEAD_R + 2})`}>
-          <circle r={6} fill="#1a2a1a" stroke="#22c55e" strokeWidth={1} />
+        <g transform={`translate(${x + 6}, ${hy - 2})`}>
+          <circle r={5} fill="#1a2a1a" stroke="#22c55e" strokeWidth={0.8} />
           <path
-            d="M -3 0 L -1 2.5 L 3.5 -2"
+            d="M -2.5 0 L -0.5 2 L 3 -1.5"
             stroke="#22c55e"
-            strokeWidth={1.5}
+            strokeWidth={1.2}
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
@@ -86,34 +126,32 @@ export function AgentAvatar({
         </g>
       )}
 
+      {/* Working: green status dot above head */}
+      {isWorking && (
+        <circle
+          cx={x + 6}
+          cy={hy - 3}
+          r={3}
+          fill="#22c55e"
+          style={{ animation: "pulse-ring 1s ease-in-out infinite" }}
+        />
+      )}
+
       {/* Speech bubble when working */}
       {isWorking && truncatedDesc && (
         <g style={{ animation: "float-bubble 2.5s ease-in-out infinite" }}>
-          <BubbleRect text={truncatedDesc} />
+          <SpeechBubble x={x} y={hy} text={truncatedDesc} />
         </g>
       )}
 
-      {/* Role label */}
-      <text
-        textAnchor="middle"
-        y={HEAD_R + BODY_H + 10}
-        fontSize={8}
-        fill={isIdle ? "#4b5563" : "#9ca3af"}
-        fontFamily="monospace"
-        fontWeight="600"
-        letterSpacing="0.5"
-      >
-        {role.toUpperCase()}
-      </text>
-
-      {/* Tool call badge when working */}
+      {/* Tool call count badge */}
       {isWorking && toolCallCount !== undefined && toolCallCount > 0 && (
-        <g transform={`translate(${-HEAD_R + 2}, ${-HEAD_R + 2})`}>
-          <circle r={6} fill="#1e3a5f" stroke="#3b82f6" strokeWidth={0.8} />
+        <g transform={`translate(${x - 8}, ${hy - 2})`}>
+          <circle r={5} fill="#1e3a5f" stroke="#3b82f6" strokeWidth={0.7} />
           <text
             textAnchor="middle"
-            dy="3"
-            fontSize={6}
+            dy="3.5"
+            fontSize={5}
             fill="#93c5fd"
             fontFamily="monospace"
           >
@@ -121,15 +159,33 @@ export function AgentAvatar({
           </text>
         </g>
       )}
+
+      {/* Role label below character */}
+      <text
+        x={x}
+        textAnchor="middle"
+        y={y + 6}
+        fontSize={7}
+        fill={isIdle ? "#3b4050" : "#7a8399"}
+        fontFamily="monospace"
+        fontWeight="700"
+        letterSpacing="0.5"
+      >
+        {role.toUpperCase()}
+      </text>
     </g>
   );
 }
 
-function BubbleRect({ text }: { text: string }): React.ReactElement {
-  const bubbleW = Math.max(60, text.length * 4.8 + 14);
-  const bubbleH = 18;
-  const bx = -bubbleW / 2;
-  const by = -(HEAD_R + bubbleH + 10);
+// ---------------------------------------------------------------------------
+// Speech bubble
+// ---------------------------------------------------------------------------
+
+function SpeechBubble({ x, y, text }: { x: number; y: number; text: string }): React.ReactElement {
+  const bubbleW = Math.max(55, text.length * 4.5 + 12);
+  const bubbleH = 16;
+  const bx = x - bubbleW / 2;
+  const by = y - bubbleH - 14;
 
   return (
     <g>
@@ -138,24 +194,24 @@ function BubbleRect({ text }: { text: string }): React.ReactElement {
         y={by}
         width={bubbleW}
         height={bubbleH}
-        rx={5}
+        rx={4}
         fill="#0f172a"
         stroke="#22c55e"
-        strokeWidth={0.8}
-        opacity={0.92}
+        strokeWidth={0.7}
+        opacity={0.93}
       />
       {/* Tail */}
       <path
-        d={`M -4 ${by + bubbleH} L 0 ${by + bubbleH + 6} L 4 ${by + bubbleH}`}
+        d={`M ${x - 3} ${by + bubbleH} L ${x} ${by + bubbleH + 5} L ${x + 3} ${by + bubbleH}`}
         fill="#0f172a"
         stroke="#22c55e"
-        strokeWidth={0.8}
+        strokeWidth={0.7}
       />
       <text
-        x={0}
-        y={by + 12}
+        x={x}
+        y={by + 11}
         textAnchor="middle"
-        fontSize={7.5}
+        fontSize={6.5}
         fill="#86efac"
         fontFamily="monospace"
       >
@@ -165,66 +221,80 @@ function BubbleRect({ text }: { text: string }): React.ReactElement {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Hair shapes — pixel-art style at small scale
+// ---------------------------------------------------------------------------
+
 function HairShape({
   style,
   color,
-  r,
+  hx,
+  hy,
+  hw,
+  hh,
 }: {
   style: HairStyle;
   color: string;
-  r: number;
+  hx: number;
+  hy: number;
+  hw: number;
+  hh: number;
 }): React.ReactElement | null {
   switch (style) {
-    case "short":
+    case "flat":
+      // Flat cap — simple rect across top of head
       return (
-        <ellipse cx={0} cy={-r * 0.5} rx={r * 0.95} ry={r * 0.6} fill={color} />
+        <rect
+          x={hx - 1}
+          y={hy - 2}
+          width={hw + 2}
+          height={4}
+          rx={1}
+          fill={color}
+        />
       );
     case "spiky":
+      // Three spikes on top
       return (
-        <g>
-          <ellipse cx={0} cy={-r * 0.5} rx={r * 0.9} ry={r * 0.5} fill={color} />
-          {([-0.55, -0.2, 0.15, 0.5] as number[]).map((off, i) => (
-            <polygon
-              key={i}
-              points={`${off * r * 2},${-r * 1.3} ${off * r * 2 - 3},${-r * 0.6} ${off * r * 2 + 3},${-r * 0.6}`}
-              fill={color}
-            />
-          ))}
+        <g fill={color}>
+          <polygon points={`${hx + 1},${hy} ${hx + 3},${hy - 6} ${hx + 5},${hy}`} />
+          <polygon points={`${hx + 4},${hy} ${hx + 5},${hy - 7} ${hx + 7},${hy}`} />
+          <polygon points={`${hx + 7},${hy} ${hx + 8},${hy - 5} ${hx + 10},${hy}`} />
         </g>
       );
-    case "side":
+    case "round":
+      // Round puff — semicircle on top
       return (
-        <g>
-          <ellipse cx={-r * 0.1} cy={-r * 0.5} rx={r} ry={r * 0.55} fill={color} />
-          <rect
-            x={r * 0.3}
-            y={-r * 1.1}
-            width={r * 0.5}
-            height={r * 0.4}
-            rx={2}
-            fill={color}
-          />
-        </g>
+        <ellipse
+          cx={hx + hw / 2}
+          cy={hy + 1}
+          rx={hw / 2 + 1}
+          ry={5}
+          fill={color}
+        />
       );
-    case "curly":
+    case "long":
+      // Long hair — extends down the sides
       return (
-        <g>
-          {([[-0.5, -0.9], [0, -1.05], [0.5, -0.9], [-0.75, -0.55], [0.75, -0.55]] as [number, number][]).map(
-            ([ox, oy], i) => (
-              <circle key={i} cx={ox * r} cy={oy * r} r={r * 0.32} fill={color} />
-            )
-          )}
+        <g fill={color}>
+          <rect x={hx - 1} y={hy - 1} width={hw + 2} height={4} rx={1} />
+          {/* Left side hang */}
+          <rect x={hx - 2} y={hy + 2} width={3} height={hh} rx={1} />
+          {/* Right side hang */}
+          <rect x={hx + hw - 1} y={hy + 2} width={3} height={hh} rx={1} />
         </g>
       );
     case "buzz":
+      // Very close-cropped — thin strip
       return (
-        <ellipse
-          cx={0}
-          cy={-r * 0.45}
-          rx={r * 0.88}
-          ry={r * 0.48}
+        <rect
+          x={hx}
+          y={hy}
+          width={hw}
+          height={3}
+          rx={1}
           fill={color}
-          opacity={0.75}
+          opacity={0.8}
         />
       );
     default:
