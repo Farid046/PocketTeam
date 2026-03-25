@@ -31,7 +31,11 @@ POCKETTEAM_START = "<!-- POCKETTEAM START -->"
 POCKETTEAM_END = "<!-- POCKETTEAM END -->"
 
 
-async def run_init(project_name: str | None, accept_defaults: bool) -> None:
+async def run_init(
+    project_name: str | None,
+    accept_defaults: bool,
+    no_dashboard: bool = False,
+) -> None:
     """Main init flow."""
     console.print(Panel(
         "Welcome to [bold cyan]PocketTeam[/] 🚀\n"
@@ -86,10 +90,24 @@ async def run_init(project_name: str | None, accept_defaults: bool) -> None:
     # Create .env.example
     _create_env_example(project_root)
 
-    # Create start script if Telegram configured
+    # Create start script + ensure plugin is installed if Telegram configured
     tg_active = bool(cfg.telegram.bot_token and not cfg.telegram.bot_token.startswith("$"))
     if tg_active:
         _create_start_script(project_root, cfg)
+        # Safety net: ensure plugin is installed even on re-init without reconfigure
+        _setup_telegram_plugin(cfg.telegram.bot_token)
+
+    # Setup dashboard (default ON, skip with --no-dashboard)
+    if not no_dashboard:
+        try:
+            from .dashboard import setup_dashboard
+            setup_dashboard(cfg)
+        except SystemExit:
+            # setup_dashboard may sys.exit() with instructions — let it propagate
+            raise
+        except Exception as e:
+            console.print(f"  [yellow]Dashboard setup skipped: {e}[/]")
+            console.print("  Run later: [bold]pocketteam dashboard install[/]")
 
     # Send Telegram confirmation if configured
     if tg_active and cfg.telegram.chat_id:
@@ -118,7 +136,7 @@ async def run_init(project_name: str | None, accept_defaults: bool) -> None:
         next_steps.append("  [bold]pocketteam start[/]")
         next_steps.append("")
         next_steps.append("[dim]This runs: claude --channels plugin:telegram@...[/]")
-        next_steps.append("[dim]First time? Follow the pairing steps from Step 3b above.[/]")
+        next_steps.append("[dim]First time? DM your bot, then run /telegram:access pair <code>[/]")
     else:
         next_steps.append("Open Claude Code — it will act as your COO:")
         next_steps.append("  [bold]claude[/]")
@@ -127,6 +145,13 @@ async def run_init(project_name: str | None, accept_defaults: bool) -> None:
     next_steps.append("Then give it a task:")
     next_steps.append("  > Build user auth with OAuth2")
     next_steps.append("")
+    if cfg.dashboard.enabled:
+        next_steps.append(
+            f"Dashboard: [bold cyan]http://localhost:{cfg.dashboard.port}[/]"
+        )
+        next_steps.append("[dim]Manage: pocketteam dashboard start|stop|status|logs[/]")
+    elif no_dashboard:
+        next_steps.append("[dim]Dashboard skipped. Install later: pocketteam dashboard install[/]")
     next_steps.append("[dim]Commands: pocketteam start | pocketteam status | pocketteam kill[/]")
 
     console.print(Panel(
@@ -311,25 +336,33 @@ async def _interview(
 
                     console.print()
                     console.print("  [green]Token saved![/]")
+
+                    # Auto-setup: install plugin + write config
                     console.print()
-                    console.print("  [bold]Step 3b:[/] Connect to Claude Code")
-                    console.print("  Run these commands in Claude Code (after init finishes):")
-                    console.print()
-                    console.print("  [bold cyan]1.[/] Install the Telegram plugin:")
-                    console.print("     [bold]/plugin install telegram@claude-plugins-official[/]")
-                    console.print()
-                    console.print("  [bold cyan]2.[/] Configure with your token:")
-                    console.print(f"     [bold]/telegram:configure {bot_token}[/]")
-                    console.print()
-                    console.print("  [bold cyan]3.[/] Restart Claude Code with channels:")
-                    console.print("     [bold]claude --channels plugin:telegram@claude-plugins-official[/]")
-                    console.print()
-                    console.print("  [bold cyan]4.[/] DM your bot on Telegram, then pair:")
-                    console.print("     [bold]/telegram:access pair <code-from-bot>[/]")
-                    console.print()
-                    console.print("  [bold cyan]5.[/] Lock down access (recommended):")
-                    console.print("     [bold]/telegram:access policy allowlist[/]")
-                    console.print()
+                    console.print("  Setting up Telegram plugin automatically...")
+                    plugin_ok = _setup_telegram_plugin(bot_token)
+
+                    if plugin_ok:
+                        console.print("  [green]✅ Telegram plugin installed and configured![/]")
+                        console.print()
+                        console.print("  [bold]After starting, DM your bot on Telegram to pair:[/]")
+                        console.print("     1. Send any message to your bot")
+                        console.print("     2. Bot replies with a pairing code")
+                        console.print("     3. In Claude Code, run: [bold]/telegram:access pair <code>[/]")
+                        console.print("     4. Lock down access: [bold]/telegram:access policy allowlist[/]")
+                        console.print()
+                    else:
+                        console.print("  [yellow]⚠️ Auto-setup failed. Follow these manual steps after init:[/]")
+                        console.print()
+                        console.print("  [bold cyan]1.[/] Install the Telegram plugin:")
+                        console.print("     [bold]/plugin install telegram@claude-plugins-official[/]")
+                        console.print()
+                        console.print("  [bold cyan]2.[/] Configure with your token:")
+                        console.print(f"     [bold]/telegram:configure {bot_token}[/]")
+                        console.print()
+                        console.print("  [bold cyan]3.[/] Restart Claude Code with channels:")
+                        console.print("     [bold]pocketteam start[/]")
+                        console.print()
 
                     # Also save chat_id if user has it
                     chat_id = Prompt.ask(
@@ -339,7 +372,7 @@ async def _interview(
                     if chat_id:
                         cfg.telegram.chat_id = chat_id
 
-                    console.print("  [green]Telegram setup saved! Follow steps 3b above after init.[/]")
+                    console.print("  [green]Telegram setup saved![/]")
                 else:
                     console.print("  [dim]Skipped. Run pocketteam init again anytime.[/]")
 
@@ -650,6 +683,33 @@ def _setup_agent_definitions(project_root: Path) -> None:
         for md_file in skills_dir.glob("*.md"):
             target = skills_target / md_file.name
             shutil.copy2(md_file, target)
+
+
+def _setup_telegram_plugin(bot_token: str) -> bool:
+    """Install Telegram plugin and write bot token config. Returns True on success."""
+    try:
+        if not shutil.which("claude"):
+            return False
+
+        # Install plugin (idempotent — succeeds or reports already installed)
+        result = subprocess.run(
+            ["claude", "plugin", "install", "telegram@claude-plugins-official"],
+            capture_output=True, text=True, timeout=60,
+        )
+        combined = (result.stdout + result.stderr).lower()
+        if result.returncode != 0 and "already installed" not in combined:
+            return False
+
+        # Write bot token to plugin's config location
+        channel_dir = Path.home() / ".claude" / "channels" / "telegram"
+        channel_dir.mkdir(parents=True, exist_ok=True)
+        env_path = channel_dir / ".env"
+        env_path.write_text(f"TELEGRAM_BOT_TOKEN={bot_token}\n")
+        os.chmod(env_path, 0o600)
+
+        return True
+    except Exception:
+        return False
 
 
 def _create_start_script(project_root: Path, cfg: PocketTeamConfig) -> None:
