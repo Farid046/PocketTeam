@@ -28,7 +28,6 @@ from rich.console import Console
 
 from .config import DashboardConfig, PocketTeamConfig, load_config, save_config
 from .constants import (
-    DASHBOARD_DIGEST,
     DASHBOARD_IMAGE,
     DASHBOARD_PORT,
     DASHBOARD_PORT_RANGE_END,
@@ -225,77 +224,30 @@ def check_disk_space(min_mb: int = 200) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Image pull with retry + error taxonomy (Step 3)
+# Image build from local source (Step 3)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def pull_image(
-    image: str,
-    version: str,
-    digest: str,
-    context: str,
-    max_retries: int = 3,
-) -> None:
-    """
-    Pull the dashboard image with retry and error taxonomy.
-
-    Non-retryable errors exit immediately with instructions.
-    Retryable errors use exponential backoff.
-    Uses shell=False — no shell injection.
-    """
-    ref = f"{image}@{digest}" if digest else f"{image}:{version}"
-    for attempt in range(max_retries):
-        result = subprocess.run(
-            ["docker", "--context", context, "pull", ref],
-            capture_output=True,
-            check=False,
+def build_image(project_root: Path, context: str) -> None:
+    """Build the dashboard Docker image from local source."""
+    dashboard_dir = project_root / "dashboard"
+    if not dashboard_dir.exists():
+        console.print("[red]dashboard/ directory not found.[/]")
+        console.print("PocketTeam must be installed from source (git clone).")
+        console.print("pip-installed versions don't include the dashboard source.")
+        sys.exit(1)
+    console.print("  Building dashboard image (first time ~2 min, cached after)...")
+    try:
+        subprocess.run(
+            ["docker", "--context", context, "build",
+             "-t", f"{DASHBOARD_IMAGE}:{DASHBOARD_VERSION}",
+             "-f", str(dashboard_dir / "Dockerfile"),
+             str(dashboard_dir)],
+            check=True
         )
-        if result.returncode == 0:
-            return
-
-        stderr = (result.stderr or b"").decode(errors="replace").lower()
-
-        # Non-retryable: image doesn't exist
-        if "not found" in stderr or "manifest unknown" in stderr:
-            console.print(f"[red]Image {ref} not found on GHCR.[/]")
-            console.print(
-                "Your pocketteam version may be newer than the published image."
-            )
-            console.print("Check releases: https://github.com/pocketteam/pocketteam/releases")
-            sys.exit(1)
-
-        # Non-retryable: auth / rate limit
-        if "denied" in stderr or "403" in stderr:
-            console.print("[red]GHCR rate limit or auth error.[/]")
-            console.print("Try: [bold]docker login ghcr.io[/]")
-            sys.exit(1)
-
-        # Non-retryable: no disk space
-        if "no space left" in stderr:
-            console.print("[red]No disk space left during pull.[/]")
-            console.print("Free up disk space, then re-run: [bold]pocketteam init[/]")
-            sys.exit(1)
-
-        # Non-retryable: proxy auth required
-        if "407" in stderr or "proxy" in stderr:
-            console.print("[red]Proxy authentication required.[/]")
-            console.print(
-                "Configure Docker proxy settings: "
-                "https://docs.docker.com/network/proxy/"
-            )
-            sys.exit(1)
-
-        # Retryable
-        if attempt < max_retries - 1:
-            wait = 2**attempt
-            console.print(
-                f"Pull failed, retrying in {wait}s... ({attempt + 1}/{max_retries})"
-            )
-            time.sleep(wait)
-
-    console.print("[red]Docker pull failed after 3 attempts.[/]")
-    console.print("Check your internet connection, then re-run: [bold]pocketteam init[/]")
-    sys.exit(1)
+    except subprocess.CalledProcessError:
+        console.print("[red]Docker build failed. Check the output above for errors.[/]")
+        sys.exit(1)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -382,11 +334,7 @@ def generate_compose(
     deploy.restart_policy which is Swarm-only).
     Auth token sourced from env_file, not from config.
     """
-    image_ref = (
-        f"{dash.image}@{dash.image_digest}"
-        if dash.image_digest
-        else f"{dash.image}:{dash.image_version}"
-    )
+    image_ref = f"{dash.image}:{dash.image_version}"
 
     return f"""version: "3.8"
 services:
@@ -396,12 +344,12 @@ services:
     ports:
       - "127.0.0.1:{dash.port}:{dash.port}"
     volumes:
-      - {claude_project_dir}:/data/claude/project:ro
-      - {pocketteam_dir}:/data/pocketteam:ro
+      - "{claude_project_dir}:/data/claude/project:ro"
+      - "{pocketteam_dir}:/data/pocketteam:ro"
     environment:
       - PORT={dash.port}
     env_file:
-      - {env_file_path}
+      - "{env_file_path}"
     read_only: true
     tmpfs:
       - /tmp
@@ -516,16 +464,10 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
     console.print(f"  [green]Docker context: {detected_context}[/]")
 
     # Step 2: Disk space
-    check_disk_space(min_mb=200)
+    check_disk_space(min_mb=600)
 
-    # Step 3: Pull image
-    console.print(f"  Pulling dashboard image {DASHBOARD_IMAGE}:{DASHBOARD_VERSION}...")
-    pull_image(
-        image=DASHBOARD_IMAGE,
-        version=DASHBOARD_VERSION,
-        digest=DASHBOARD_DIGEST,
-        context=detected_context,
-    )
+    # Step 3: Build image from local source
+    build_image(project_root, detected_context)
     console.print("  [green]Image ready.[/]")
 
     # Step 4: Auto-compute paths + validate
@@ -594,7 +536,6 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
         port=port,
         image=DASHBOARD_IMAGE,
         image_version=DASHBOARD_VERSION,
-        image_digest=DASHBOARD_DIGEST,
         domain="",
         compose_dir=str(compose_dir),
         docker_context=detected_context,
@@ -694,6 +635,16 @@ def dashboard_start_cmd(project_root: Optional[Path] = None) -> None:
     root = project_root or Path.cwd()
     cfg, compose_file = _load_dashboard_config(root)
     check_docker_daemon(cfg.dashboard.docker_context)
+
+    # Check if image exists, build if not
+    result = subprocess.run(
+        ["docker", "image", "inspect", f"{DASHBOARD_IMAGE}:{DASHBOARD_VERSION}"],
+        capture_output=True, check=False
+    )
+    if result.returncode != 0:
+        console.print("[yellow]Dashboard image not found. Building...[/]")
+        project_root_path = Path(cfg.dashboard.project_root)
+        build_image(project_root_path, cfg.dashboard.docker_context)
 
     cmd = _build_compose_cmd(cfg, compose_file) + ["up", "-d"]
     result = subprocess.run(cmd, check=False)
@@ -812,99 +763,25 @@ def dashboard_logs_cmd(project_root: Optional[Path] = None) -> None:
 
 
 def dashboard_update_cmd(project_root: Optional[Path] = None) -> None:
-    """
-    Pull new digest-pinned version, update compose, restart.
-    Checks disk space first.
-    """
+    """Rebuild dashboard from local source."""
     root = project_root or Path.cwd()
-    cfg, compose_file = _load_dashboard_config(root)
-    check_docker_daemon(cfg.dashboard.docker_context)
-    check_disk_space(min_mb=200)
-
-    ctx = cfg.dashboard.docker_context
-
-    console.print("Fetching latest release manifest...")
-    try:
-        req = urllib.request.Request(
-            "https://api.github.com/repos/pocketteam/pocketteam/releases/latest",
-            headers={"Accept": "application/vnd.github+json"},
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            import json
-            release_data = json.loads(resp.read())
-    except (urllib.error.URLError, OSError) as e:
-        console.print(f"[red]Could not fetch release manifest: {e}[/]")
-        console.print("Check your internet connection.")
-        sys.exit(1)
-
-    # Extract version + digest from release body (expected format: "digest: sha256:abc...")
-    new_version = release_data.get("tag_name", "").lstrip("v")
-    new_digest = ""
-    body = release_data.get("body", "")
-    for line in body.splitlines():
-        if line.lower().startswith("digest:"):
-            new_digest = line.split(":", 1)[1].strip()
-            break
-
-    current_version = cfg.dashboard.image_version
-    current_digest = cfg.dashboard.image_digest
-
-    if new_version == current_version and new_digest == current_digest:
-        console.print(f"Already up to date ({current_version}).")
+    cfg = load_config(root)
+    if not cfg.dashboard.enabled:
+        console.print("[yellow]Dashboard not configured. Run: pocketteam init[/]")
         return
-
-    console.print(f"Updating {current_version} → {new_version}...")
-
-    # Pull new image
-    pull_image(
-        image=cfg.dashboard.image,
-        version=new_version,
-        digest=new_digest,
-        context=ctx,
-    )
-
-    # Check compose checksum — warn if hand-edited
-    current_checksum = hashlib.sha256(compose_file.read_bytes()).hexdigest()
-    if cfg.dashboard.compose_checksum and current_checksum != cfg.dashboard.compose_checksum:
-        console.print(
-            "[yellow]Compose file has been hand-edited. "
-            "It will be overwritten with the new version.[/]"
-        )
-        backup = compose_file.with_suffix(".yml.bak")
-        shutil.copy2(compose_file, backup)
-        os.chmod(backup, 0o600)
-        console.print(f"Backed up to: {backup}")
-
-    # Update config + regenerate compose
-    cfg.dashboard.image_version = new_version
-    cfg.dashboard.image_digest = new_digest
-
-    claude_project_dir = (
-        Path.home() / ".claude" / "projects" / cfg.dashboard.claude_project_hash
-    )
-    env_file_path = Path(cfg.dashboard.project_root) / ".pocketteam" / ".env"
-    pocketteam_dir = Path(cfg.dashboard.project_root) / ".pocketteam"
-
-    compose_content = generate_compose(
-        dash=cfg.dashboard,
-        claude_project_dir=claude_project_dir,
-        pocketteam_dir=pocketteam_dir,
-        env_file_path=env_file_path,
-    )
-    compose_file.write_text(compose_content)
-    os.chmod(compose_file, 0o600)
-    cfg.dashboard.compose_checksum = hashlib.sha256(compose_content.encode()).hexdigest()
-    save_config(cfg)
-
-    # Restart
-    compose_cmd = _build_compose_cmd(cfg, compose_file)
-    subprocess.run(compose_cmd + ["down"], check=False)
-    subprocess.run(compose_cmd + ["up", "-d"], check=False)
-
-    port = cfg.dashboard.port
-    wait_for_healthy(port)
-    console.print(f"[green]Updated {current_version} → {new_version}[/]")
-    console.print(f"Dashboard: http://localhost:{port}")
+    check_docker_daemon(cfg.dashboard.docker_context)
+    project_root_path = Path(cfg.dashboard.project_root)
+    console.print("[bold]Rebuilding dashboard from source...[/]")
+    build_image(project_root_path, cfg.dashboard.docker_context)
+    # Restart container with new image
+    compose_file = Path(cfg.dashboard.compose_dir) / "docker-compose.yml"
+    if compose_file.exists():
+        compose_cmd = cfg.dashboard.compose_command.split()
+        subprocess.run([*compose_cmd, "-f", str(compose_file), "down"], check=False)
+        subprocess.run([*compose_cmd, "-f", str(compose_file), "up", "-d"], check=True)
+        console.print("[green]Dashboard updated and restarted.[/]")
+    else:
+        console.print("[yellow]No compose file found. Run: pocketteam init[/]")
 
 
 def dashboard_configure_cmd(

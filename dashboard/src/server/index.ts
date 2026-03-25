@@ -20,6 +20,11 @@ if (!AUTH_TOKEN || AUTH_TOKEN.trim().length === 0) {
   console.error("          Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\"");
   process.exit(1);
 }
+if (!/^[0-9a-f]{64}$/.test(AUTH_TOKEN)) {
+  console.error("[startup] AUTH_TOKEN must be exactly 64 lowercase hex characters.");
+  console.error("          Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\"");
+  process.exit(1);
+}
 
 const CLAUDE_PROJECT_DIR = process.env["CLAUDE_PROJECT_DIR"] ?? "/data/claude/project";
 const POCKETTEAM_DIR = process.env["POCKETTEAM_DIR"] ?? "/data/pocketteam";

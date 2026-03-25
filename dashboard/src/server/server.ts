@@ -39,7 +39,7 @@ export function createServer(config: ServerConfig): PocketTeamServer {
         directives: {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
-          connectSrc: ["'self'", `ws://localhost:${port}`, `wss://localhost:${port}`],
+          connectSrc: ["'self'", `ws://localhost:${port}`, `wss://localhost:${port}`, `ws://127.0.0.1:${port}`, `wss://127.0.0.1:${port}`],
           styleSrc: ["'self'", "'unsafe-inline'"], // required for Tailwind utility classes
           imgSrc: ["'self'", "data:"],
           fontSrc: ["'self'"],
@@ -65,16 +65,20 @@ export function createServer(config: ServerConfig): PocketTeamServer {
   const auditLogReader = new AuditLogReader(pocketteamDir);
   auditLogReader.loadInitial(2000);
 
-  const killSwitchReader = new KillSwitchReader(pocketteamDir);
-  killSwitchReader.init();
-
   // === WebSocket hub ===
+  // KillSwitchReader is created once (with WebSocket callback) and shared with routes.
+  const killSwitchReader = new KillSwitchReader(pocketteamDir, (active: boolean) => {
+    wsHub.broadcastKillSwitchChange(active);
+  });
+
   const wsHub = new WebSocketHub(auth, {
     subagentReader,
     eventStreamReader,
     auditLogReader,
     killSwitchReader,
   });
+
+  killSwitchReader.init();
 
   // === File watcher — drives incremental WebSocket broadcasts ===
   const watcher = new FileWatcher({
@@ -102,14 +106,8 @@ export function createServer(config: ServerConfig): PocketTeamServer {
     watcher.watch(watchPaths);
   }
 
-  // Kill switch reader handles its own chokidar watcher internally.
-  // Wire its onChange to the WebSocket hub for immediate broadcast.
-  // We re-init with onChange callback by patching the reader after construction.
-  // Since KillSwitchReader.onChange is private, we wrap via a new instance:
-  const killSwitchReaderWithCb = new KillSwitchReader(pocketteamDir, (active: boolean) => {
-    wsHub.broadcastKillSwitchChange(active);
-  });
-  killSwitchReaderWithCb.init();
+  // Track known agent IDs so we can distinguish new spawns from updates
+  const knownAgentIds = new Set<string>();
 
   function handleFileChange(filePath: string): void {
     const normalizedPath = path.normalize(filePath);
@@ -148,9 +146,12 @@ export function createServer(config: ServerConfig): PocketTeamServer {
       for (const agent of agents) {
         if (agent.status === "done") {
           wsHub.broadcastAgentCompleted(agent.id, 0);
+        } else if (!knownAgentIds.has(agent.id)) {
+          wsHub.broadcastAgentSpawned(agent);
         } else {
           wsHub.broadcastAgentUpdate(agent);
         }
+        knownAgentIds.add(agent.id);
       }
     }
   }
@@ -162,7 +163,7 @@ export function createServer(config: ServerConfig): PocketTeamServer {
       subagentReader,
       eventStreamReader,
       auditLogReader,
-      killSwitchReader: killSwitchReaderWithCb,
+      killSwitchReader,
     })
   );
 
@@ -220,7 +221,7 @@ export function createServer(config: ServerConfig): PocketTeamServer {
   const close = async (): Promise<void> => {
     await Promise.all([
       watcher.close(),
-      killSwitchReaderWithCb.close(),
+      killSwitchReader.close(),
       wsHub.close(),
       new Promise<void>((resolve) => httpServer.close(() => resolve())),
     ]);

@@ -23,6 +23,10 @@ venv/
 .claude/skills/pocketteam/
 .github/workflows/pocketteam-monitor.yml
 
+# Node / Dashboard
+node_modules/
+dashboard/dist/
+
 # IDE
 .vscode/
 .idea/
