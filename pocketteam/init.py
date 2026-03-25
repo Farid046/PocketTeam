@@ -252,13 +252,25 @@ async def _interview(
             )
             if setup_telegram:
                 # Check Bun prerequisite
+                # Check common bun locations if not in PATH
+                if not has_bun:
+                    bun_paths = [
+                        Path.home() / ".bun/bin/bun",
+                        Path("/usr/local/bin/bun"),
+                    ]
+                    for bp in bun_paths:
+                        if bp.exists():
+                            has_bun = True
+                            # Add to PATH for this session + pocketteam start
+                            os.environ["PATH"] = f"{bp.parent}:{os.environ.get('PATH', '')}"
+                            console.print(f"  [green]Bun found at {bp}[/]")
+                            break
+
                 if not has_bun:
                     console.print()
                     console.print("  [yellow]Bun is required for Claude Code Channels.[/]")
-                    console.print("  Install it: [bold]curl -fsSL https://bun.sh/install | bash[/]")
-                    console.print("  Then re-run [bold]pocketteam init[/]")
                     console.print()
-                    install_bun = Confirm.ask("  Try to install Bun now?", default=True)
+                    install_bun = Confirm.ask("  Install Bun now?", default=True)
                     if install_bun:
                         console.print("  Installing Bun...")
                         result = subprocess.run(
@@ -266,10 +278,16 @@ async def _interview(
                             capture_output=True, text=True,
                         )
                         if result.returncode == 0:
+                            # Bun installs to ~/.bun/bin/ — add to PATH immediately
+                            bun_dir = Path.home() / ".bun/bin"
+                            if bun_dir.exists():
+                                os.environ["PATH"] = f"{bun_dir}:{os.environ.get('PATH', '')}"
+                                has_bun = True
                             console.print("  [green]Bun installed![/]")
-                            has_bun = True
                         else:
-                            console.print(f"  [red]Bun install failed. Install manually.[/]")
+                            console.print("  [red]Install failed.[/]")
+                            console.print("  Run manually: [bold]curl -fsSL https://bun.sh/install | bash[/]")
+                            console.print("  Then: [bold]source ~/.zshrc && pocketteam init[/]")
 
                 console.print()
                 console.print("  [bold]Step 3a:[/] Create your Telegram bot")
