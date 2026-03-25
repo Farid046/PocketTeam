@@ -28,7 +28,7 @@ export function AgentAvatar({
   role,
   status,
   description,
-  toolCallCount,
+  // toolCallCount prop retained for API compatibility but badge removed to reduce clutter
 }: Props): React.ReactElement {
   const isWorking = status === "working";
   const isDone = status === "done";
@@ -111,14 +111,14 @@ export function AgentAvatar({
       <rect x={hx + 2} y={hy + 3} width={2} height={2} fill="#1a1a1a" rx={0.5} />
       <rect x={hx + 6} y={hy + 3} width={2} height={2} fill="#1a1a1a" rx={0.5} />
 
-      {/* Done: green checkmark badge */}
+      {/* Done: green checkmark badge — reduced size by ~30% */}
       {isDone && (
-        <g transform={`translate(${x + 6}, ${hy - 2})`}>
-          <circle r={5} fill="#1a2a1a" stroke="#22c55e" strokeWidth={0.8} />
+        <g transform={`translate(${x + 5}, ${hy - 2})`}>
+          <circle r={3.5} fill="#1a2a1a" stroke="#22c55e" strokeWidth={0.7} />
           <path
-            d="M -2.5 0 L -0.5 2 L 3 -1.5"
+            d="M -1.8 0 L -0.4 1.4 L 2.1 -1.1"
             stroke="#22c55e"
-            strokeWidth={1.2}
+            strokeWidth={0.9}
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
@@ -126,12 +126,12 @@ export function AgentAvatar({
         </g>
       )}
 
-      {/* Working: green status dot above head */}
+      {/* Working: green status dot above head — smaller */}
       {isWorking && (
         <circle
-          cx={x + 6}
+          cx={x + 5}
           cy={hy - 3}
-          r={3}
+          r={2}
           fill="#22c55e"
           style={{ animation: "pulse-ring 1s ease-in-out infinite" }}
         />
@@ -144,35 +144,40 @@ export function AgentAvatar({
         </g>
       )}
 
-      {/* Tool call count badge */}
-      {isWorking && toolCallCount !== undefined && toolCallCount > 0 && (
-        <g transform={`translate(${x - 8}, ${hy - 2})`}>
-          <circle r={5} fill="#1e3a5f" stroke="#3b82f6" strokeWidth={0.7} />
-          <text
-            textAnchor="middle"
-            dy="3.5"
-            fontSize={5}
-            fill="#93c5fd"
-            fontFamily="monospace"
-          >
-            {toolCallCount > 99 ? "99+" : toolCallCount}
-          </text>
-        </g>
-      )}
+      {/* Tool call count badge removed — clutters the view */}
 
-      {/* Role label below character */}
-      <text
-        x={x}
-        textAnchor="middle"
-        y={y + 6}
-        fontSize={7}
-        fill={isIdle ? "#3b4050" : "#7a8399"}
-        fontFamily="monospace"
-        fontWeight="700"
-        letterSpacing="0.5"
-      >
-        {role.toUpperCase()}
-      </text>
+      {/* Role label below character — pushed further down, smaller font, with bg rect */}
+      {(() => {
+        const labelText = role.toUpperCase();
+        const labelW = labelText.length * 4.5 + 6;
+        const labelX = x - labelW / 2;
+        const labelY = y + 12; // 12px below anchor (was 6)
+        return (
+          <g>
+            <rect
+              x={labelX}
+              y={labelY - 7}
+              width={labelW}
+              height={10}
+              rx={2}
+              fill="#0d0d14"
+              opacity={0.72}
+            />
+            <text
+              x={x}
+              textAnchor="middle"
+              y={labelY}
+              fontSize={6}
+              fill={isIdle ? "#3b4050" : "#6a7389"}
+              fontFamily="monospace"
+              fontWeight="700"
+              letterSpacing="0.5"
+            >
+              {labelText}
+            </text>
+          </g>
+        );
+      })()}
     </g>
   );
 }

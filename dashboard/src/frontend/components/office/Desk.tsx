@@ -5,10 +5,10 @@ interface Props {
   y: number;
 }
 
-// Isometric desk dimensions
-const DESK_W = 40;   // width of the top diamond face
-const DESK_H = 20;   // height of the top diamond face (half of DESK_W in iso)
-const DESK_DEPTH = 14; // vertical face height
+// Isometric desk dimensions — scaled down ~10% to reduce crowding
+const DESK_W = 36;   // width of the top diamond face
+const DESK_H = 18;   // height of the top diamond face (half of DESK_W in iso)
+const DESK_DEPTH = 12; // vertical face height
 
 // Colors — warm wood tones
 const COLOR_TOP   = "#8B7355";

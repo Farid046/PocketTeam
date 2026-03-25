@@ -17,14 +17,14 @@ import { toIso, tilePath, tileCenter } from "./isoUtils";
 const GRID_COLS = 12;
 const GRID_ROWS = 10;
 
-// Canvas dimensions — give extra room for characters and speech bubbles
-const SVG_W = 1100;
-const SVG_H = 660;
+// Canvas dimensions — wider/taller to accommodate larger 88x44 tiles
+const SVG_W = 1400;
+const SVG_H = 820;
 
 // The iso grid's leftmost screen X is at (0 - GRID_ROWS) * (TILE_W/2)
 // We translate by OFFSET to center the grid in the SVG.
 const OFFSET_X = SVG_W / 2;  // center horizontally
-const OFFSET_Y = 80;          // push down from top so row 0 is visible
+const OFFSET_Y = 100;         // push down from top so row 0 is visible
 
 // ---------------------------------------------------------------------------
 // Zone definitions — which grid cells belong to which zone
@@ -409,9 +409,7 @@ export function FloorPlan({ agents }: Props): React.ReactElement {
       {/* ── Layer 1: Isometric floor tiles ── */}
       <FloorTiles />
 
-      {/* ── Layer 2: Zone labels on floor ── */}
-      <ZoneLabels />
-      <CorridorLabel />
+      {/* ── Layer 2: Zone labels — removed to reduce clutter; agent names identify zones ── */}
 
       {/* ── Layer 3: Furniture (desks + chairs) ── */}
       <FurnitureLayer />

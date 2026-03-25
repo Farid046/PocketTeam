@@ -53,6 +53,19 @@ export class SubagentReader {
 
       if (!fs.existsSync(subagentsDir)) continue;
 
+      // Check parent session JSONL mtime — this file is written to actively by
+      // the running Claude Code session, even when no subagent files change.
+      // Path: <projectDir>/<sessionId>.jsonl  (sibling to the session directory)
+      const parentJsonlPath = path.join(this.projectDir, `${sessionId}.jsonl`);
+      let parentMtimeMs = 0;
+      try {
+        parentMtimeMs = fs.statSync(parentJsonlPath).mtimeMs;
+      } catch {
+        // Parent JSONL may not exist for very old sessions
+      }
+      const now = Date.now();
+      const sessionActive = parentMtimeMs > now - ACTIVITY_TIMEOUT_MS;
+
       let files: string[] = [];
       try {
         files = fs.readdirSync(subagentsDir);
@@ -88,7 +101,7 @@ export class SubagentReader {
         const stats = this.parseJsonl(jsonlPath, mtimeMs);
         const roleInfo = inferRole(meta.description);
 
-        const isRecentlyWritten = mtimeMs > Date.now() - ACTIVITY_TIMEOUT_MS;
+        const isRecentlyWritten = mtimeMs > now - ACTIVITY_TIMEOUT_MS;
         const isDefinitelyDone = stats.isDone; // stop_reason === "end_turn"
 
         let status: AgentState["status"] = "idle";
@@ -111,6 +124,7 @@ export class SubagentReader {
           toolCallCount: stats.toolCallCount,
           messageCount: stats.messageCount,
           sessionId,
+          sessionActive,
         });
       }
     }

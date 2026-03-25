@@ -24,7 +24,10 @@ function buildSessions(agents: AgentState[]): SessionSummary[] {
 
   for (const agent of agents) {
     const existing = map.get(agent.sessionId);
-    const isActive = agent.status === "working";
+    // A session is active if:
+    //   1. The parent session JSONL was written within ACTIVITY_TIMEOUT_MS (sessionActive), OR
+    //   2. Any agent in the session is actively working
+    const isActive = agent.sessionActive || agent.status === "working";
 
     if (!existing) {
       map.set(agent.sessionId, {

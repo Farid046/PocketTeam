@@ -162,6 +162,7 @@ export function createServer(config: ServerConfig): PocketTeamServer {
   // (Date.now() - mtimeMs), so it must be re-evaluated periodically.
   const statusRefreshInterval = setInterval(() => {
     const agents = subagentReader.readAll();
+    console.log("[refresh]", agents.length, "agents");
     for (const agent of agents) {
       wsHub.broadcastAgentUpdate(agent);
       knownAgentIds.add(agent.id);
