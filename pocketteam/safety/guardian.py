@@ -42,6 +42,14 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
 
     input_str = json.dumps(tool_input) if not isinstance(tool_input, str) else tool_input
 
+    # For Bash tools, extract the actual command string for pattern matching
+    # (dict input like {"command": "rm -rf ..."} needs unwrapping)
+    if tool_name == "Bash" and isinstance(tool_input, dict):
+        bash_cmd = tool_input.get("command", "")
+        check_str = bash_cmd if bash_cmd else input_str
+    else:
+        check_str = input_str
+
     # ── Layer 10: Kill Switch (checked first, highest priority) ──────────────
     project_root = _find_project_root()
     if project_root:
@@ -54,7 +62,7 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
             }
 
     # ── Layer 1: NEVER_ALLOW ─────────────────────────────────────────────────
-    result = check_never_allow(tool_name, input_str)
+    result = check_never_allow(tool_name, check_str)
     if not result.allowed:
         _log_denial(agent_id, tool_name, tool_input, 1, result.reason)
         return {
@@ -112,7 +120,7 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
                 }
 
     # ── Layer 2: Destructive Patterns ────────────────────────────────────────
-    destr_result = check_destructive(tool_name, input_str)
+    destr_result = check_destructive(tool_name, check_str)
     if not destr_result.allowed:
         # Requires D-SAC approval — not an outright block
         _log_denial(agent_id, tool_name, tool_input, 2, destr_result.reason)

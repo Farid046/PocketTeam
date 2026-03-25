@@ -566,6 +566,10 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
     """Merge PocketTeam safety hooks into .claude/settings.json."""
     settings_path = project_root / CLAUDE_DIR / "settings.json"
 
+    # Absolute path ensures hooks work regardless of cwd
+    abs_root = str(project_root.resolve())
+    hook_prefix = f"cd {abs_root} && PYTHONPATH=. python -m pocketteam.safety"
+
     pocketteam_hooks = {
         "PreToolUse": [
             {
@@ -573,18 +577,18 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python -m pocketteam.safety pre",
+                        "command": f"{hook_prefix} pre",
                     }
                 ],
             }
         ],
         "PostToolUse": [
             {
-                "matcher": ".*",
+                "matcher": "Bash|Write|Edit",
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python -m pocketteam.tools.activity_logger",
+                        "command": f"{hook_prefix} post",
                     }
                 ],
             }
