@@ -50,11 +50,16 @@ async def _init(project_name: str | None, yes: bool) -> None:
 @click.option("--no-telegram", is_flag=True, help="Start without Telegram channel.")
 def start(no_telegram: bool) -> None:
     """Start Claude Code with PocketTeam (and Telegram if configured)."""
-    import subprocess as sp
+    import os
     from .config import load_config
 
     root = Path.cwd()
     cfg = load_config(root)
+
+    # Ensure bun is in PATH (installed to ~/.bun/bin/ by pocketteam init)
+    bun_dir = Path.home() / ".bun/bin"
+    if bun_dir.exists() and str(bun_dir) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = f"{bun_dir}:{os.environ['PATH']}"
 
     tg_active = bool(
         cfg.telegram.bot_token
@@ -65,14 +70,12 @@ def start(no_telegram: bool) -> None:
     cmd = ["claude"]
 
     if tg_active:
-        # Set bot token env var for the channel plugin
+        # Load Telegram token from .pocketteam/telegram.env
         env_file = root / ".pocketteam/telegram.env"
         if env_file.exists():
-            console.print("[dim]Loading Telegram token...[/]")
             for line in env_file.read_text().splitlines():
                 if "=" in line and not line.startswith("#"):
                     key, val = line.split("=", 1)
-                    import os
                     os.environ[key.strip()] = val.strip()
 
         cmd.extend(["--channels", "plugin:telegram@claude-plugins-official"])
@@ -81,10 +84,21 @@ def start(no_telegram: bool) -> None:
     else:
         console.print(f"Starting Claude Code for [bold]{cfg.project_name}[/]")
 
-    console.print()
+    # Check Claude Code version supports channels
+    if tg_active:
+        import subprocess as sp
+        try:
+            ver_out = sp.run(["claude", "--version"], capture_output=True, text=True).stdout.strip()
+            ver_num = ver_out.split()[0] if ver_out else "0"
+            parts = ver_num.split(".")
+            if len(parts) >= 3 and int(parts[0]) <= 2 and int(parts[1]) <= 1 and int(parts[2]) < 80:
+                console.print(f"\n  [yellow]Claude Code {ver_num} detected. Channels need v2.1.80+[/]")
+                console.print("  Update: [bold]claude update[/]")
+                console.print()
+        except Exception:
+            pass
 
-    # Replace current process with claude
-    import os
+    console.print()
     os.execvp(cmd[0], cmd)
 
 
