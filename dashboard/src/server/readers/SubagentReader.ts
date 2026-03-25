@@ -10,12 +10,18 @@ import { inferRole } from "../roleMap.js";
 // acompact-* files are memory-compaction artefacts — skip them.
 // Entries without a .meta.json are skipped.
 
+const ACTIVITY_TIMEOUT_MS = parseInt(
+  process.env["ACTIVITY_TIMEOUT_MS"] ?? "300000",
+  10
+);
+
 interface ParsedJsonlStats {
   startedAt: string;
   lastActivity: string;
   toolCallCount: number;
   messageCount: number;
   isDone: boolean;
+  mtimeMs: number;
 }
 
 export class SubagentReader {
@@ -72,13 +78,25 @@ export class SubagentReader {
         const meta = this.readMeta(metaPath);
         if (!meta) continue;
 
-        const stats = this.parseJsonl(jsonlPath);
+        let mtimeMs = 0;
+        try {
+          mtimeMs = fs.statSync(jsonlPath).mtimeMs;
+        } catch {
+          // File missing or inaccessible
+        }
+
+        const stats = this.parseJsonl(jsonlPath, mtimeMs);
         const roleInfo = inferRole(meta.description);
 
+        const isRecentlyWritten = mtimeMs > Date.now() - ACTIVITY_TIMEOUT_MS;
+        const isDefinitelyDone = stats.isDone; // stop_reason === "end_turn"
+
         let status: AgentState["status"] = "idle";
-        if (stats.isDone) {
+        if (stats.messageCount === 0) {
+          status = "idle";
+        } else if (isDefinitelyDone || !isRecentlyWritten) {
           status = "done";
-        } else if (stats.messageCount > 0) {
+        } else {
           status = "working";
         }
 
@@ -120,13 +138,14 @@ export class SubagentReader {
     }
   }
 
-  private parseJsonl(jsonlPath: string): ParsedJsonlStats {
+  private parseJsonl(jsonlPath: string, mtimeMs = 0): ParsedJsonlStats {
     const defaultStats: ParsedJsonlStats = {
       startedAt: new Date(0).toISOString(),
       lastActivity: new Date(0).toISOString(),
       toolCallCount: 0,
       messageCount: 0,
       isDone: false,
+      mtimeMs,
     };
 
     if (!fs.existsSync(jsonlPath)) return defaultStats;
@@ -197,6 +216,7 @@ export class SubagentReader {
       toolCallCount,
       messageCount,
       isDone,
+      mtimeMs,
     };
   }
 }

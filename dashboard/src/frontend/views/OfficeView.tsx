@@ -1,16 +1,9 @@
 import React from "react";
 import type { AgentState } from "../types";
-import { AgentTile } from "../components/AgentTile";
 import { EventFeed } from "../components/EventFeed";
 import { EmptyState } from "./EmptyState";
+import { FloorPlan } from "../components/office/FloorPlan";
 import type { PocketTeamEvent } from "../types";
-
-// Grid layout: 4 columns x 3 rows
-const GRID_ROLES: string[][] = [
-  ["product", "planner", "reviewer", "coo"],
-  ["engineer", "qa", "security", "devops"],
-  ["investigator", "documentation", "monitor", "observer"],
-];
 
 interface Props {
   agents: AgentState[];
@@ -22,7 +15,6 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
   for (const agent of agents) {
     const role = agent.role.toLowerCase();
     const existing = agentsByRole.get(role);
-    // Prefer working over done over idle; most recent if same status
     if (!existing || agentPriority(agent) > agentPriority(existing)) {
       agentsByRole.set(role, agent);
     }
@@ -34,12 +26,14 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
 
   // COO is the main session (parent) — always active when subagents exist
   if (hasAnyActive && !agentsByRole.has("coo")) {
+    const anyWorking = agents.some((a) => a.status === "working");
+    const cooStatus = anyWorking ? "working" : "done";
     agentsByRole.set("coo", {
       id: "coo-main-session",
       role: "coo",
       agentType: "orchestrator",
       description: "Orchestrating tasks, delegating to agents",
-      status: "working",
+      status: cooStatus,
       startedAt: agents[0]?.startedAt ?? new Date().toISOString(),
       lastActivity: new Date().toISOString(),
       toolCallCount: agents.length,
@@ -48,21 +42,17 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
     });
   }
 
+  // Flatten back to array for FloorPlan
+  const normalizedAgents = Array.from(agentsByRole.values());
+
   return (
     <div className="flex gap-4 h-full">
-      {/* Main grid */}
-      <div className="flex-1 flex flex-col gap-4">
+      {/* Main office floor plan */}
+      <div className="flex-1 min-w-0" style={{ minHeight: "400px" }}>
         {!hasAnyActive ? (
           <EmptyState agents={agents} />
         ) : (
-          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-            {GRID_ROLES.flat().map((role) => {
-              const agent = agentsByRole.get(role) ?? null;
-              return (
-                <AgentTile key={role} role={role} agent={agent} />
-              );
-            })}
-          </div>
+          <FloorPlan agents={normalizedAgents} events={events} />
         )}
       </div>
 
