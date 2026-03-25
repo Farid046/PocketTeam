@@ -14,6 +14,9 @@ import yaml
 
 from .constants import (
     CONFIG_FILE,
+    DASHBOARD_IMAGE,
+    DASHBOARD_PORT,
+    DASHBOARD_VERSION,
     DEFAULT_BUDGET_USD,
     MAX_AUTO_FIX_ATTEMPTS,
     MONITOR_INTERVAL_STEADY,
@@ -52,6 +55,23 @@ class AuthConfig:
 
 
 @dataclass
+class DashboardConfig:
+    enabled: bool = False
+    port: int = DASHBOARD_PORT
+    image: str = DASHBOARD_IMAGE
+    image_version: str = DASHBOARD_VERSION
+    image_digest: str = ""
+    domain: str = ""
+    compose_dir: str = ""
+    docker_context: str = "default"
+    claude_version_at_init: str = ""
+    compose_checksum: str = ""
+    project_root: str = ""
+    claude_project_hash: str = ""
+    compose_command: str = "docker compose"  # "docker compose" (v2) or "docker-compose" (v1)
+
+
+@dataclass
 class GitHubActionsConfig:
     enabled: bool = True
     api_key: str = ""            # Stored as GitHub Secret ANTHROPIC_API_KEY
@@ -82,6 +102,7 @@ class PocketTeamConfig:
     budget: BudgetConfig = field(default_factory=BudgetConfig)
     github_actions: GitHubActionsConfig = field(default_factory=GitHubActionsConfig)
     network: NetworkConfig = field(default_factory=NetworkConfig)
+    dashboard: DashboardConfig = field(default_factory=DashboardConfig)
 
     # Absolute path to project root (set at runtime, not stored)
     project_root: Path = field(default_factory=Path.cwd, repr=False)
@@ -152,6 +173,23 @@ def load_config(project_root: Optional[Path] = None) -> PocketTeamConfig:
             approved_domains=NetworkConfig().approved_domains + extra_domains
         )
 
+    if dash := raw.get("dashboard"):
+        cfg.dashboard = DashboardConfig(
+            enabled=dash.get("enabled", False),
+            port=dash.get("port", DASHBOARD_PORT),
+            image=dash.get("image", DASHBOARD_IMAGE),
+            image_version=dash.get("image_version", DASHBOARD_VERSION),
+            image_digest=dash.get("image_digest", ""),
+            domain=dash.get("domain", ""),
+            compose_dir=dash.get("compose_dir", ""),
+            docker_context=dash.get("docker_context", "default"),
+            claude_version_at_init=dash.get("claude_version_at_init", ""),
+            compose_checksum=dash.get("compose_checksum", ""),
+            project_root=dash.get("project_root", ""),
+            claude_project_hash=dash.get("claude_project_hash", ""),
+            compose_command=dash.get("compose_command", "docker compose"),
+        )
+
     return cfg
 
 
@@ -195,10 +233,28 @@ def save_config(cfg: PocketTeamConfig) -> None:
         "network": {
             "approved_domains": [],  # Extra domains beyond defaults
         },
+        "dashboard": {
+            "enabled": cfg.dashboard.enabled,
+            "port": cfg.dashboard.port,
+            "image": cfg.dashboard.image,
+            "image_version": cfg.dashboard.image_version,
+            "image_digest": cfg.dashboard.image_digest,
+            "domain": cfg.dashboard.domain,
+            "compose_dir": cfg.dashboard.compose_dir,
+            "docker_context": cfg.dashboard.docker_context,
+            "claude_version_at_init": cfg.dashboard.claude_version_at_init,
+            "compose_checksum": cfg.dashboard.compose_checksum,
+            "project_root": cfg.dashboard.project_root,
+            "claude_project_hash": cfg.dashboard.claude_project_hash,
+            "compose_command": cfg.dashboard.compose_command,
+        },
     }
 
     with open(config_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+
+    # Errata E1: config.yaml contains project paths and checksums — protect it
+    os.chmod(config_path, 0o600)
 
 
 def _load_dotenv(project_root: Path) -> None:

@@ -111,6 +111,16 @@ DSAC_MAX_BATCH_SIZE = 10           # Max items per destructive batch
 DSAC_BATCH_PAUSE = 1.0             # 1s pause between batch items
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+DASHBOARD_IMAGE = "ghcr.io/pocketteam/dashboard"
+DASHBOARD_VERSION = "0.1.0"
+DASHBOARD_DIGEST = ""  # Will be set after first GHCR publish
+DASHBOARD_PORT = 3847
+DASHBOARD_PORT_RANGE_END = 3857
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Kill switch
 # ─────────────────────────────────────────────────────────────────────────────
 
