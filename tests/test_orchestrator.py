@@ -131,12 +131,12 @@ class TestLogEvent:
 # ── CLI: pocketteam run ─────────────────────────────────────────────────────
 
 class TestCLIRun:
-    def test_run_command_exists(self):
+    def test_run_headless_command_exists(self):
         from pocketteam.cli import main
         runner = CliRunner()
-        result = runner.invoke(main, ["run", "--help"])
+        result = runner.invoke(main, ["run-headless", "--help"])
         assert result.exit_code == 0
-        assert "pipeline" in result.output.lower()
+        assert "headless" in result.output.lower()
 
     def test_sessions_command_exists(self):
         from pocketteam.cli import main

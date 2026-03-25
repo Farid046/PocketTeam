@@ -170,15 +170,19 @@ class BaseAgent(ABC):
 
     async def _run_with_sdk(self, task: str) -> "AgentResult":
         """
-        Run a task via the Claude Agent SDK.
+        HEADLESS/CI FALLBACK: Run a task via the Claude Agent SDK.
 
-        Wires in:
-        - Model, budget, turn limits from constants
-        - System prompt from prompts/*.md
-        - Per-agent tool allowlist (Layer 6)
-        - Safety guardian via can_use_tool callback (Layers 1-6, 10)
+        ⚠️  This is NOT the normal flow. Normal usage:
+            User → Claude Code → reads .claude/CLAUDE.md → COO spawns agents natively.
+            That flow is FREE (runs on Claude Code subscription).
 
-        All agents call this; system prompts define the specific behavior.
+        This method is ONLY for:
+        - GitHub Actions self-healing (when health check fails)
+        - CI/CD headless pipeline execution
+        - Requires ANTHROPIC_API_KEY (costs per token)
+
+        Wires in: model, budget, turn limits, system prompt, per-agent tool
+        allowlist (Layer 6), safety guardian via can_use_tool (Layers 1-6, 10).
         """
         from claude_agent_sdk import (  # type: ignore[import]
             AssistantMessage,

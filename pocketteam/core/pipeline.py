@@ -48,11 +48,18 @@ class PipelineError(Exception):
 
 class Pipeline:
     """
-    Orchestrates the multi-agent pipeline with:
-    - Phase timeouts (deadlock prevention)
-    - Human gates (CEO approval)
-    - Kill switch checks
-    - Artifact passing
+    HEADLESS/CI FALLBACK: Programmatic multi-agent pipeline.
+
+    ⚠️  This is NOT the normal flow. Normal usage:
+        User → Claude Code → reads .claude/CLAUDE.md → COO spawns agents natively.
+        That flow is FREE (runs on Claude Code subscription).
+
+    This Pipeline class is ONLY for:
+    - GitHub Actions self-healing (handle_health_failure)
+    - CI/CD headless pipeline execution (pocketteam run-headless)
+    - Requires ANTHROPIC_API_KEY (each agent call costs tokens)
+
+    Features: phase timeouts, human gates, kill switch, artifact passing.
     """
 
     def __init__(
@@ -87,23 +94,29 @@ class Pipeline:
             self._current_phase = phase
             self.context.advance_phase(phase.value)
 
+            self._log_event("phase_start", phase.value)
             await self._notify(f"Starting phase: {phase.value}")
 
             try:
                 result = await self._run_with_timeout(runner, phase)
             except asyncio.TimeoutError:
+                self._log_event("phase_timeout", phase.value)
                 await self._notify(
                     f"⚠️ Phase '{phase.value}' timed out after "
                     f"{PHASE_TIMEOUTS.get(phase.value, 0)//60} minutes. Escalating."
                 )
                 return False
             except Exception as e:
+                self._log_event("phase_error", f"{phase.value}: {e}")
                 await self._notify(f"❌ Phase '{phase.value}' failed: {e}")
                 return False
 
             if not result.success:
+                self._log_event("phase_failed", f"{phase.value}: {result.error}")
                 await self._notify(f"❌ Phase '{phase.value}' failed: {result.error}")
                 return False
+
+            self._log_event("phase_complete", phase.value)
 
             if result.awaiting_approval:
                 approved = await self._request_approval(result.approval_prompt or "")
@@ -327,6 +340,25 @@ class Pipeline:
         # Default: non-interactive mode always requires explicit approval
         await self._notify(f"⛔ HUMAN GATE:\n{prompt}")
         return False
+
+    def _log_event(self, event_type: str, detail: str) -> None:
+        """Log pipeline event to stream.jsonl."""
+        import json, time
+        try:
+            from ..constants import EVENTS_FILE
+            events_path = self.context.project_root / EVENTS_FILE
+            events_path.parent.mkdir(parents=True, exist_ok=True)
+            event = {
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "agent": "pipeline",
+                "type": event_type,
+                "status": "working",
+                "action": detail,
+            }
+            with open(events_path, "a") as f:
+                f.write(json.dumps(event) + "\n")
+        except Exception:
+            pass
 
     async def _notify(self, message: str) -> None:
         """Send status update to CEO."""

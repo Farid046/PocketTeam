@@ -162,17 +162,8 @@ async def _attempt_auto_fix(
             result["escalated"] = True
             break
 
-        # In a real implementation, this would:
-        # 1. Run investigator agent to diagnose
-        # 2. Run engineer agent to create fix
-        # 3. Run QA agent to test
-        # 4. Deploy to staging
-        # 5. Verify staging health
-        # 6. If OK: deploy to production
-        #
-        # For now, the fix attempt is a stub that always returns False
-        # The actual agent invocations happen when running with SDK mode.
-        fix_success = False
+        # Run the agent pipeline via SDK (headless — this is the correct use case)
+        fix_success = await _run_fix_pipeline(project_root, incident, attempt + 1)
 
         if fix_success:
             escalation.resolve_incident(
@@ -190,6 +181,52 @@ async def _attempt_auto_fix(
             break
 
     return result
+
+
+async def _run_fix_pipeline(
+    project_root: Path,
+    incident: Incident,
+    attempt: int,
+) -> bool:
+    """
+    Run the actual fix pipeline via Agent SDK (headless).
+
+    This is the CORRECT use of _run_with_sdk() — headless CI self-healing.
+    Steps: Investigator → Engineer → QA → verify.
+    """
+    try:
+        from ..agents.investigator import InvestigatorAgent
+        from ..agents.engineer import EngineerAgent
+        from ..agents.qa import QAAgent
+
+        # Step 1: Investigator diagnoses
+        investigator = InvestigatorAgent(project_root)
+        diag = await investigator.execute(
+            f"Diagnose production incident: {incident.description}"
+        )
+        if not diag.success:
+            return False
+
+        # Step 2: Engineer creates fix
+        engineer = EngineerAgent(project_root)
+        fix = await engineer.execute(
+            f"Create minimal fix for: {diag.output}\n"
+            f"Incident: {incident.description}\n"
+            f"This is attempt {attempt}. Keep the fix minimal and scoped."
+        )
+        if not fix.success:
+            return False
+
+        # Step 3: QA tests the fix
+        qa = QAAgent(project_root)
+        test_result = await qa.run_tests_now()
+        if not test_result.success:
+            return False
+
+        return True
+
+    except Exception:
+        return False
 
 
 async def _notify_telegram(bot_token: str, chat_id: str, message: str) -> None:
