@@ -67,7 +67,9 @@ def start(no_telegram: bool) -> None:
         and not no_telegram
     )
 
-    cmd = ["claude"]
+    # Safety hooks (10-layer guardian) handle ALL security — not Claude's permission prompts.
+    # This allows autonomous operation while hooks block dangerous commands deterministically.
+    cmd = ["claude", "--dangerously-skip-permissions"]
 
     if tg_active:
         # Load Telegram token from .pocketteam/telegram.env

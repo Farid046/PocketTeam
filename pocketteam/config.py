@@ -92,6 +92,9 @@ def load_config(project_root: Optional[Path] = None) -> PocketTeamConfig:
     root = project_root or Path.cwd()
     config_path = root / CONFIG_FILE
 
+    # Load .env before resolving config (secrets live in .env, not config.yaml)
+    _load_dotenv(root)
+
     if not config_path.exists():
         cfg = PocketTeamConfig(project_name=root.name)
         cfg.project_root = root
@@ -196,6 +199,27 @@ def save_config(cfg: PocketTeamConfig) -> None:
 
     with open(config_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+
+
+def _load_dotenv(project_root: Path) -> None:
+    """Load .pocketteam/.env if it exists (secrets stay out of config.yaml)."""
+    env_file = project_root / ".pocketteam" / ".env"
+    if not env_file.exists():
+        return
+    try:
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip()
+                # Don't overwrite existing env vars (system takes precedence)
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except OSError:
+        pass
 
 
 def _resolve_env(value: str) -> str:

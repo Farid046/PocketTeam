@@ -1,32 +1,37 @@
 """
-Entry point for: python -m pocketteam.safety.guardian [pre|post]
+Entry point for: python -m pocketteam.safety [pre|post]
 
-Called by Claude Code's PreToolUse hook in .claude/settings.json.
-Reads hook input from stdin, checks safety layers, returns allow/deny.
+Called by Claude Code hooks in .claude/settings.json.
+- pre:  Reads hook input from stdin, checks safety layers, returns allow/deny.
+- post: Logs tool usage to audit trail, always allows.
 """
-from .guardian import *
 
-if __name__ == "__main__":
-    import json
-    import sys
+import json
+import sys
 
-    mode = sys.argv[1] if len(sys.argv) > 1 else "pre"
+mode = sys.argv[1] if len(sys.argv) > 1 else "pre"
 
-    try:
-        hook_input = json.loads(sys.stdin.read())
-    except (json.JSONDecodeError, EOFError):
-        print(json.dumps({"allow": True, "reason": "Could not parse hook input"}))
-        sys.exit(0)
+try:
+    hook_input = json.loads(sys.stdin.read())
+except (json.JSONDecodeError, EOFError):
+    print(json.dumps({"allow": True, "reason": "Could not parse hook input"}))
+    sys.exit(0)
 
-    if mode == "pre":
-        tool_name = hook_input.get("tool_name", hook_input.get("name", ""))
-        tool_input = hook_input.get("tool_input", hook_input.get("input", {}))
-        agent_id = hook_input.get("agent_id", "")
+tool_name = hook_input.get("tool_name", hook_input.get("name", ""))
+tool_input = hook_input.get("tool_input", hook_input.get("input", {}))
+agent_id = hook_input.get("agent_id", "")
 
-        result = pre_tool_hook(tool_name, tool_input, agent_id)
-        print(json.dumps(result))
-        sys.exit(0 if result.get("allow") else 1)
+if mode == "pre":
+    from .guardian import pre_tool_hook
 
-    elif mode == "post":
-        print(json.dumps({"allow": True}))
-        sys.exit(0)
+    result = pre_tool_hook(tool_name, tool_input, agent_id)
+    print(json.dumps(result))
+    sys.exit(0 if result.get("allow") else 1)
+
+elif mode == "post":
+    from .activity_logger import log_activity
+
+    input_str = json.dumps(tool_input, default=str) if not isinstance(tool_input, str) else tool_input
+    log_activity(tool_name, input_str, agent_id)
+    print(json.dumps({"allow": True}))
+    sys.exit(0)
