@@ -26,10 +26,16 @@ export default function App(): React.ReactElement {
   const connectionStatus = useStore((s) => s.connectionStatus);
   const activeTab = useStore((s) => s.activeTab);
   const setActiveTab = useStore((s) => s.setActiveTab);
+  const selectedSessionId = useStore((s) => s.selectedSessionId);
+
+  // Session filtering
+  const visibleAgents = selectedSessionId
+    ? agents.filter((a) => a.sessionId === selectedSessionId)
+    : agents;
 
   // Session info
   const activeSessions = new Set(agents.map((a) => a.sessionId));
-  const activeAgentCount = agents.filter((a) => a.status === "working").length;
+  const activeAgentCount = visibleAgents.filter((a) => a.status === "working").length;
   const sessionLabel =
     activeSessions.size === 0
       ? null
@@ -64,13 +70,7 @@ export default function App(): React.ReactElement {
             </span>
           )}
 
-          <SessionPicker
-            agents={agents}
-            selectedSessionId={null}
-            onSelect={() => {
-              // Future: filter view by session
-            }}
-          />
+          <SessionPicker agents={agents} />
         </div>
 
         <div className="flex items-center gap-4">
@@ -99,12 +99,12 @@ export default function App(): React.ReactElement {
       <main className="flex-1 overflow-hidden p-4" style={{ minHeight: 0 }}>
         {activeTab === "office" && (
           <div className="h-full">
-            <OfficeView agents={agents} events={events} />
+            <OfficeView agents={visibleAgents} events={events} />
           </div>
         )}
         {activeTab === "timeline" && (
           <div className="h-full">
-            <TimelineView agents={agents} />
+            <TimelineView agents={visibleAgents} />
           </div>
         )}
         {activeTab === "safety" && (

@@ -18,6 +18,7 @@ interface DashboardStore {
   killSwitch: boolean;
   connectionStatus: ConnectionStatus;
   activeTab: ActiveTab;
+  selectedSessionId: string | null;
 
   // Actions
   setSnapshot: (snapshot: DashboardSnapshot) => void;
@@ -29,6 +30,7 @@ interface DashboardStore {
   setKillSwitch: (active: boolean) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setActiveTab: (tab: ActiveTab) => void;
+  setSelectedSessionId: (id: string | null) => void;
 }
 
 export const useStore = create<DashboardStore>((set) => ({
@@ -39,6 +41,7 @@ export const useStore = create<DashboardStore>((set) => ({
   killSwitch: false,
   connectionStatus: "no-data",
   activeTab: "office",
+  selectedSessionId: null,
 
   setSnapshot: (snapshot) =>
     set({
@@ -118,4 +121,6 @@ export const useStore = create<DashboardStore>((set) => ({
   setConnectionStatus: (status) => set({ connectionStatus: status }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
+
+  setSelectedSessionId: (id) => set({ selectedSessionId: id }),
 }));

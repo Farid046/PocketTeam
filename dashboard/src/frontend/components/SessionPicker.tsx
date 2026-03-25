@@ -1,5 +1,6 @@
 import React from "react";
 import type { AgentState } from "../types";
+import { useStore } from "../store/useStore";
 
 function relativeTime(isoTs: string): string {
   const diffMs = Date.now() - new Date(isoTs).getTime();
@@ -52,11 +53,12 @@ function buildSessions(agents: AgentState[]): SessionSummary[] {
 
 interface Props {
   agents: AgentState[];
-  selectedSessionId: string | null;
-  onSelect: (sessionId: string) => void;
 }
 
-export function SessionPicker({ agents, selectedSessionId, onSelect }: Props): React.ReactElement | null {
+export function SessionPicker({ agents }: Props): React.ReactElement | null {
+  const selectedSessionId = useStore((s) => s.selectedSessionId);
+  const setSelectedSessionId = useStore((s) => s.setSelectedSessionId);
+
   const sessions = buildSessions(agents);
 
   if (sessions.length <= 1) return null;
@@ -65,7 +67,7 @@ export function SessionPicker({ agents, selectedSessionId, onSelect }: Props): R
     <select
       className="bg-gray-900 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-gray-500"
       value={selectedSessionId ?? ""}
-      onChange={(e) => onSelect(e.target.value)}
+      onChange={(e) => setSelectedSessionId(e.target.value || null)}
     >
       {sessions.map((s) => (
         <option key={s.sessionId} value={s.sessionId}>
