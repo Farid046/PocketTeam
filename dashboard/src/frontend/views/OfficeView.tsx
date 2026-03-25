@@ -32,6 +32,22 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
     (a) => a.status === "working" || a.status === "done"
   );
 
+  // COO is the main session (parent) — always active when subagents exist
+  if (hasAnyActive && !agentsByRole.has("coo")) {
+    agentsByRole.set("coo", {
+      id: "coo-main-session",
+      role: "coo",
+      agentType: "orchestrator",
+      description: "Orchestrating tasks, delegating to agents",
+      status: "working",
+      startedAt: agents[0]?.startedAt ?? new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+      toolCallCount: agents.length,
+      messageCount: 0,
+      sessionId: agents[0]?.sessionId ?? "",
+    });
+  }
+
   return (
     <div className="flex gap-4 h-full">
       {/* Main grid */}
