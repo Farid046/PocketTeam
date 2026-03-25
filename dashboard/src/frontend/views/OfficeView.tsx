@@ -39,6 +39,7 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
       toolCallCount: agents.length,
       messageCount: 0,
       sessionId: agents[0]?.sessionId ?? "",
+      sessionActive: agents.some((a) => a.sessionActive),
     });
   }
 

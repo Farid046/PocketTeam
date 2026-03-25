@@ -16,6 +16,7 @@ export interface AgentState {
   toolCallCount: number;
   messageCount: number;
   sessionId: string;
+  sessionActive: boolean; // true if the parent session JSONL was written within ACTIVITY_TIMEOUT_MS
 }
 
 export interface PocketTeamEvent {
