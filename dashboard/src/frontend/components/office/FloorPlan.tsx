@@ -5,163 +5,384 @@ import { Chair } from "./Chair";
 import { Plant } from "./Plant";
 import { AgentAvatar } from "./AgentAvatar";
 import { generateAvatar } from "./avatarGenerator";
+import { toIso, tilePath, tileCenter } from "./isoUtils";
 
 // ---------------------------------------------------------------------------
-// Layout constants
+// SVG canvas and grid dimensions
 // ---------------------------------------------------------------------------
 
-const SVG_W = 1200;
-const SVG_H = 700;
+// Total grid: 12 cols x 10 rows. SVG canvas sized to fit the whole diamond grid.
+// Isometric grid spans: x from -(COLS+ROWS)*TILE_W/2 to +(COLS+ROWS)*TILE_W/2
+// We use a generous viewBox with origin at the center-top.
+const GRID_COLS = 12;
+const GRID_ROWS = 10;
 
-// Zone rectangles: { x, y, w, h }
-const ZONES = {
-  planning:    { x: 0,   y: 0,   w: 580, h: 300, label: "PLANNING",    color: "#1e2a3a" },
-  operations:  { x: 620, y: 0,   w: 580, h: 300, label: "OPERATIONS",  color: "#1e2e2a" },
-  engineering: { x: 0,   y: 340, w: 580, h: 360, label: "ENGINEERING", color: "#1e2633" },
-  support:     { x: 0,   y: 560, w: 580, h: 140, label: "SUPPORT",     color: "#261e2a" },
-  coo:         { x: 620, y: 340, w: 580, h: 360, label: "COO OFFICE",  color: "#2a2520" },
-  corridor:    { x: 0,   y: 300, w: 1200, h: 40,  label: "",           color: "#151a24" },
-  vCorridorL:  { x: 580, y: 0,   w: 40,  h: 700, label: "",           color: "#151a24" },
-} as const;
+// Canvas dimensions — give extra room for characters and speech bubbles
+const SVG_W = 1100;
+const SVG_H = 660;
 
-// Fixed desk positions per role
-const DESK_POSITIONS: Record<string, { x: number; y: number }> = {
-  product:       { x: 110,  y: 90  },
-  planner:       { x: 290,  y: 90  },
-  reviewer:      { x: 200,  y: 210 },
-  devops:        { x: 710,  y: 90  },
-  monitor:       { x: 890,  y: 90  },
-  observer:      { x: 800,  y: 210 },
-  engineer:      { x: 110,  y: 420 },
-  qa:            { x: 290,  y: 420 },
-  security:      { x: 200,  y: 520 },
-  investigator:  { x: 110,  y: 625 },
-  documentation: { x: 290,  y: 625 },
-  coo:           { x: 870,  y: 500 },
+// The iso grid's leftmost screen X is at (0 - GRID_ROWS) * (TILE_W/2)
+// We translate by OFFSET to center the grid in the SVG.
+const OFFSET_X = SVG_W / 2;  // center horizontally
+const OFFSET_Y = 80;          // push down from top so row 0 is visible
+
+// ---------------------------------------------------------------------------
+// Zone definitions — which grid cells belong to which zone
+// ---------------------------------------------------------------------------
+
+type ZoneName = "planning" | "engineering" | "operations" | "support" | "coo" | "corridor" | "empty";
+
+const ZONE_COLORS: Record<ZoneName, string> = {
+  planning:    "#2a2a3a",
+  engineering: "#2a2833",
+  operations:  "#2a3030",
+  support:     "#2a2a2e",
+  coo:         "#332a20",
+  corridor:    "#1e1e28",
+  empty:       "#181820",
 };
 
-// Roles that get a bigger desk (the COO)
-const LARGE_DESK_ROLES = new Set(["coo"]);
+const ZONE_STROKE: Record<ZoneName, string> = {
+  planning:    "#3a3a4e",
+  engineering: "#3a3845",
+  operations:  "#3a4040",
+  support:     "#3a3a3e",
+  coo:         "#453a2e",
+  corridor:    "#282830",
+  empty:       "#202028",
+};
+
+// Build a lookup: "col,row" -> zone name
+function buildZoneMap(): Map<string, ZoneName> {
+  const map = new Map<string, ZoneName>();
+
+  const set = (col: number, row: number, zone: ZoneName) => {
+    map.set(`${col},${row}`, zone);
+  };
+
+  // Fill all tiles as empty first (only fill defined areas)
+  for (let c = 0; c < GRID_COLS; c++) {
+    for (let r = 0; r < GRID_ROWS; r++) {
+      set(c, r, "empty");
+    }
+  }
+
+  // Planning zone — cols 0-4, rows 0-4
+  for (let c = 0; c <= 4; c++) for (let r = 0; r <= 4; r++) set(c, r, "planning");
+
+  // Engineering zone — cols 0-4, rows 5-9
+  for (let c = 0; c <= 4; c++) for (let r = 5; r <= 9; r++) set(c, r, "engineering");
+
+  // Corridor — col 5, all rows
+  for (let r = 0; r < GRID_ROWS; r++) set(5, r, "corridor");
+
+  // Operations zone — cols 6-10, rows 0-4
+  for (let c = 6; c <= 10; c++) for (let r = 0; r <= 4; r++) set(c, r, "operations");
+
+  // COO office — cols 6-10, rows 5-9
+  for (let c = 6; c <= 10; c++) for (let r = 5; r <= 9; r++) set(c, r, "coo");
+
+  // Support sub-zone — bottom of engineering (rows 7-9, cols 0-3) kept as engineering but visually distinct
+  // (support agents share engineering floor, just their positions differ)
+
+  return map;
+}
+
+const ZONE_MAP = buildZoneMap();
 
 // ---------------------------------------------------------------------------
-// Zone background + label
+// Zone labels — placed at zone center tiles
 // ---------------------------------------------------------------------------
 
-function ZoneRect({
-  zone,
-}: {
-  zone: { x: number; y: number; w: number; h: number; label: string; color: string };
-}): React.ReactElement {
-  return (
-    <>
-      <rect
-        x={zone.x}
-        y={zone.y}
-        width={zone.w}
-        height={zone.h}
-        fill={zone.color}
-        stroke="#0d1117"
-        strokeWidth={1}
-      />
-      {zone.label && (
-        <text
-          x={zone.x + 12}
-          y={zone.y + 20}
-          fontSize={9}
-          fill="#374151"
-          fontFamily="monospace"
-          fontWeight="700"
-          letterSpacing="2"
-        >
-          {zone.label}
-        </text>
-      )}
-    </>
-  );
+const ZONE_LABELS: Array<{ col: number; row: number; text: string }> = [
+  { col: 2, row: 0, text: "PLANNING" },
+  { col: 2, row: 5, text: "ENGINEERING" },
+  { col: 2, row: 8, text: "SUPPORT" },
+  { col: 8, row: 0, text: "OPERATIONS" },
+  { col: 8, row: 7, text: "COO OFFICE" },
+];
+
+// ---------------------------------------------------------------------------
+// Desk positions per role — grid (col, row) coordinates
+// ---------------------------------------------------------------------------
+
+const DESK_GRID: Record<string, { col: number; row: number }> = {
+  product:       { col: 1, row: 1 },
+  planner:       { col: 3, row: 1 },
+  reviewer:      { col: 2, row: 3 },
+  engineer:      { col: 1, row: 5 },
+  qa:            { col: 3, row: 5 },
+  security:      { col: 2, row: 7 },
+  investigator:  { col: 1, row: 8 },
+  documentation: { col: 3, row: 8 },
+  devops:        { col: 7, row: 1 },
+  monitor:       { col: 9, row: 1 },
+  observer:      { col: 8, row: 3 },
+  coo:           { col: 8, row: 6 },
+};
+
+// Plant decoration positions
+const PLANT_GRID: Array<{ col: number; row: number }> = [
+  { col: 0, row: 0 },
+  { col: 4, row: 0 },
+  { col: 0, row: 4 },
+  { col: 4, row: 4 },
+  { col: 6, row: 0 },
+  { col: 10, row: 0 },
+  { col: 6, row: 4 },
+  { col: 10, row: 4 },
+  { col: 0, row: 9 },
+  { col: 4, row: 9 },
+  { col: 6, row: 9 },
+  { col: 10, row: 9 },
+];
+
+// ---------------------------------------------------------------------------
+// Helper: convert grid coord to SVG screen coord (with canvas offset)
+// ---------------------------------------------------------------------------
+
+function gridTileCenter(col: number, row: number): { x: number; y: number } {
+  const center = tileCenter(col, row);
+  return { x: center.x + OFFSET_X, y: center.y + OFFSET_Y };
 }
 
 // ---------------------------------------------------------------------------
-// COO meeting table + chairs
-// ---------------------------------------------------------------------------
-
-function MeetingTable(): React.ReactElement {
-  const cx = 750;
-  const cy = 430;
-  return (
-    <g>
-      {/* Table surface */}
-      <ellipse cx={cx} cy={cy} rx={60} ry={36} fill="#2a1f18" stroke="#3d2f25" strokeWidth={1.5} />
-      {/* Table leg hint */}
-      <ellipse cx={cx} cy={cy} rx={40} ry={22} fill="none" stroke="#3d2f25" strokeWidth={0.5} />
-      {/* Chairs around the table */}
-      <Chair x={cx - 65} y={cy} />
-      <Chair x={cx + 65} y={cy} />
-      <Chair x={cx}      y={cy - 42} />
-      <Chair x={cx}      y={cy + 42} />
-    </g>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Grid floor tiles for visual richness
+// Floor tile grid — sorted by zOrder for correct isometric rendering
 // ---------------------------------------------------------------------------
 
 function FloorTiles(): React.ReactElement {
-  const lines: React.ReactElement[] = [];
-  const gridSize = 40;
+  // Collect all tiles with their z-order
+  const tiles: Array<{ col: number; row: number; zone: ZoneName; z: number }> = [];
 
-  for (let x = 0; x <= SVG_W; x += gridSize) {
-    lines.push(
-      <line key={`v${x}`} x1={x} y1={0} x2={x} y2={SVG_H}
-        stroke="#ffffff" strokeWidth={0.15} opacity={0.04} />
-    );
+  for (let c = 0; c < GRID_COLS; c++) {
+    for (let r = 0; r < GRID_ROWS; r++) {
+      const zone = ZONE_MAP.get(`${c},${r}`) ?? "empty";
+      tiles.push({ col: c, row: r, zone, z: c + r });
+    }
   }
-  for (let y = 0; y <= SVG_H; y += gridSize) {
-    lines.push(
-      <line key={`h${y}`} x1={0} y1={y} x2={SVG_W} y2={y}
-        stroke="#ffffff" strokeWidth={0.15} opacity={0.04} />
-    );
-  }
-  return <g>{lines}</g>;
-}
 
-// ---------------------------------------------------------------------------
-// Zone separator lines
-// ---------------------------------------------------------------------------
+  // Sort by z-order (painter's algorithm)
+  tiles.sort((a, b) => a.z - b.z || a.col - b.col);
 
-function ZoneBorders(): React.ReactElement {
   return (
-    <g stroke="#0d1117" strokeWidth={2} fill="none">
-      {/* Horizontal corridor top border */}
-      <line x1={0} y1={300} x2={SVG_W} y2={300} />
-      {/* Horizontal corridor bottom border */}
-      <line x1={0} y1={340} x2={SVG_W} y2={340} />
-      {/* Vertical corridor left border */}
-      <line x1={580} y1={0} x2={580} y2={SVG_H} />
-      {/* Vertical corridor right border */}
-      <line x1={620} y1={0} x2={620} y2={SVG_H} />
-      {/* Support zone separator */}
-      <line x1={0} y1={560} x2={580} y2={560} strokeDasharray="6 4" strokeWidth={1} stroke="#1f2937" />
+    <g>
+      {tiles.map(({ col, row, zone }) => {
+        const rawPoints = tilePath(col, row);
+        // Offset points by OFFSET_X, OFFSET_Y
+        const points = rawPoints
+          .split(" ")
+          .map((pt) => {
+            const [px, py] = pt.split(",").map(Number);
+            return `${px + OFFSET_X},${py + OFFSET_Y}`;
+          })
+          .join(" ");
+
+        return (
+          <polygon
+            key={`${col},${row}`}
+            points={points}
+            fill={ZONE_COLORS[zone]}
+            stroke={ZONE_STROKE[zone]}
+            strokeWidth={0.5}
+          />
+        );
+      })}
     </g>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Role desk + chair layout helper
+// Zone labels
+// ---------------------------------------------------------------------------
+
+function ZoneLabels(): React.ReactElement {
+  return (
+    <g>
+      {ZONE_LABELS.map(({ col, row, text }) => {
+        const { x, y } = gridTileCenter(col, row);
+        return (
+          <text
+            key={text}
+            x={x}
+            y={y}
+            textAnchor="middle"
+            fontSize={7}
+            fill="#3a3a50"
+            fontFamily="monospace"
+            fontWeight="700"
+            letterSpacing="1.5"
+          >
+            {text}
+          </text>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Corridor label
+// ---------------------------------------------------------------------------
+
+function CorridorLabel(): React.ReactElement {
+  const { x, y } = gridTileCenter(5, 5);
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      fontSize={6}
+      fill="#2a2a38"
+      fontFamily="monospace"
+      fontWeight="700"
+      letterSpacing="2"
+    >
+      CORRIDOR
+    </text>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Furniture layer — desks and chairs, z-sorted
 // ---------------------------------------------------------------------------
 
 interface DeskSlot {
   role: string;
-  pos: { x: number; y: number };
-  isLarge: boolean;
+  col: number;
+  row: number;
 }
 
-function getDeskSlots(): DeskSlot[] {
-  return Object.entries(DESK_POSITIONS).map(([role, pos]) => ({
-    role,
-    pos,
-    isLarge: LARGE_DESK_ROLES.has(role),
-  }));
+function FurnitureLayer(): React.ReactElement {
+  // Sort desks by z-order so closer ones render on top
+  const slots = Object.entries(DESK_GRID)
+    .map(([role, { col, row }]) => ({ role, col, row, z: col + row }))
+    .sort((a, b) => a.z - b.z);
+
+  return (
+    <g>
+      {slots.map(({ role, col, row }) => {
+        const center = gridTileCenter(col, row);
+        // Chair sits slightly in front (lower-right of the desk in iso space)
+        const chairOffset = { x: center.x + 8, y: center.y + 10 };
+        return (
+          <g key={role}>
+            {/* Chair renders first (behind desk in z) */}
+            <Chair x={chairOffset.x} y={chairOffset.y} />
+            <Desk x={center.x} y={center.y} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plant decorations
+// ---------------------------------------------------------------------------
+
+function PlantLayer(): React.ReactElement {
+  const plants = PLANT_GRID
+    .map(({ col, row }) => ({ col, row, z: col + row }))
+    .sort((a, b) => a.z - b.z);
+
+  return (
+    <g>
+      {plants.map(({ col, row }) => {
+        const { x, y } = gridTileCenter(col, row);
+        return (
+          <Plant key={`plant-${col}-${row}`} x={x} y={y} scale={0.85} />
+        );
+      })}
+    </g>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Agent layer — characters at their desks
+// ---------------------------------------------------------------------------
+
+interface AgentLayerProps {
+  agents: AgentState[];
+}
+
+function AgentLayer({ agents }: AgentLayerProps): React.ReactElement {
+  // Build role -> agent map (prefer working > done > idle)
+  const agentsByRole = new Map<string, AgentState>();
+  for (const agent of agents) {
+    const role = agent.role.toLowerCase();
+    const existing = agentsByRole.get(role);
+    if (!existing || agentPriority(agent) > agentPriority(existing)) {
+      agentsByRole.set(role, agent);
+    }
+  }
+
+  // Sort by z-order
+  const slots = Object.entries(DESK_GRID)
+    .map(([role, { col, row }]) => ({ role, col, row, z: col + row }))
+    .sort((a, b) => a.z - b.z);
+
+  return (
+    <g>
+      {slots.map(({ role, col, row }) => {
+        const center = gridTileCenter(col, row);
+        // Agent sits in the chair: slightly forward (toward viewer) from desk center
+        const avatarX = center.x + 8;
+        const avatarY = center.y + 6;
+
+        const agent = agentsByRole.get(role) ?? null;
+        const avatar = generateAvatar(role);
+
+        if (agent === null) {
+          return (
+            <AgentAvatar
+              key={role}
+              x={avatarX}
+              y={avatarY}
+              avatar={avatar}
+              role={role}
+              status="idle"
+            />
+          );
+        }
+
+        return (
+          <AgentAvatar
+            key={role}
+            x={avatarX}
+            y={avatarY}
+            avatar={avatar}
+            role={role}
+            status={agent.status}
+            description={agent.description}
+            toolCallCount={agent.toolCallCount}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CSS animations injected as <style> in the SVG
+// ---------------------------------------------------------------------------
+
+function SvgStyles(): React.ReactElement {
+  return (
+    <defs>
+      <style>{`
+        @keyframes pulse-ring {
+          0%   { opacity: 0.7; transform: scale(1); }
+          50%  { opacity: 0.3; transform: scale(1.15); }
+          100% { opacity: 0.7; transform: scale(1); }
+        }
+        @keyframes float-bubble {
+          0%   { transform: translateY(0px); }
+          50%  { transform: translateY(-3px); }
+          100% { transform: translateY(0px); }
+        }
+      `}</style>
+    </defs>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -174,110 +395,32 @@ interface Props {
 }
 
 export function FloorPlan({ agents }: Props): React.ReactElement {
-  // Build a role -> agent map
-  const agentsByRole = new Map<string, AgentState>();
-  for (const agent of agents) {
-    const role = agent.role.toLowerCase();
-    const existing = agentsByRole.get(role);
-    if (!existing || agentPriority(agent) > agentPriority(existing)) {
-      agentsByRole.set(role, agent);
-    }
-  }
-
-  const deskSlots = getDeskSlots();
-
   return (
     <svg
       viewBox={`0 0 ${SVG_W} ${SVG_H}`}
       preserveAspectRatio="xMidYMid meet"
       style={{ width: "100%", height: "100%", display: "block" }}
     >
+      <SvgStyles />
+
       {/* ── Layer 0: Background ── */}
-      <rect width={SVG_W} height={SVG_H} fill="#1a1f2e" />
+      <rect width={SVG_W} height={SVG_H} fill="#13131c" />
 
-      {/* ── Layer 1: Zone floors ── */}
-      {Object.values(ZONES).map((zone, i) => (
-        <ZoneRect key={i} zone={zone as { x: number; y: number; w: number; h: number; label: string; color: string }} />
-      ))}
-
-      {/* ── Layer 2: Subtle grid ── */}
+      {/* ── Layer 1: Isometric floor tiles ── */}
       <FloorTiles />
 
-      {/* ── Layer 3: Zone borders / walls ── */}
-      <ZoneBorders />
+      {/* ── Layer 2: Zone labels on floor ── */}
+      <ZoneLabels />
+      <CorridorLabel />
 
-      {/* ── Layer 4: Furniture ── */}
-      {/* Regular desks + chairs */}
-      {deskSlots.map(({ role, pos, isLarge }) => (
-        <g key={role}>
-          <Chair x={pos.x} y={pos.y + (isLarge ? 46 : 38)} />
-          <Desk
-            x={pos.x}
-            y={pos.y}
-            color={isLarge ? "#3a2e24" : "#2d3748"}
-          />
-        </g>
-      ))}
+      {/* ── Layer 3: Furniture (desks + chairs) ── */}
+      <FurnitureLayer />
 
-      {/* COO meeting table */}
-      <MeetingTable />
+      {/* ── Layer 4: Decorative plants ── */}
+      <PlantLayer />
 
-      {/* ── Layer 5: Decorative plants ── */}
-      <Plant x={28}   y={270}  scale={0.85} />
-      <Plant x={550}  y={270}  scale={0.85} />
-      <Plant x={630}  y={270}  scale={0.85} />
-      <Plant x={1170} y={270}  scale={0.85} />
-      <Plant x={28}   y={530}  scale={0.85} />
-      <Plant x={550}  y={530}  scale={0.85} />
-      <Plant x={1170} y={530}  scale={0.85} />
-      <Plant x={1170} y={670}  scale={0.85} />
-
-      {/* ── Layer 6: Agents at their desks ── */}
-      {deskSlots.map(({ role, pos }) => {
-        const agent = agentsByRole.get(role) ?? null;
-        const avatar = generateAvatar(role);
-
-        if (agent === null) {
-          // Idle placeholder — dimmed avatar
-          return (
-            <AgentAvatar
-              key={role}
-              x={pos.x}
-              y={pos.y - 18}
-              avatar={avatar}
-              role={role}
-              status="idle"
-            />
-          );
-        }
-
-        return (
-          <AgentAvatar
-            key={role}
-            x={pos.x}
-            y={pos.y - 18}
-            avatar={avatar}
-            role={role}
-            status={agent.status}
-            description={agent.description}
-            toolCallCount={agent.toolCallCount}
-          />
-        );
-      })}
-
-      {/* ── Layer 7: Corridor label ── */}
-      <text
-        x={SVG_W / 2}
-        y={325}
-        textAnchor="middle"
-        fontSize={8}
-        fill="#374151"
-        fontFamily="monospace"
-        fontWeight="700"
-        letterSpacing="3"
-      >
-        CORRIDOR
-      </text>
+      {/* ── Layer 5: Agent characters ── */}
+      <AgentLayer agents={agents} />
     </svg>
   );
 }
