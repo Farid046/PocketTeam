@@ -34,7 +34,11 @@ export function AgentAvatar({
   const isDone = status === "done";
   const isIdle = status === "idle";
 
-  const opacity = isIdle ? 0.3 : isDone ? 0.7 : 1;
+  const opacity = isIdle ? 0.3 : isDone ? 0.75 : 1;
+
+  // Each agent gets a unique animation delay so they don't all bob in sync
+  const bobDelay = `${(role.charCodeAt(0) % 5) * 0.4}s`;
+  const bobDuration = isWorking ? "1.8s" : "3.5s"; // faster bob when working
 
   const truncatedDesc =
     description && description.length > MAX_BUBBLE_CHARS
@@ -50,7 +54,13 @@ export function AgentAvatar({
   const hy = by - HEAD_H - 1;
 
   return (
-    <g opacity={opacity}>
+    <g
+      opacity={opacity}
+      style={{
+        animation: isIdle ? "none" : `agent-bob ${bobDuration} ease-in-out infinite`,
+        animationDelay: bobDelay,
+      }}
+    >
       {/* Working: pulsing green ring around character */}
       {isWorking && (
         <ellipse
