@@ -2,17 +2,16 @@ import { useEffect, useRef } from "react";
 import { useStore } from "../store/useStore";
 import type { WsMessage, DashboardSnapshot, AgentState, PocketTeamEvent, AuditEntry } from "../types";
 
-declare global {
-  interface Window {
-    __AUTH_TOKEN__: string;
-  }
+function getAuthToken(): string {
+  const meta = document.querySelector('meta[name="pt-token"]');
+  return meta?.getAttribute("content") ?? "";
 }
 
 const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30000;
 
 async function fetchTicket(): Promise<string> {
-  const token = window.__AUTH_TOKEN__;
+  const token = getAuthToken();
   const res = await fetch("/api/v1/ws-ticket", {
     method: "POST",
     headers: {
