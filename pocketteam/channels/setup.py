@@ -1,8 +1,15 @@
 """
-Channel Setup — configures Telegram bot and session management.
+Channel Setup — Telegram notifications and session management.
 
-Telegram integration: 1 Bot = 1 Project = 1 persistent session.
-Messages from Telegram are routed to the pipeline, responses go back.
+IMPORTANT: The main Telegram communication uses Claude Code's native
+Channels system (plugin:telegram@claude-plugins-official), NOT this module.
+
+This module provides:
+1. TelegramNotifier — one-way notifications (health alerts, init confirmation)
+2. SessionManager — manages pipeline session files
+
+For two-way Telegram chat:
+  claude --channels plugin:telegram@claude-plugins-official
 """
 
 from __future__ import annotations
@@ -19,13 +26,16 @@ from ..constants import EVENTS_FILE, SESSIONS_DIR
 
 class TelegramChannel:
     """
-    Telegram bot channel for PocketTeam.
+    Telegram notification sender for PocketTeam.
 
-    Handles:
-    - Receiving messages from CEO via Telegram
-    - Routing them to the pipeline (or existing session)
-    - Sending status updates and approval requests back
-    - Session resumption (persistent sessions across restarts)
+    Used for ONE-WAY notifications only:
+    - Init confirmation messages
+    - Health failure alerts (from GitHub Actions)
+    - Self-healing status updates
+
+    For TWO-WAY Telegram chat (send tasks, get responses), use
+    Claude Code's native Channels system instead:
+      claude --channels plugin:telegram@claude-plugins-official
     """
 
     def __init__(
