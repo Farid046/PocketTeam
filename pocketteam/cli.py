@@ -43,6 +43,52 @@ async def _init(project_name: str | None, yes: bool) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# pocketteam start — launch Claude Code with Telegram channel
+# ─────────────────────────────────────────────────────────────────────────────
+
+@main.command()
+@click.option("--no-telegram", is_flag=True, help="Start without Telegram channel.")
+def start(no_telegram: bool) -> None:
+    """Start Claude Code with PocketTeam (and Telegram if configured)."""
+    import subprocess as sp
+    from .config import load_config
+
+    root = Path.cwd()
+    cfg = load_config(root)
+
+    tg_active = bool(
+        cfg.telegram.bot_token
+        and not cfg.telegram.bot_token.startswith("$")
+        and not no_telegram
+    )
+
+    cmd = ["claude"]
+
+    if tg_active:
+        # Set bot token env var for the channel plugin
+        env_file = root / ".pocketteam/telegram.env"
+        if env_file.exists():
+            console.print("[dim]Loading Telegram token...[/]")
+            for line in env_file.read_text().splitlines():
+                if "=" in line and not line.startswith("#"):
+                    key, val = line.split("=", 1)
+                    import os
+                    os.environ[key.strip()] = val.strip()
+
+        cmd.extend(["--channels", "plugin:telegram@claude-plugins-official"])
+        console.print(f"Starting Claude Code with [cyan]Telegram channel[/] for [bold]{cfg.project_name}[/]")
+        console.print("[dim]Telegram messages will arrive in your Claude Code session.[/]")
+    else:
+        console.print(f"Starting Claude Code for [bold]{cfg.project_name}[/]")
+
+    console.print()
+
+    # Replace current process with claude
+    import os
+    os.execvp(cmd[0], cmd)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # pocketteam status
 # ─────────────────────────────────────────────────────────────────────────────
 

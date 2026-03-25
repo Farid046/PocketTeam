@@ -86,34 +86,39 @@ async def run_init(project_name: str | None, accept_defaults: bool) -> None:
     # Create .env.example
     _create_env_example(project_root)
 
+    # Create start script if Telegram configured
+    tg_active = bool(cfg.telegram.bot_token and not cfg.telegram.bot_token.startswith("$"))
+    if tg_active:
+        _create_start_script(project_root, cfg)
+
     # Send Telegram confirmation if configured
-    tg_ok = False
-    if cfg.telegram.bot_token and cfg.telegram.chat_id and not cfg.telegram.bot_token.startswith("$"):
+    if tg_active and cfg.telegram.chat_id:
         try:
             from .channels.setup import TelegramChannel
             ch = TelegramChannel(project_root, config=cfg)
             tg_ok = await ch.send_message(
                 f"🚀 <b>PocketTeam initialized!</b>\n\n"
                 f"Project: {cfg.project_name}\n"
-                f"Send me a task to get started.\n"
-                f"Use /kill for emergency stop."
+                f"Start Claude Code with Telegram:\n"
+                f"<code>pocketteam start</code>\n\n"
+                f"Or DM me after pairing."
             )
             if tg_ok:
-                console.print("  [green]✅ Telegram test message sent! Check your bot.[/]")
+                console.print("  [green]✅ Telegram test message sent![/]")
             else:
-                console.print("  [yellow]⚠️ Could not reach Telegram. Check your bot token and chat ID.[/]")
+                console.print("  [yellow]⚠️ Could not reach Telegram bot.[/]")
         except Exception:
-            console.print("  [yellow]⚠️ Telegram test failed. You can fix this later.[/]")
+            pass
 
-    # Dynamic next steps based on what was configured
+    # Dynamic next steps
     next_steps = []
 
-    if cfg.telegram.bot_token and not cfg.telegram.bot_token.startswith("$"):
-        next_steps.append("Start Claude Code with Telegram channel:")
-        next_steps.append("  [bold]claude --channels plugin:telegram@claude-plugins-official[/]")
+    if tg_active:
+        next_steps.append("Start Claude Code with Telegram (auto-configured):")
+        next_steps.append("  [bold]pocketteam start[/]")
         next_steps.append("")
-        next_steps.append("Or without Telegram:")
-        next_steps.append("  [bold]claude[/]")
+        next_steps.append("[dim]This runs: claude --channels plugin:telegram@...[/]")
+        next_steps.append("[dim]First time? Follow the pairing steps from Step 3b above.[/]")
     else:
         next_steps.append("Open Claude Code — it will act as your COO:")
         next_steps.append("  [bold]claude[/]")
@@ -122,7 +127,7 @@ async def run_init(project_name: str | None, accept_defaults: bool) -> None:
     next_steps.append("Then give it a task:")
     next_steps.append("  > Build user auth with OAuth2")
     next_steps.append("")
-    next_steps.append("[dim]Commands: pocketteam status | pocketteam kill | pocketteam logs[/]")
+    next_steps.append("[dim]Commands: pocketteam start | pocketteam status | pocketteam kill[/]")
 
     console.print(Panel(
         "✅ [bold green]PocketTeam initialized![/]\n\n"
@@ -623,6 +628,17 @@ def _setup_agent_definitions(project_root: Path) -> None:
         for md_file in skills_dir.glob("*.md"):
             target = skills_target / md_file.name
             shutil.copy2(md_file, target)
+
+
+def _create_start_script(project_root: Path, cfg: PocketTeamConfig) -> None:
+    """Create a start script that launches Claude Code with Telegram channel."""
+    # The token is needed for the channel plugin
+    bot_token = cfg.telegram.bot_token
+
+    # Store token in .pocketteam/telegram.env (gitignored)
+    env_path = project_root / ".pocketteam/telegram.env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path.write_text(f"TELEGRAM_BOT_TOKEN={bot_token}\n")
 
 
 def _create_github_actions(project_root: Path, cfg: PocketTeamConfig) -> None:
