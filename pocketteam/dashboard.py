@@ -1,0 +1,1013 @@
+"""
+PocketTeam Dashboard
+Docker-based real-time visibility into the agent swarm.
+
+All subprocess calls use shell=False to prevent shell injection.
+Auth token lives in .pocketteam/.env, never in config.yaml.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import platform
+import pwd
+import secrets
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+import webbrowser
+from pathlib import Path
+from typing import Optional
+
+from rich.console import Console
+
+from .config import DashboardConfig, PocketTeamConfig, load_config, save_config
+from .constants import (
+    DASHBOARD_DIGEST,
+    DASHBOARD_IMAGE,
+    DASHBOARD_PORT,
+    DASHBOARD_PORT_RANGE_END,
+    DASHBOARD_VERSION,
+)
+
+console = Console()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Username resolution (Errata Q2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def get_real_username() -> str:
+    """Get actual user, even under sudo."""
+    return (
+        os.environ.get("SUDO_USER")
+        or os.environ.get("USER")
+        or pwd.getpwuid(os.getuid()).pw_name
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Container runtime detection (Step 1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _user_in_docker_group() -> bool:
+    """Check if the real user is in the docker group."""
+    try:
+        import grp
+        docker_gid = grp.getgrnam("docker").gr_gid
+        return docker_gid in os.getgroups()
+    except (KeyError, OSError):
+        return False
+
+
+def detect_container_runtime() -> str:
+    """
+    Detect available Docker context without mutating state.
+
+    Uses `docker --context <ctx> info` — NOT `docker context use`.
+    Returns the context name string on success.
+    Exits with instructions on failure.
+    """
+    os_type = platform.system()
+
+    # Check Podman first — we require Docker
+    if shutil.which("podman") and not shutil.which("docker"):
+        console.print("[yellow]Podman detected. PocketTeam requires Docker (or OrbStack).[/]")
+        console.print("Install Docker Desktop: https://docker.com/get-started")
+        console.print("Or OrbStack (Mac, lightweight): https://orbstack.dev")
+        sys.exit(1)
+
+    # Probe known contexts — never mutates state
+    for ctx in ["orbstack", "desktop-linux", "default"]:
+        result = subprocess.run(
+            ["docker", "--context", ctx, "info"],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return ctx
+
+    # Docker installed but daemon not running
+    if shutil.which("docker"):
+        if os_type == "Darwin":
+            console.print("[red]Docker is installed but not running.[/]")
+            console.print("Start Docker Desktop or OrbStack from Applications.")
+            console.print("Then re-run: [bold]pocketteam init[/]")
+        elif os_type == "Linux":
+            console.print("[red]Docker is installed but not running.[/]")
+            console.print("Run: [bold]sudo systemctl start docker[/]")
+            if not _user_in_docker_group():
+                console.print(
+                    "Then: [bold]sudo usermod -aG docker $USER && newgrp docker[/]"
+                )
+        sys.exit(1)
+
+    # Not installed — always ask before installing system software (Q1, Q2, Q3)
+    _install_docker(os_type)
+    # _install_docker always exits — this is unreachable but satisfies type checker
+    sys.exit(1)  # pragma: no cover
+
+
+def _install_docker(os_type: str) -> None:
+    """Ask user before installing Docker. Always exits."""
+    if os_type == "Darwin":
+        console.print("[yellow]Docker is required for the PocketTeam dashboard.[/]")
+        console.print("Recommended: OrbStack (lightweight) — https://orbstack.dev")
+        console.print("Alternative: Docker Desktop — https://docker.com/get-started")
+        if shutil.which("brew"):
+            confirm = input("Install OrbStack via Homebrew? (y/n) ")
+            if confirm.lower() == "y":
+                subprocess.run(["brew", "install", "--cask", "orbstack"], check=False)
+                console.print(
+                    "[green]OrbStack installed. Start it from Applications, then re-run:[/]"
+                )
+                console.print("  [bold]pocketteam init[/]")
+                sys.exit(0)  # Success path — Errata Q1: exit(0) not exit(1)
+            else:
+                console.print("Install manually, then re-run: [bold]pocketteam init[/]")
+                sys.exit(0)
+        else:
+            console.print("Install manually, then re-run: [bold]pocketteam init[/]")
+            sys.exit(0)
+
+    elif os_type == "Linux":
+        console.print("[yellow]Docker is required for the PocketTeam dashboard.[/]")
+        console.print("Official install: https://docs.docker.com/engine/install/")
+        confirm = input("Auto-install Docker via official script? (y/n) ")
+        if confirm.lower() == "y":
+            # Download first, show SHA256, then execute (Errata S6 pattern)
+            tmp_script = "/tmp/get-docker.sh"
+            subprocess.run(
+                ["curl", "-fsSL", "-o", tmp_script, "https://get.docker.com"],
+                check=True,
+            )
+            sha = hashlib.sha256(Path(tmp_script).read_bytes()).hexdigest()
+            console.print(f"Script SHA256: {sha}")
+            execute_confirm = input("Execute? (y/n) ")
+            if execute_confirm.lower() != "y":
+                console.print("Aborted. Install Docker manually, then re-run: pocketteam init")
+                sys.exit(0)
+            subprocess.run(["sh", tmp_script], check=False)
+            username = get_real_username()
+            console.print()
+            console.print("[yellow]Docker group membership required.[/]")
+            console.print(f"  This grants effective root access via Docker.")
+            group_confirm = input(f"  Add '{username}' to docker group? (y/n) ")
+            if group_confirm.lower() == "y":
+                subprocess.run(
+                    ["sudo", "usermod", "-aG", "docker", username], check=False
+                )
+                console.print("Added. Run: [bold]newgrp docker[/]")
+                console.print("Then re-run: [bold]pocketteam init[/]")
+            sys.exit(1)
+        else:
+            console.print("Install Docker manually, then re-run: [bold]pocketteam init[/]")
+            sys.exit(1)
+
+    elif "WSL" in platform.release():
+        console.print("[yellow]Install Docker Desktop for Windows with WSL2 backend:[/]")
+        console.print("https://docs.docker.com/desktop/wsl/")
+        sys.exit(1)
+
+    else:
+        console.print("[red]Unsupported OS. Install Docker manually:[/]")
+        console.print("https://docs.docker.com/engine/install/")
+        sys.exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Docker daemon pre-flight (used by CLI commands — Errata Q4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def check_docker_daemon(docker_context: str) -> None:
+    """
+    Verify Docker daemon is reachable with the stored context.
+    Exits with actionable message if not running.
+    """
+    result = subprocess.run(
+        ["docker", "--context", docker_context, "info"],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        os_type = platform.system()
+        console.print("[red]Docker daemon is not running.[/]")
+        if os_type == "Darwin":
+            console.print("Start Docker Desktop or OrbStack from Applications.")
+        elif os_type == "Linux":
+            console.print("Run: [bold]sudo systemctl start docker[/]")
+        console.print(f"Context in use: {docker_context}")
+        sys.exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Disk space check (Step 2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def check_disk_space(min_mb: int = 200) -> None:
+    """Exit with actionable message if disk space is insufficient."""
+    free_mb = shutil.disk_usage("/").free // (1024 * 1024)
+    if free_mb < min_mb:
+        console.print(
+            f"[red]Insufficient disk space: {free_mb}MB free, {min_mb}MB required.[/]"
+        )
+        console.print("Free up disk space, then re-run: [bold]pocketteam init[/]")
+        sys.exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Image pull with retry + error taxonomy (Step 3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def pull_image(
+    image: str,
+    version: str,
+    digest: str,
+    context: str,
+    max_retries: int = 3,
+) -> None:
+    """
+    Pull the dashboard image with retry and error taxonomy.
+
+    Non-retryable errors exit immediately with instructions.
+    Retryable errors use exponential backoff.
+    Uses shell=False — no shell injection.
+    """
+    ref = f"{image}@{digest}" if digest else f"{image}:{version}"
+    for attempt in range(max_retries):
+        result = subprocess.run(
+            ["docker", "--context", context, "pull", ref],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return
+
+        stderr = (result.stderr or b"").decode(errors="replace").lower()
+
+        # Non-retryable: image doesn't exist
+        if "not found" in stderr or "manifest unknown" in stderr:
+            console.print(f"[red]Image {ref} not found on GHCR.[/]")
+            console.print(
+                "Your pocketteam version may be newer than the published image."
+            )
+            console.print("Check releases: https://github.com/pocketteam/pocketteam/releases")
+            sys.exit(1)
+
+        # Non-retryable: auth / rate limit
+        if "denied" in stderr or "403" in stderr:
+            console.print("[red]GHCR rate limit or auth error.[/]")
+            console.print("Try: [bold]docker login ghcr.io[/]")
+            sys.exit(1)
+
+        # Non-retryable: no disk space
+        if "no space left" in stderr:
+            console.print("[red]No disk space left during pull.[/]")
+            console.print("Free up disk space, then re-run: [bold]pocketteam init[/]")
+            sys.exit(1)
+
+        # Non-retryable: proxy auth required
+        if "407" in stderr or "proxy" in stderr:
+            console.print("[red]Proxy authentication required.[/]")
+            console.print(
+                "Configure Docker proxy settings: "
+                "https://docs.docker.com/network/proxy/"
+            )
+            sys.exit(1)
+
+        # Retryable
+        if attempt < max_retries - 1:
+            wait = 2**attempt
+            console.print(
+                f"Pull failed, retrying in {wait}s... ({attempt + 1}/{max_retries})"
+            )
+            time.sleep(wait)
+
+    console.print("[red]Docker pull failed after 3 attempts.[/]")
+    console.print("Check your internet connection, then re-run: [bold]pocketteam init[/]")
+    sys.exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Port detection (Step 5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def find_free_port(
+    start: int = DASHBOARD_PORT,
+    end: int = DASHBOARD_PORT_RANGE_END,
+) -> int:
+    """Auto-detect free port in range. Zero questions asked."""
+    for port in range(start, end + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("localhost", port)) != 0:
+                return port
+    console.print(f"[red]Ports {start}–{end} all in use.[/]")
+    console.print(
+        f"Free one, or run: [bold]pocketteam dashboard configure --port <port>[/]"
+    )
+    sys.exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Compose command detection (Errata E3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def detect_compose_command() -> list[str]:
+    """
+    Detect Docker Compose v2 plugin or v1 standalone.
+    Returns command as list for subprocess (no shell injection).
+    """
+    # Try v2 plugin syntax first
+    r = subprocess.run(
+        ["docker", "compose", "version"], capture_output=True, check=False
+    )
+    if r.returncode == 0:
+        return ["docker", "compose"]
+
+    # Try v1 standalone
+    r = subprocess.run(
+        ["docker-compose", "version"], capture_output=True, check=False
+    )
+    if r.returncode == 0:
+        return ["docker-compose"]
+
+    console.print("[red]Docker Compose not found.[/]")
+    console.print("Install: https://docs.docker.com/compose/install/")
+    sys.exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Compose file generation (Step 7)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _get_claude_version() -> str:
+    """Get installed Claude Code version, empty string if unavailable."""
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ver = result.stdout.strip()
+        return ver.split()[0] if ver else ""
+    except (OSError, IndexError):
+        return ""
+
+
+def generate_compose(
+    dash: DashboardConfig,
+    claude_project_dir: Path,
+    pocketteam_dir: Path,
+    env_file_path: Path,
+) -> str:
+    """
+    Generate a hardened docker-compose.yml with literal paths.
+
+    Security: localhost-only binding, read_only, non-root, resource limits,
+    cap_drop ALL, no-new-privileges, restart on-failure:3 (Errata E4 — not
+    deploy.restart_policy which is Swarm-only).
+    Auth token sourced from env_file, not from config.
+    """
+    image_ref = (
+        f"{dash.image}@{dash.image_digest}"
+        if dash.image_digest
+        else f"{dash.image}:{dash.image_version}"
+    )
+
+    return f"""version: "3.8"
+services:
+  dashboard:
+    image: {image_ref}
+    container_name: pocketteam-dashboard
+    ports:
+      - "127.0.0.1:{dash.port}:{dash.port}"
+    volumes:
+      - {claude_project_dir}:/data/claude/project:ro
+      - {pocketteam_dir}:/data/pocketteam:ro
+    environment:
+      - PORT={dash.port}
+    env_file:
+      - {env_file_path}
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 256m
+    cpus: 0.5
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:{dash.port}/api/v1/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Health wait (Step 8)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def wait_for_healthy(port: int, timeout: int = 30) -> bool:
+    """Poll health endpoint until healthy or timeout. Returns True if healthy."""
+    for _ in range(timeout // 2):
+        try:
+            r = urllib.request.urlopen(
+                f"http://localhost:{port}/api/v1/health", timeout=2
+            )
+            if r.status == 200:
+                return True
+        except (urllib.error.URLError, OSError):
+            pass
+        time.sleep(2)
+
+    console.print("[yellow]Dashboard starting but taking longer than expected.[/]")
+    console.print("  Check: [bold]pocketteam dashboard logs[/]")
+    return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# .pocketteam/.env auth token management
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _write_auth_token(project_root: Path) -> str:
+    """
+    Generate a 64-char hex auth token and write to .pocketteam/.env.
+    NEVER logs the token.
+    Returns the token for use in this session only.
+    """
+    token = secrets.token_hex(32)  # 64 hex chars
+    env_path = project_root / ".pocketteam" / ".env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Preserve existing lines, update or append DASHBOARD_AUTH_TOKEN
+    existing_lines: list[str] = []
+    if env_path.exists():
+        existing_lines = env_path.read_text().splitlines()
+
+    updated = False
+    new_lines = []
+    for line in existing_lines:
+        if line.startswith("DASHBOARD_AUTH_TOKEN="):
+            new_lines.append(f"DASHBOARD_AUTH_TOKEN={token}")
+            updated = True
+        else:
+            new_lines.append(line)
+
+    if not updated:
+        new_lines.append(f"DASHBOARD_AUTH_TOKEN={token}")
+
+    env_path.write_text("\n".join(new_lines) + "\n")
+    os.chmod(env_path, 0o600)
+    return token
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# .pocketteam/.gitignore (Errata S2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def ensure_pocketteam_gitignore(project_root: Path) -> None:
+    """Write .pocketteam/.gitignore with deny-all '*' rule."""
+    gitignore_path = project_root / ".pocketteam" / ".gitignore"
+    gitignore_path.parent.mkdir(parents=True, exist_ok=True)
+    if not gitignore_path.exists():
+        gitignore_path.write_text("*\n")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main dashboard setup (called from init.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def setup_dashboard(cfg: PocketTeamConfig) -> None:
+    """
+    Full dashboard setup flow — runs after existing init steps.
+    Modifies cfg.dashboard in-place and calls save_config().
+    """
+    project_root = cfg.project_root.resolve()
+
+    console.print()
+    console.print("[bold cyan]Setting up PocketTeam Dashboard...[/]")
+
+    # Step 1: Detect container runtime
+    console.print("  Detecting container runtime...")
+    detected_context = detect_container_runtime()
+    console.print(f"  [green]Docker context: {detected_context}[/]")
+
+    # Step 2: Disk space
+    check_disk_space(min_mb=200)
+
+    # Step 3: Pull image
+    console.print(f"  Pulling dashboard image {DASHBOARD_IMAGE}:{DASHBOARD_VERSION}...")
+    pull_image(
+        image=DASHBOARD_IMAGE,
+        version=DASHBOARD_VERSION,
+        digest=DASHBOARD_DIGEST,
+        context=detected_context,
+    )
+    console.print("  [green]Image ready.[/]")
+
+    # Step 4: Auto-compute paths + validate
+    claude_home = Path.home() / ".claude"
+    claude_project_hash = str(project_root).replace("/", "-").lstrip("-")
+    claude_project_dir = claude_home / "projects" / claude_project_hash
+
+    if not claude_project_dir.exists():
+        if not claude_home.exists():
+            console.print(
+                "  [dim]Claude Code hasn't been run yet. Creating placeholder dirs.[/]"
+            )
+            console.print(
+                "  Dashboard will show data once you run: [bold]pocketteam start[/]"
+            )
+        claude_project_dir.mkdir(parents=True, exist_ok=True)
+
+    # Ensure event + audit dirs exist for volume mounts
+    (project_root / ".pocketteam" / "events").mkdir(parents=True, exist_ok=True)
+    (project_root / ".pocketteam" / "artifacts" / "audit").mkdir(
+        parents=True, exist_ok=True
+    )
+
+    # Errata E2: compose_dir uses sha256 hash — prevents path collision
+    compose_dir_hash = hashlib.sha256(str(project_root).encode()).hexdigest()[:16]
+    compose_dir = Path.home() / ".pocketteam" / "dashboard" / compose_dir_hash
+    compose_file = compose_dir / "docker-compose.yml"
+
+    # Step 5: Find free port (zero questions)
+    port = find_free_port()
+
+    # Step 6: Handle re-init (don't clobber hand-edited compose files)
+    if compose_file.exists():
+        existing_root = cfg.dashboard.project_root
+        if existing_root and existing_root != str(project_root):
+            console.print(
+                f"  [yellow]Dashboard currently configured for: {existing_root}[/]"
+            )
+            console.print(f"  Switching to: {project_root}")
+            confirm = input("  Continue? (y/n) ")
+            if confirm.lower() != "y":
+                sys.exit(0)
+
+        # Backup if hand-edited
+        current_checksum = hashlib.sha256(compose_file.read_bytes()).hexdigest()
+        stored_checksum = cfg.dashboard.compose_checksum
+        if stored_checksum and current_checksum != stored_checksum:
+            backup = compose_file.with_suffix(".yml.bak")
+            shutil.copy2(compose_file, backup)
+            os.chmod(backup, 0o600)
+            console.print(f"  Backed up hand-edited compose to: {backup}")
+
+    # Step 7a: Detect compose command (Errata E3)
+    compose_cmd_list = detect_compose_command()
+    compose_command = " ".join(compose_cmd_list)
+
+    # Step 7b: Generate auth token — write to .pocketteam/.env (Errata S2, S3)
+    _write_auth_token(project_root)
+
+    # Step 7c: Write .pocketteam/.gitignore (Errata S2)
+    ensure_pocketteam_gitignore(project_root)
+
+    # Step 7d: Populate dashboard config
+    cfg.dashboard = DashboardConfig(
+        enabled=True,
+        port=port,
+        image=DASHBOARD_IMAGE,
+        image_version=DASHBOARD_VERSION,
+        image_digest=DASHBOARD_DIGEST,
+        domain="",
+        compose_dir=str(compose_dir),
+        docker_context=detected_context,
+        claude_version_at_init=_get_claude_version(),
+        compose_checksum="",  # filled after writing compose
+        project_root=str(project_root),
+        claude_project_hash=claude_project_hash,
+        compose_command=compose_command,
+    )
+    save_config(cfg)
+
+    # Step 7e: Generate and write compose file
+    compose_dir.mkdir(parents=True, exist_ok=True)
+    env_file_path = project_root / ".pocketteam" / ".env"
+    compose_content = generate_compose(
+        dash=cfg.dashboard,
+        claude_project_dir=claude_project_dir,
+        pocketteam_dir=project_root / ".pocketteam",
+        env_file_path=env_file_path,
+    )
+    compose_file.write_text(compose_content)
+    os.chmod(compose_file, 0o600)
+
+    # Update checksum after writing
+    cfg.dashboard.compose_checksum = hashlib.sha256(
+        compose_content.encode()
+    ).hexdigest()
+    save_config(cfg)
+
+    # Step 7f: Start the container
+    console.print("  Starting dashboard container...")
+    # Build the full command: docker --context <ctx> compose -f <file> up -d
+    # or: docker-compose -f <file> up -d  (v1)
+    if compose_cmd_list[0] == "docker":
+        start_cmd = (
+            ["docker", "--context", detected_context]
+            + compose_cmd_list[1:]  # ["compose"]
+            + ["-f", str(compose_file), "up", "-d"]
+        )
+    else:
+        start_cmd = compose_cmd_list + ["-f", str(compose_file), "up", "-d"]
+
+    result = subprocess.run(start_cmd, check=False)
+    if result.returncode != 0:
+        console.print("[red]Failed to start dashboard container.[/]")
+        console.print(f"  Check: [bold]pocketteam dashboard logs[/]")
+        console.print(f"  Compose file: {compose_file}")
+        return
+
+    # Step 8: Wait for healthy + open browser
+    console.print("  Waiting for dashboard to become healthy...")
+    healthy = wait_for_healthy(port)
+    if healthy:
+        url = f"http://localhost:{port}"
+        console.print(f"  [green]Dashboard ready: {url}[/]")
+        webbrowser.open(url)
+    else:
+        console.print(f"  Dashboard may still be starting: http://localhost:{port}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLI helpers used by cli.py dashboard subcommands
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _load_dashboard_config(project_root: Optional[Path] = None) -> tuple[PocketTeamConfig, Path]:
+    """Load config and return (cfg, compose_file). Exits if dashboard not configured."""
+    root = project_root or Path.cwd()
+    cfg = load_config(root)
+    if not cfg.dashboard.enabled or not cfg.dashboard.compose_dir:
+        console.print("[red]Dashboard is not configured.[/]")
+        console.print("Run: [bold]pocketteam dashboard install[/]")
+        sys.exit(1)
+    compose_file = Path(cfg.dashboard.compose_dir) / "docker-compose.yml"
+    if not compose_file.exists():
+        console.print(f"[red]Compose file not found: {compose_file}[/]")
+        console.print("Run: [bold]pocketteam init[/] to reconfigure the dashboard.")
+        sys.exit(1)
+    return cfg, compose_file
+
+
+def _build_compose_cmd(cfg: PocketTeamConfig, compose_file: Path) -> list[str]:
+    """Build the compose command prefix with context and file flag."""
+    compose_parts = cfg.dashboard.compose_command.split()
+    ctx = cfg.dashboard.docker_context
+
+    if compose_parts[0] == "docker":
+        # docker --context <ctx> compose -f <file> ...
+        return ["docker", "--context", ctx] + compose_parts[1:] + ["-f", str(compose_file)]
+    else:
+        # docker-compose -f <file> ...  (v1 does not support --context)
+        return compose_parts + ["-f", str(compose_file)]
+
+
+def dashboard_start_cmd(project_root: Optional[Path] = None) -> None:
+    """Start the dashboard container (compose up -d)."""
+    root = project_root or Path.cwd()
+    cfg, compose_file = _load_dashboard_config(root)
+    check_docker_daemon(cfg.dashboard.docker_context)
+
+    cmd = _build_compose_cmd(cfg, compose_file) + ["up", "-d"]
+    result = subprocess.run(cmd, check=False)
+    if result.returncode != 0:
+        console.print("[red]Failed to start dashboard.[/]")
+        console.print("Check: [bold]pocketteam dashboard logs[/]")
+        sys.exit(1)
+
+    port = cfg.dashboard.port
+    healthy = wait_for_healthy(port)
+    url = f"http://localhost:{port}"
+    if healthy:
+        console.print(f"[green]Dashboard running: {url}[/]")
+        webbrowser.open(url)
+    else:
+        console.print(f"[yellow]Dashboard starting: {url}[/]")
+
+
+def dashboard_stop_cmd(project_root: Optional[Path] = None) -> None:
+    """Stop the dashboard container (compose down)."""
+    root = project_root or Path.cwd()
+    cfg, compose_file = _load_dashboard_config(root)
+    check_docker_daemon(cfg.dashboard.docker_context)
+
+    cmd = _build_compose_cmd(cfg, compose_file) + ["down"]
+    subprocess.run(cmd, check=False)
+    console.print("Dashboard stopped.")
+
+
+def dashboard_status_cmd(project_root: Optional[Path] = None) -> None:
+    """
+    Show dashboard status: container state, URL, volume health.
+    Exits with non-zero if container is not running (Errata Q7).
+    """
+    root = project_root or Path.cwd()
+    cfg, compose_file = _load_dashboard_config(root)
+    check_docker_daemon(cfg.dashboard.docker_context)
+
+    # Container state via docker inspect
+    ctx = cfg.dashboard.docker_context
+    inspect_result = subprocess.run(
+        [
+            "docker",
+            "--context",
+            ctx,
+            "inspect",
+            "--format",
+            "{{.State.Status}} (up {{.State.StartedAt}})",
+            "pocketteam-dashboard",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if inspect_result.returncode != 0:
+        container_status = "not found"
+        exit_code = 1
+    else:
+        raw = inspect_result.stdout.strip()
+        container_status = raw
+        exit_code = 0 if "running" in raw else 1
+
+    port = cfg.dashboard.port
+    url = f"http://localhost:{port}"
+
+    console.print(f"\n[bold]Dashboard Status[/]")
+    console.print(f"  Container:  {container_status}")
+    console.print(f"  URL:        {url}")
+    console.print(f"  Image:      {cfg.dashboard.image}:{cfg.dashboard.image_version}")
+    console.print(f"  Project:    {cfg.dashboard.project_root}")
+    console.print()
+    console.print("[bold]Volume Health:[/]")
+
+    # Check claude project dir
+    claude_project_dir = (
+        Path.home() / ".claude" / "projects" / cfg.dashboard.claude_project_hash
+    )
+    if claude_project_dir.exists():
+        sessions = sum(
+            1
+            for p in claude_project_dir.iterdir()
+            if p.is_dir() and p.name != "memory"
+        )
+        console.print(
+            f"  [green]~/.claude/projects/{cfg.dashboard.claude_project_hash}/"
+            f" exists ({sessions} session(s))[/]"
+        )
+    else:
+        console.print(
+            f"  [yellow].claude/projects/{cfg.dashboard.claude_project_hash}/"
+            f" does not exist yet — run pocketteam start[/]"
+        )
+
+    pocketteam_dir = Path(cfg.dashboard.project_root) / ".pocketteam"
+    if pocketteam_dir.exists():
+        console.print(f"  [green].pocketteam/ exists[/]")
+    else:
+        console.print(f"  [red].pocketteam/ missing — run pocketteam init[/]")
+
+    if exit_code != 0:
+        sys.exit(exit_code)
+
+
+def dashboard_logs_cmd(project_root: Optional[Path] = None) -> None:
+    """Follow dashboard container logs (compose logs -f)."""
+    root = project_root or Path.cwd()
+    cfg, compose_file = _load_dashboard_config(root)
+    check_docker_daemon(cfg.dashboard.docker_context)
+
+    cmd = _build_compose_cmd(cfg, compose_file) + ["logs", "-f"]
+    try:
+        subprocess.run(cmd, check=False)
+    except KeyboardInterrupt:
+        pass
+
+
+def dashboard_update_cmd(project_root: Optional[Path] = None) -> None:
+    """
+    Pull new digest-pinned version, update compose, restart.
+    Checks disk space first.
+    """
+    root = project_root or Path.cwd()
+    cfg, compose_file = _load_dashboard_config(root)
+    check_docker_daemon(cfg.dashboard.docker_context)
+    check_disk_space(min_mb=200)
+
+    ctx = cfg.dashboard.docker_context
+
+    console.print("Fetching latest release manifest...")
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/repos/pocketteam/pocketteam/releases/latest",
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            import json
+            release_data = json.loads(resp.read())
+    except (urllib.error.URLError, OSError) as e:
+        console.print(f"[red]Could not fetch release manifest: {e}[/]")
+        console.print("Check your internet connection.")
+        sys.exit(1)
+
+    # Extract version + digest from release body (expected format: "digest: sha256:abc...")
+    new_version = release_data.get("tag_name", "").lstrip("v")
+    new_digest = ""
+    body = release_data.get("body", "")
+    for line in body.splitlines():
+        if line.lower().startswith("digest:"):
+            new_digest = line.split(":", 1)[1].strip()
+            break
+
+    current_version = cfg.dashboard.image_version
+    current_digest = cfg.dashboard.image_digest
+
+    if new_version == current_version and new_digest == current_digest:
+        console.print(f"Already up to date ({current_version}).")
+        return
+
+    console.print(f"Updating {current_version} → {new_version}...")
+
+    # Pull new image
+    pull_image(
+        image=cfg.dashboard.image,
+        version=new_version,
+        digest=new_digest,
+        context=ctx,
+    )
+
+    # Check compose checksum — warn if hand-edited
+    current_checksum = hashlib.sha256(compose_file.read_bytes()).hexdigest()
+    if cfg.dashboard.compose_checksum and current_checksum != cfg.dashboard.compose_checksum:
+        console.print(
+            "[yellow]Compose file has been hand-edited. "
+            "It will be overwritten with the new version.[/]"
+        )
+        backup = compose_file.with_suffix(".yml.bak")
+        shutil.copy2(compose_file, backup)
+        os.chmod(backup, 0o600)
+        console.print(f"Backed up to: {backup}")
+
+    # Update config + regenerate compose
+    cfg.dashboard.image_version = new_version
+    cfg.dashboard.image_digest = new_digest
+
+    claude_project_dir = (
+        Path.home() / ".claude" / "projects" / cfg.dashboard.claude_project_hash
+    )
+    env_file_path = Path(cfg.dashboard.project_root) / ".pocketteam" / ".env"
+    pocketteam_dir = Path(cfg.dashboard.project_root) / ".pocketteam"
+
+    compose_content = generate_compose(
+        dash=cfg.dashboard,
+        claude_project_dir=claude_project_dir,
+        pocketteam_dir=pocketteam_dir,
+        env_file_path=env_file_path,
+    )
+    compose_file.write_text(compose_content)
+    os.chmod(compose_file, 0o600)
+    cfg.dashboard.compose_checksum = hashlib.sha256(compose_content.encode()).hexdigest()
+    save_config(cfg)
+
+    # Restart
+    compose_cmd = _build_compose_cmd(cfg, compose_file)
+    subprocess.run(compose_cmd + ["down"], check=False)
+    subprocess.run(compose_cmd + ["up", "-d"], check=False)
+
+    port = cfg.dashboard.port
+    wait_for_healthy(port)
+    console.print(f"[green]Updated {current_version} → {new_version}[/]")
+    console.print(f"Dashboard: http://localhost:{port}")
+
+
+def dashboard_configure_cmd(
+    project_root: Optional[Path] = None,
+    port: Optional[int] = None,
+    domain: Optional[str] = None,
+    project_root_override: Optional[str] = None,
+    reset: bool = False,
+) -> None:
+    """
+    Change dashboard settings post-setup.
+    Validates paths, checks compose checksum, regenerates compose, restarts.
+    """
+    root = project_root or Path.cwd()
+    cfg, compose_file = _load_dashboard_config(root)
+
+    changed = False
+
+    if port is not None:
+        cfg.dashboard.port = port
+        changed = True
+
+    if domain is not None:
+        cfg.dashboard.domain = domain
+        changed = True
+
+    if project_root_override is not None:
+        # Symlink resolution + allowlist validation (Errata S5)
+        resolved = Path(project_root_override).resolve()
+
+        # Allowlist: must be under home directory
+        if not resolved.is_relative_to(Path.home()):
+            console.print("[red]Project root must be under your home directory.[/]")
+            sys.exit(1)
+
+        if not resolved.is_dir():
+            console.print(f"[red]Not a directory: {resolved}[/]")
+            sys.exit(1)
+
+        cfg.dashboard.project_root = str(resolved)
+        cfg.dashboard.claude_project_hash = (
+            str(resolved).replace("/", "-").lstrip("-")
+        )
+        changed = True
+
+    if not changed and not reset:
+        console.print(
+            "[yellow]No changes specified. Use --port, --domain, --project-root, or --reset.[/]"
+        )
+        return
+
+    # Check compose checksum — warn if hand-edited
+    current_checksum = hashlib.sha256(compose_file.read_bytes()).hexdigest()
+    if cfg.dashboard.compose_checksum and current_checksum != cfg.dashboard.compose_checksum:
+        console.print(
+            "[yellow]Compose file has been hand-edited. It will be overwritten.[/]"
+        )
+        backup = compose_file.with_suffix(".yml.bak")
+        shutil.copy2(compose_file, backup)
+        os.chmod(backup, 0o600)
+        console.print(f"Backed up to: {backup}")
+        confirm = input("Continue? (y/n) ")
+        if confirm.lower() != "y":
+            sys.exit(0)
+
+    # Regenerate compose
+    claude_project_dir = (
+        Path.home() / ".claude" / "projects" / cfg.dashboard.claude_project_hash
+    )
+    env_file_path = Path(cfg.dashboard.project_root) / ".pocketteam" / ".env"
+    pocketteam_dir = Path(cfg.dashboard.project_root) / ".pocketteam"
+
+    compose_content = generate_compose(
+        dash=cfg.dashboard,
+        claude_project_dir=claude_project_dir,
+        pocketteam_dir=pocketteam_dir,
+        env_file_path=env_file_path,
+    )
+    compose_file.write_text(compose_content)
+    os.chmod(compose_file, 0o600)
+    cfg.dashboard.compose_checksum = hashlib.sha256(compose_content.encode()).hexdigest()
+    save_config(cfg)
+
+    # Restart if running
+    check_docker_daemon(cfg.dashboard.docker_context)
+    compose_cmd = _build_compose_cmd(cfg, compose_file)
+    subprocess.run(compose_cmd + ["down"], check=False)
+    subprocess.run(compose_cmd + ["up", "-d"], check=False)
+
+    wait_for_healthy(cfg.dashboard.port)
+    console.print(f"[green]Dashboard reconfigured and restarted.[/]")
+    console.print(f"  URL: http://localhost:{cfg.dashboard.port}")
+
+
+def dashboard_install_cmd(project_root: Optional[Path] = None) -> None:
+    """
+    Install dashboard for users who ran `pocketteam init --no-dashboard`.
+    Runs the full dashboard setup flow. (Errata Q5)
+    """
+    root = project_root or Path.cwd()
+    cfg = load_config(root)
+    if cfg.dashboard.enabled:
+        console.print("[yellow]Dashboard is already configured.[/]")
+        console.print("Run: [bold]pocketteam dashboard start[/]")
+        return
+    setup_dashboard(cfg)
