@@ -32,14 +32,15 @@ def main() -> None:
 @click.option("--new", "project_name", default=None, metavar="NAME",
               help="Create a new project directory with the given name.")
 @click.option("--yes", "-y", is_flag=True, help="Accept defaults without prompting.")
-def init(project_name: str | None, yes: bool) -> None:
+@click.option("--no-dashboard", is_flag=True, help="Skip dashboard setup.")
+def init(project_name: str | None, yes: bool, no_dashboard: bool) -> None:
     """Set up PocketTeam in the current project (or create a new one)."""
-    asyncio.run(_init(project_name, yes))
+    asyncio.run(_init(project_name, yes, no_dashboard))
 
 
-async def _init(project_name: str | None, yes: bool) -> None:
+async def _init(project_name: str | None, yes: bool, no_dashboard: bool) -> None:
     from .init import run_init
-    await run_init(project_name=project_name, accept_defaults=yes)
+    await run_init(project_name=project_name, accept_defaults=yes, no_dashboard=no_dashboard)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -426,6 +427,84 @@ def uninstall(keep_artifacts: bool) -> None:
 async def _uninstall(keep_artifacts: bool) -> None:
     from .init import run_uninstall
     await run_uninstall(keep_artifacts=keep_artifacts)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# pocketteam dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@main.group(invoke_without_command=True)  # Errata E8: invoke_without_command=True
+@click.pass_context
+def dashboard(ctx: click.Context) -> None:
+    """Manage the PocketTeam dashboard."""
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(dashboard_start)
+
+
+@dashboard.command("start")
+def dashboard_start() -> None:
+    """Start the dashboard container."""
+    from .dashboard import dashboard_start_cmd
+    dashboard_start_cmd(Path.cwd())
+
+
+@dashboard.command("stop")
+def dashboard_stop() -> None:
+    """Stop the dashboard container."""
+    from .dashboard import dashboard_stop_cmd
+    dashboard_stop_cmd(Path.cwd())
+
+
+@dashboard.command("status")
+def dashboard_status() -> None:
+    """Show dashboard status, URL, and volume health."""
+    from .dashboard import dashboard_status_cmd
+    dashboard_status_cmd(Path.cwd())
+
+
+@dashboard.command("logs")
+def dashboard_logs() -> None:
+    """Follow dashboard container logs."""
+    from .dashboard import dashboard_logs_cmd
+    dashboard_logs_cmd(Path.cwd())
+
+
+@dashboard.command("update")
+def dashboard_update() -> None:
+    """Pull latest digest-pinned image, update compose, and restart."""
+    from .dashboard import dashboard_update_cmd
+    dashboard_update_cmd(Path.cwd())
+
+
+@dashboard.command("configure")
+@click.option("--port", default=None, type=int, help="Change the external port.")
+@click.option("--domain", default=None, help="Set domain (generates Caddyfile with basicauth).")
+@click.option("--project-root", "project_root_override", default=None,
+              help="Switch project root (must be under your home directory).")
+@click.option("--reset", is_flag=True, help="Regenerate compose from config (warns if hand-edited).")
+def dashboard_configure(
+    port: int | None,
+    domain: str | None,
+    project_root_override: str | None,
+    reset: bool,
+) -> None:
+    """Change dashboard settings post-setup."""
+    from .dashboard import dashboard_configure_cmd
+    dashboard_configure_cmd(
+        project_root=Path.cwd(),
+        port=port,
+        domain=domain,
+        project_root_override=project_root_override,
+        reset=reset,
+    )
+
+
+@dashboard.command("install")
+def dashboard_install() -> None:
+    """Install the dashboard (for users who ran pocketteam init --no-dashboard)."""
+    from .dashboard import dashboard_install_cmd
+    dashboard_install_cmd(Path.cwd())
 
 
 if __name__ == "__main__":
