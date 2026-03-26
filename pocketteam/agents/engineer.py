@@ -2,7 +2,7 @@
 Engineer Agent — implements features.
 
 Writes code, creates files, runs builds, and follows the approved plan.
-Uses the "Boil the Lake" philosophy: complete coverage, not 80%.
+Uses the completeness principle: with AI, 100% coverage is as cheap as 80%.
 """
 
 from __future__ import annotations
