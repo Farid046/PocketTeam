@@ -276,22 +276,36 @@ class Pipeline:
         )
 
     async def _run_staging(self) -> PhaseResult:
-        """Deploy to staging and validate."""
+        """Deploy to staging and validate. Gates on CEO approval before production."""
         from ..agents.devops import DevOpsAgent
 
         devops = DevOpsAgent(self.context.project_root, self.context)
         result = await devops.execute("Deploy to staging and run smoke tests")
 
+        if not result.success:
+            return PhaseResult(
+                phase=Phase.STAGING,
+                success=False,
+                output=result.output,
+                artifacts=result.artifacts,
+                error=result.error,
+            )
+
+        # Human gate BEFORE production deploy starts — CEO must approve here
         return PhaseResult(
             phase=Phase.STAGING,
-            success=result.success,
+            success=True,
             output=result.output,
             artifacts=result.artifacts,
-            error=result.error,
+            awaiting_approval=True,
+            approval_prompt=(
+                "Staging deploy complete. Smoke tests passed.\n"
+                "Approve production deploy? (y/n)"
+            ),
         )
 
     async def _run_production(self) -> PhaseResult:
-        """CEO approves then deploy to production."""
+        """Deploy to production (CEO already approved at end of staging phase)."""
         from ..agents.devops import DevOpsAgent
 
         devops = DevOpsAgent(self.context.project_root, self.context)
@@ -303,12 +317,6 @@ class Pipeline:
             output=result.output,
             artifacts=result.artifacts,
             error=result.error,
-            awaiting_approval=True,
-            approval_prompt=(
-                "🚀 Ready for production deploy.\n"
-                f"Staging: ✅\n"
-                "Deploy to production? (y/n)"
-            ),
         )
 
     async def _run_monitoring(self) -> PhaseResult:

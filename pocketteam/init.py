@@ -128,34 +128,45 @@ async def run_init(
         except Exception:
             pass
 
+    # Active features summary
+    features = []
+    features.append("  [green]✓[/] Effort: [bold]high[/] (maximale Reasoning-Qualität)")
+    features.append("  [green]✓[/] Remote Control: [bold]aktiv[/] (claude.ai/code + Mobile)")
+    features.append("  [green]✓[/] Auto Memory: [bold]aktiv[/]")
+    features.append("  [green]✓[/] PocketTeam HUD: [bold]konfiguriert[/]")
+    features.append("  [green]✓[/] Safety Hooks: [bold]10-Layer Guardian[/]")
+    if tg_active:
+        features.append("  [green]✓[/] Telegram: [bold]konfiguriert[/]")
+    if cfg.dashboard.enabled:
+        features.append(f"  [green]✓[/] Dashboard: [bold cyan]http://localhost:{cfg.dashboard.port}[/]")
+    features.append("  [dim]💡 Tipp: Auto Dream über /memory aktivieren[/]")
+
     # Dynamic next steps
     next_steps = []
-
     if tg_active:
-        next_steps.append("Start Claude Code with Telegram (auto-configured):")
+        next_steps.append("Start:")
         next_steps.append("  [bold]pocketteam start[/]")
         next_steps.append("")
-        next_steps.append("[dim]This runs: claude --channels plugin:telegram@...[/]")
         next_steps.append("[dim]First time? DM your bot, then run /telegram:access pair <code>[/]")
     else:
-        next_steps.append("Open Claude Code — it will act as your COO:")
-        next_steps.append("  [bold]claude[/]")
+        next_steps.append("Start:")
+        next_steps.append("  [bold]pocketteam start[/]")
 
     next_steps.append("")
     next_steps.append("Then give it a task:")
     next_steps.append("  > Build user auth with OAuth2")
     next_steps.append("")
     if cfg.dashboard.enabled:
-        next_steps.append(
-            f"Dashboard: [bold cyan]http://localhost:{cfg.dashboard.port}[/]"
-        )
         next_steps.append("[dim]Manage: pocketteam dashboard start|stop|status|logs[/]")
     elif no_dashboard:
         next_steps.append("[dim]Dashboard skipped. Install later: pocketteam dashboard install[/]")
-    next_steps.append("[dim]Commands: pocketteam start | pocketteam status | pocketteam kill[/]")
+    next_steps.append("[dim]Commands: pocketteam start | start new | start resume | status | kill[/]")
 
     console.print(Panel(
         "✅ [bold green]PocketTeam initialized![/]\n\n"
+        "[bold]Active Features:[/]\n"
+        + "\n".join(features)
+        + "\n\n"
         + "\n".join(next_steps),
         title="Ready",
         border_style="green",
@@ -201,10 +212,13 @@ async def _interview(
     key_display = f"{current_key[:10]}...{current_key[-4:]}" if len(current_key) > 20 else ("set" if current_key else "not set")
 
     console.print(Panel(
-        "[bold]Step 2/5: Anthropic API Key[/]\n\n"
-        "The Claude Agent SDK needs an API key to run agents.\n"
+        "[bold]Step 2/5: Anthropic API Key[/] [dim](optional)[/]\n\n"
+        "Only needed for self-healing via Agent SDK (e.g. GitHub Actions monitoring).\n"
+        "Uses Haiku model for minimal cost.\n"
+        "[bold]Normal operation runs entirely on your Claude subscription[/] —\n"
+        "no API key required for interactive use.\n\n"
         "Get one at: [bold cyan]https://console.anthropic.com/settings/keys[/]\n\n"
-        f"Current: [{'green' if current_key else 'red'}]{key_display}[/]\n"
+        f"Current: [{'green' if current_key else 'yellow'}]{key_display}[/]\n"
         + ("  (detected from ANTHROPIC_API_KEY env var)\n" if has_env_key else "") +
         "\n"
         "[dim]The key is stored in .pocketteam/config.yaml (gitignored).\n"
@@ -474,6 +488,71 @@ def _setup_claude_dir(project_root: Path, cfg: PocketTeamConfig, is_new: bool) -
     _setup_claude_md(project_root, cfg, is_new)
     _setup_settings_json(project_root, is_new)
     _setup_agent_definitions(project_root)
+    _setup_statusline(project_root)
+    _setup_optimal_defaults(project_root)
+
+
+def _setup_statusline(project_root: Path) -> None:
+    """Register PocketTeam statusline plugin in .claude/settings.json.
+
+    The statusline script pipes Claude Code session data (context window %,
+    rate limits) to .pocketteam/session-status.json for the dashboard.
+    """
+    settings_path = project_root / CLAUDE_DIR / "settings.json"
+    if not settings_path.exists():
+        return
+
+    # Find the statusline script
+    statusline_script = Path(__file__).parent / "statusline" / "index.js"
+    if not statusline_script.exists():
+        return
+
+    try:
+        existing = json.loads(settings_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+
+    # Only add if not already configured
+    if "statusLine" not in existing:
+        existing["statusLine"] = {
+            "type": "command",
+            "command": f"node {statusline_script.resolve()}",
+        }
+        settings_path.write_text(json.dumps(existing, indent=2))
+        console.print("  [green]PocketTeam HUD configured[/]")
+    else:
+        console.print("  [dim]PocketTeam HUD already configured[/]")
+
+
+def _setup_optimal_defaults(project_root: Path) -> None:
+    """Set optimal Claude Code defaults for PocketTeam.
+
+    - effortLevel: medium (COO is a dispatcher, Planner gets Opus for deep thinking)
+    - remoteControlAtStartup: true (in ~/.claude.json)
+    """
+    # ── Project settings: effortLevel ────────────────────────────────────
+    settings_path = project_root / CLAUDE_DIR / "settings.json"
+    if settings_path.exists():
+        try:
+            existing = json.loads(settings_path.read_text())
+            if "effortLevel" not in existing:
+                existing["effortLevel"] = "medium"
+                settings_path.write_text(json.dumps(existing, indent=2))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # ── Global: remoteControlAtStartup ───────────────────────────────────
+    global_config = Path.home() / ".claude.json"
+    try:
+        if global_config.exists():
+            config = json.loads(global_config.read_text())
+        else:
+            config = {}
+        if not config.get("remoteControlAtStartup"):
+            config["remoteControlAtStartup"] = True
+            global_config.write_text(json.dumps(config, indent=2))
+    except (json.JSONDecodeError, OSError):
+        pass
 
 
 def _setup_claude_md(project_root: Path, cfg: PocketTeamConfig, is_new: bool) -> None:
@@ -563,6 +642,19 @@ Example delegation:
 4. **HUMAN GATE**: CEO approves deploy
 5. Use **devops** agent → staging first, then production
 
+## Workflow Modes (Magic Keywords)
+
+The CEO can activate special modes by starting their message with a keyword:
+
+| Keyword | Mode | What happens |
+|---|---|---|
+| `autopilot: <task>` | Full autonomous pipeline | Plan → Review → Implement → Test → Review → Security → Docs. No stops unless failure. |
+| `ralph: <task>` | Persistent until done | Implement → Test → Fix loop. Keeps going until ALL tests pass (max 5 iterations). |
+| `quick: <task>` | Speed mode | Skip planning/review, implement directly, quick test. |
+| `deep-dive: <topic>` | Research mode | Spawn 3 parallel Explore agents for thorough research. |
+
+These keywords are detected by a UserPromptSubmit hook and inject workflow instructions automatically.
+
 ## Human Gate Protocol
 
 At human gates, present a clear summary and ask for approval:
@@ -570,6 +662,7 @@ At human gates, present a clear summary and ask for approval:
 - "Tests passed. Security clean. Deploy to production? (y/n)"
 
 If CEO says no → ask what to change. Never proceed without approval.
+**Exception:** autopilot and ralph modes skip human gates (CEO pre-approved by using the keyword).
 
 ## Safety Rules (ABSOLUTE — enforced by hooks, not prompts)
 - Safety hooks in `.claude/settings.json` run on EVERY tool call automatically
@@ -603,6 +696,8 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
     abs_root = str(project_root.resolve())
     hook_prefix = f"cd {abs_root} && PYTHONPATH=. python -m pocketteam.safety"
 
+    hooks_prefix = f"cd {abs_root} && PYTHONPATH=. python -m pocketteam.hooks"
+
     pocketteam_hooks = {
         "PreToolUse": [
             {
@@ -613,7 +708,16 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                         "command": f"{hook_prefix} pre",
                     }
                 ],
-            }
+            },
+            {
+                "matcher": "Agent",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} delegation",
+                    }
+                ],
+            },
         ],
         "PostToolUse": [
             {
@@ -622,6 +726,65 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                     {
                         "type": "command",
                         "command": f"{hook_prefix} post",
+                    }
+                ],
+            }
+        ],
+        "UserPromptSubmit": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} keyword",
+                    },
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} telegram_save",
+                    },
+                ],
+            }
+        ],
+        "SessionStart": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} session_start",
+                    }
+                ],
+            }
+        ],
+        "PreCompact": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} pre_compact",
+                    }
+                ],
+            }
+        ],
+        "SubagentStart": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} agent_start",
+                    }
+                ],
+            }
+        ],
+        "SubagentStop": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} agent_stop",
                     }
                 ],
             }

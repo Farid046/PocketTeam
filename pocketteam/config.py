@@ -203,10 +203,14 @@ def save_config(cfg: PocketTeamConfig) -> None:
         },
         "auth": {
             "mode": cfg.auth.mode,
-            "api_key": cfg.auth.api_key or "",
+            # Write a placeholder reference, never the literal secret value.
+            # The actual key lives in .pocketteam/.env (gitignored).
+            "api_key": "$ANTHROPIC_API_KEY",
         },
         "telegram": {
-            "bot_token": cfg.telegram.bot_token or "",
+            # Write a placeholder reference, never the literal secret value.
+            # The actual token lives in .pocketteam/telegram.env (gitignored).
+            "bot_token": "$TELEGRAM_BOT_TOKEN",
             "chat_id": cfg.telegram.chat_id or "",
             "persistent_sessions": cfg.telegram.persistent_sessions,
             "auto_resume": cfg.telegram.auto_resume,
@@ -224,7 +228,8 @@ def save_config(cfg: PocketTeamConfig) -> None:
         },
         "github_actions": {
             "enabled": cfg.github_actions.enabled,
-            "api_key": cfg.github_actions.api_key or "",
+            # Stored as GitHub Secret ANTHROPIC_API_KEY — never write the literal value.
+            "api_key": "$ANTHROPIC_API_KEY",
             "model": cfg.github_actions.model,
             "schedule": cfg.github_actions.schedule,
         },

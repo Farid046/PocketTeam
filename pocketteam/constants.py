@@ -12,7 +12,7 @@ from __future__ import annotations
 AGENT_MODELS: dict[str, str] = {
     "coo":           "claude-sonnet-4-6",   # Orchestrates only, fast
     "product":       "claude-sonnet-4-6",   # Questions + demand validation
-    "planner":       "claude-sonnet-4-6",   # Plan writing = medium tokens
+    "planner":       "claude-opus-4-6",     # Opus for maximum plan quality — first stop for every task
     "reviewer":      "claude-sonnet-4-6",   # Code + plan review
     "engineer":      "claude-sonnet-4-6",   # Default. Opus on-demand for complex tasks.
     "qa":            "claude-sonnet-4-6",   # Tests = medium tokens
@@ -57,17 +57,17 @@ DEFAULT_BUDGET_USD = 5.0
 
 AGENT_MAX_TURNS: dict[str, int] = {
     "coo":           30,
-    "product":       20,
-    "planner":       40,
-    "reviewer":      20,
-    "engineer":      50,
-    "qa":            30,
-    "security":      20,
-    "devops":        25,
-    "investigator":  30,
-    "documentation": 15,
-    "monitor":       10,
-    "observer":      10,
+    "product":       15,
+    "planner":       25,
+    "reviewer":      15,
+    "engineer":      40,
+    "qa":            20,
+    "security":      15,
+    "devops":        15,
+    "investigator":  20,
+    "documentation": 10,
+    "monitor":       8,
+    "observer":      8,
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
