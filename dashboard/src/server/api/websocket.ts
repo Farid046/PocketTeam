@@ -11,9 +11,13 @@ import {
   AgentState,
   PocketTeamEvent,
   AuditEntry,
+  SessionUsage,
+  SessionStatus,
   WsMessage,
   DashboardSnapshot,
 } from "../readers/types.js";
+import { UsageReader } from "../readers/UsageReader.js";
+import { SessionStatusReader } from "../readers/SessionStatusReader.js";
 
 // Debounce delay for non-killswitch events (ms).
 // Batches rapid agent-spawn bursts into a single broadcast.
@@ -24,6 +28,8 @@ export interface WsReaders {
   eventStreamReader: EventStreamReader;
   auditLogReader: AuditLogReader;
   killSwitchReader: KillSwitchReader;
+  usageReader: UsageReader;
+  sessionStatusReader: SessionStatusReader;
 }
 
 export class WebSocketHub {
@@ -73,11 +79,24 @@ export class WebSocketHub {
   // Send a snapshot of current state to a newly connected client.
   private sendSnapshot(ws: WebSocket): void {
     try {
+      const agents = this.readers.subagentReader.readAll();
+      const latestSession = agents.length > 0 ? agents[0].sessionId : null;
+      const sessionUsage = latestSession
+        ? this.readers.usageReader.computeSessionUsage(latestSession, agents)
+        : null;
+      const cooActivity = latestSession
+        ? this.readers.subagentReader.readCooActivity(latestSession)
+        : null;
+
       const snapshot: DashboardSnapshot = {
-        agents: this.readers.subagentReader.readAll(),
+        agents,
         events: this.readers.eventStreamReader.getEvents(),
         auditStats: this.readers.auditLogReader.computeStats(),
+        auditEntries: this.readers.auditLogReader.getEntries().slice(-100),
         killSwitch: this.readers.killSwitchReader.isActive(),
+        sessionUsage,
+        cooActivity,
+        sessionStatus: this.readers.sessionStatusReader.read(),
       };
 
       const msg: WsMessage = { type: "snapshot", payload: snapshot };
@@ -89,9 +108,11 @@ export class WebSocketHub {
 
   private handleConnection(ws: WebSocket): void {
     this.clients.add(ws);
+    console.log(`[WsHub] client connected (${this.clients.size} total)`);
 
     ws.on("close", () => {
       this.clients.delete(ws);
+      console.log(`[WsHub] client disconnected (${this.clients.size} total)`);
     });
 
     ws.on("error", (err: Error) => {
@@ -123,6 +144,35 @@ export class WebSocketHub {
 
   broadcastAuditNew(entry: AuditEntry): void {
     this.queueMessage({ type: "audit:new", payload: entry });
+  }
+
+  broadcastRefreshSnapshot(agents: AgentState[], usageReader: UsageReader): void {
+    if (this.clients.size === 0) return;
+    const latestSession = agents.length > 0 ? agents[0].sessionId : null;
+    const cooActivity = latestSession
+      ? this.readers.subagentReader.readCooActivity(latestSession)
+      : null;
+    const snapshot: DashboardSnapshot = {
+      agents,
+      events: this.readers.eventStreamReader.getEvents(),
+      auditStats: this.readers.auditLogReader.computeStats(),
+      auditEntries: this.readers.auditLogReader.getEntries().slice(-100),
+      killSwitch: this.readers.killSwitchReader.isActive(),
+      sessionUsage: latestSession
+        ? usageReader.computeSessionUsage(latestSession, agents)
+        : null,
+      cooActivity,
+      sessionStatus: this.readers.sessionStatusReader.read(),
+    };
+    this.emitToAllClients({ type: "snapshot", payload: snapshot });
+  }
+
+  broadcastSessionStatus(status: SessionStatus): void {
+    this.emitToAllClients({ type: "session:status" as WsMessage["type"], payload: status });
+  }
+
+  broadcastUsageUpdate(usage: SessionUsage): void {
+    this.queueMessage({ type: "usage:update", payload: usage });
   }
 
   // Kill switch change bypasses the debounce — immediate broadcast.

@@ -17,6 +17,25 @@ const ROLE_MAP: Record<string, AgentRole> = {
   observer:      { role: "observer",      displayName: "Observer",     color: "#BF8F00" },
   product:       { role: "product",       displayName: "Product",      color: "#7030A0" },
   coo:           { role: "coo",           displayName: "COO",          color: "#FFD700" },
+  researcher:    { role: "researcher",    displayName: "Researcher",   color: "#00BCD4" },
+};
+
+// Map Claude Code built-in agent types to PocketTeam roles
+const AGENT_TYPE_MAP: Record<string, string> = {
+  "explore":         "researcher",
+  "plan":            "planner",
+  "planner":         "planner",
+  "engineer":        "engineer",
+  "reviewer":        "reviewer",
+  "qa":              "qa",
+  "security":        "security",
+  "devops":          "devops",
+  "investigator":    "investigator",
+  "documentation":   "documentation",
+  "monitor":         "monitor",
+  "observer":        "observer",
+  "product":         "product",
+  "coo":             "coo",
 };
 
 // Order matters — longer / more specific keywords should come first
@@ -58,14 +77,25 @@ const KEYWORD_MAP: Array<[string, string]> = [
   ["coo",              "coo"],
 ];
 
-export function inferRole(description: string): AgentRole {
+export function inferRole(description: string, agentType?: string): AgentRole {
+  // 1. agentType is the most reliable source (from .meta.json)
+  if (agentType) {
+    const mapped = AGENT_TYPE_MAP[agentType.toLowerCase()];
+    if (mapped && ROLE_MAP[mapped]) {
+      return ROLE_MAP[mapped];
+    }
+  }
+
+  // 2. Fall back to description keyword matching
   const lower = description.toLowerCase();
   for (const [keyword, role] of KEYWORD_MAP) {
     if (lower.includes(keyword)) {
       return ROLE_MAP[role];
     }
   }
-  return { role: "unknown", displayName: "Agent", color: "#808080" };
+
+  // 3. Default to generic "agent" instead of "unknown"
+  return { role: "agent", displayName: "Agent", color: "#808080" };
 }
 
 export function getRoleInfo(role: string): AgentRole {

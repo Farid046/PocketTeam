@@ -9,6 +9,8 @@ import { SubagentReader } from "./readers/SubagentReader.js";
 import { EventStreamReader } from "./readers/EventStreamReader.js";
 import { AuditLogReader } from "./readers/AuditLogReader.js";
 import { KillSwitchReader } from "./readers/KillSwitchReader.js";
+import { UsageReader } from "./readers/UsageReader.js";
+import { SessionStatusReader } from "./readers/SessionStatusReader.js";
 import { FileWatcher } from "./watcher/FileWatcher.js";
 import { createRouter } from "./api/routes.js";
 import { WebSocketHub } from "./api/websocket.js";
@@ -65,6 +67,9 @@ export function createServer(config: ServerConfig): PocketTeamServer {
   const auditLogReader = new AuditLogReader(pocketteamDir);
   auditLogReader.loadInitial(2000);
 
+  const usageReader = new UsageReader();
+  const sessionStatusReader = new SessionStatusReader(pocketteamDir);
+
   // === WebSocket hub ===
   // KillSwitchReader is created once (with WebSocket callback) and shared with routes.
   const killSwitchReader = new KillSwitchReader(pocketteamDir, (active: boolean) => {
@@ -76,6 +81,8 @@ export function createServer(config: ServerConfig): PocketTeamServer {
     eventStreamReader,
     auditLogReader,
     killSwitchReader,
+    usageReader,
+    sessionStatusReader,
   });
 
   killSwitchReader.init();
@@ -111,6 +118,15 @@ export function createServer(config: ServerConfig): PocketTeamServer {
 
   function handleFileChange(filePath: string): void {
     const normalizedPath = path.normalize(filePath);
+
+    // Session status (from statusline plugin)
+    if (normalizedPath === path.normalize(sessionStatusReader.getFilePath())) {
+      const status = sessionStatusReader.read();
+      if (status) {
+        wsHub.broadcastSessionStatus(status);
+      }
+      return;
+    }
 
     // Events stream
     if (normalizedPath === path.normalize(eventStreamReader.getStreamPath())) {
@@ -162,12 +178,16 @@ export function createServer(config: ServerConfig): PocketTeamServer {
   // (Date.now() - mtimeMs), so it must be re-evaluated periodically.
   const statusRefreshInterval = setInterval(() => {
     const agents = subagentReader.readAll();
-    console.log("[refresh]", agents.length, "agents");
+    const clientCount = wsHub.getClientCount();
+    console.log("[refresh]", agents.length, "agents,", clientCount, "ws clients");
     for (const agent of agents) {
-      wsHub.broadcastAgentUpdate(agent);
       knownAgentIds.add(agent.id);
     }
-  }, 30_000);
+    // Send full snapshot to all clients (one message instead of N individual updates)
+    if (clientCount > 0) {
+      wsHub.broadcastRefreshSnapshot(agents, usageReader);
+    }
+  }, 5_000);
 
   // === REST routes ===
   app.use(
@@ -177,6 +197,7 @@ export function createServer(config: ServerConfig): PocketTeamServer {
       eventStreamReader,
       auditLogReader,
       killSwitchReader,
+      usageReader,
     })
   );
 

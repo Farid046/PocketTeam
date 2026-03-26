@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { AgentState, SubagentMeta } from "./types.js";
+import { AgentState, SubagentMeta, TokenUsage, CooActivity } from "./types.js";
 import { inferRole } from "../roleMap.js";
 
 // Real on-disk structure (confirmed from live data):
@@ -22,6 +22,9 @@ interface ParsedJsonlStats {
   messageCount: number;
   isDone: boolean;
   mtimeMs: number;
+  tokenUsage: TokenUsage;
+  model: string;
+  gitBranch: string;
 }
 
 export class SubagentReader {
@@ -99,7 +102,7 @@ export class SubagentReader {
         }
 
         const stats = this.parseJsonl(jsonlPath, mtimeMs);
-        const roleInfo = inferRole(meta.description);
+        const roleInfo = inferRole(meta.description, meta.agentType);
 
         const isRecentlyWritten = mtimeMs > now - ACTIVITY_TIMEOUT_MS;
         const isDefinitelyDone = stats.isDone; // stop_reason === "end_turn"
@@ -125,6 +128,9 @@ export class SubagentReader {
           messageCount: stats.messageCount,
           sessionId,
           sessionActive,
+          tokenUsage: stats.tokenUsage,
+          model: stats.model,
+          gitBranch: stats.gitBranch,
         });
       }
     }
@@ -132,6 +138,119 @@ export class SubagentReader {
     // Sort newest first by startedAt
     agents.sort((a, b) => (b.startedAt > a.startedAt ? 1 : -1));
     return agents;
+  }
+
+  /** Read the tail of the main session JSONL to get COO's real-time activity */
+  readCooActivity(sessionId: string): CooActivity | null {
+    const parentJsonlPath = path.join(this.projectDir, `${sessionId}.jsonl`);
+    let mtimeMs = 0;
+    let fileSize = 0;
+    try {
+      const stat = fs.statSync(parentJsonlPath);
+      mtimeMs = stat.mtimeMs;
+      fileSize = stat.size;
+    } catch {
+      return null;
+    }
+
+    const now = Date.now();
+    const isActive = mtimeMs > now - 60_000; // 60s threshold for COO
+
+    // Read last ~32KB to find recent tool calls
+    const readSize = Math.min(fileSize, 32768);
+    let tail = "";
+    try {
+      const fd = fs.openSync(parentJsonlPath, "r");
+      const buf = Buffer.alloc(readSize);
+      fs.readSync(fd, buf, 0, readSize, Math.max(0, fileSize - readSize));
+      fs.closeSync(fd);
+      tail = buf.toString("utf-8");
+    } catch {
+      return null;
+    }
+
+    const lines = tail.split("\n").filter((l) => l.trim().length > 0);
+
+    let lastToolCall = "";
+    let lastActivity = "";
+    let model = "";
+    let gitBranch = "";
+    let toolCallCount = 0;
+    let messageCount = 0;
+    const tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
+
+    for (const line of lines) {
+      let entry: Record<string, unknown>;
+      try {
+        entry = JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+
+      const ts = entry["timestamp"] as string | undefined;
+      if (ts && (!lastActivity || ts > lastActivity)) lastActivity = ts;
+      if (!gitBranch && typeof entry["gitBranch"] === "string") {
+        gitBranch = entry["gitBranch"] as string;
+      }
+
+      messageCount++;
+      const type = entry["type"] as string | undefined;
+
+      if (type === "assistant") {
+        const message = entry["message"] as Record<string, unknown> | undefined;
+        if (!message) continue;
+
+        if (typeof message["model"] === "string") model = message["model"] as string;
+
+        const usage = message["usage"] as Record<string, unknown> | undefined;
+        if (usage) {
+          tokenUsage.inputTokens += (usage["input_tokens"] as number) ?? 0;
+          tokenUsage.outputTokens += (usage["output_tokens"] as number) ?? 0;
+          tokenUsage.cacheCreationTokens += (usage["cache_creation_input_tokens"] as number) ?? 0;
+          tokenUsage.cacheReadTokens += (usage["cache_read_input_tokens"] as number) ?? 0;
+        }
+
+        const content = message["content"];
+        if (Array.isArray(content)) {
+          for (const item of content) {
+            if (typeof item === "object" && item !== null && (item as Record<string, unknown>)["type"] === "tool_use") {
+              toolCallCount++;
+              const toolName = (item as Record<string, unknown>)["name"] as string ?? "";
+              const input = (item as Record<string, unknown>)["input"] as Record<string, unknown> | undefined;
+
+              // Build a readable description of the tool call
+              let target = "";
+              if (input) {
+                if (typeof input["file_path"] === "string") {
+                  target = (input["file_path"] as string).split("/").pop() ?? "";
+                } else if (typeof input["command"] === "string") {
+                  target = (input["command"] as string).slice(0, 60);
+                } else if (typeof input["pattern"] === "string") {
+                  target = (input["pattern"] as string);
+                } else if (typeof input["prompt"] === "string") {
+                  target = (input["prompt"] as string).slice(0, 50);
+                } else if (typeof input["description"] === "string") {
+                  target = (input["description"] as string).slice(0, 50);
+                }
+              }
+              lastToolCall = target ? `${toolName}: ${target}` : toolName;
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      sessionId,
+      lastToolCall: lastToolCall || "Idle",
+      lastActivity: lastActivity || new Date(0).toISOString(),
+      isActive,
+      model,
+      tokenUsage,
+      toolCallCount,
+      messageCount,
+      gitBranch,
+    };
   }
 
   private readMeta(metaPath: string): SubagentMeta | null {
@@ -153,6 +272,7 @@ export class SubagentReader {
   }
 
   private parseJsonl(jsonlPath: string, mtimeMs = 0): ParsedJsonlStats {
+    const zeroTokens: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
     const defaultStats: ParsedJsonlStats = {
       startedAt: new Date(0).toISOString(),
       lastActivity: new Date(0).toISOString(),
@@ -160,6 +280,9 @@ export class SubagentReader {
       messageCount: 0,
       isDone: false,
       mtimeMs,
+      tokenUsage: { ...zeroTokens },
+      model: "",
+      gitBranch: "",
     };
 
     if (!fs.existsSync(jsonlPath)) return defaultStats;
@@ -169,6 +292,9 @@ export class SubagentReader {
     let toolCallCount = 0;
     let messageCount = 0;
     let isDone = false;
+    const tokenUsage: TokenUsage = { ...zeroTokens };
+    let model = "";
+    let gitBranch = "";
 
     let raw: string;
     try {
@@ -193,6 +319,11 @@ export class SubagentReader {
         if (!lastActivity || ts > lastActivity) lastActivity = ts;
       }
 
+      // Extract gitBranch from first entry that has it
+      if (!gitBranch && typeof entry["gitBranch"] === "string") {
+        gitBranch = entry["gitBranch"] as string;
+      }
+
       messageCount++;
 
       const type = entry["type"] as string | undefined;
@@ -212,12 +343,26 @@ export class SubagentReader {
               }
             }
           }
+
+          // Extract token usage
+          const usage = message["usage"] as Record<string, unknown> | undefined;
+          if (usage) {
+            tokenUsage.inputTokens += (usage["input_tokens"] as number) ?? 0;
+            tokenUsage.outputTokens += (usage["output_tokens"] as number) ?? 0;
+            tokenUsage.cacheCreationTokens += (usage["cache_creation_input_tokens"] as number) ?? 0;
+            tokenUsage.cacheReadTokens += (usage["cache_read_input_tokens"] as number) ?? 0;
+          }
+
+          // Track most recent model
+          if (typeof message["model"] === "string") {
+            model = message["model"] as string;
+          }
+
           // Agent is done when the last assistant message has stop_reason = "end_turn"
           const stopReason = message["stop_reason"] as string | undefined;
           if (stopReason === "end_turn") {
             isDone = true;
           } else if (stopReason === "tool_use") {
-            // Still invoking tools — mark as working (not done)
             isDone = false;
           }
         }
@@ -231,6 +376,9 @@ export class SubagentReader {
       messageCount,
       isDone,
       mtimeMs,
+      tokenUsage,
+      model,
+      gitBranch,
     };
   }
 }
