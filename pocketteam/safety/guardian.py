@@ -28,7 +28,12 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
+def pre_tool_hook(
+    tool_name: str,
+    tool_input: Any,
+    agent_id: str = "",
+    session_id: str = "",
+) -> dict:
     """
     Main pre-tool-use safety check.
     Returns {"allow": True/False, "reason": str, "layer": int}
@@ -113,19 +118,38 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
         mcp_result = check_mcp_safety(tool_name, tool_input)
         if not mcp_result.allowed:
             if mcp_result.requires_approval:
-                # D-SAC flow needed — return requires_approval flag
-                _log_denial(agent_id, tool_name, tool_input, 3, mcp_result.reason, project_root)
+                # Check for valid D-SAC token
+                dsac_result = _check_dsac_token(
+                    tool_name, tool_input, agent_id, session_id,
+                    project_root,
+                )
+                if dsac_result and dsac_result.get("allow"):
+                    return dsac_result
+
+                # No valid token -- D-SAC flow needed
+                _log_denial(
+                    agent_id, tool_name, tool_input, 3,
+                    mcp_result.reason, project_root,
+                )
                 return {
                     "allow": False,
                     "layer": 3,
-                    "reason": f"BLOCKED (Layer 3 - MCP Safety): {mcp_result.reason}",
+                    "reason": (
+                        f"BLOCKED (Layer 3 - MCP Safety):"
+                        f" {mcp_result.reason}"
+                    ),
                     "requires_approval": True,
                 }
-            _log_denial(agent_id, tool_name, tool_input, 3, mcp_result.reason, project_root)
+            _log_denial(
+                agent_id, tool_name, tool_input, 3,
+                mcp_result.reason, project_root,
+            )
             return {
                 "allow": False,
                 "layer": 3,
-                "reason": f"BLOCKED (Layer 3 - MCP Safety): {mcp_result.reason}",
+                "reason": (
+                    f"BLOCKED (Layer 3 - MCP Safety): {mcp_result.reason}"
+                ),
             }
 
     # ── Layer 4: Network Safety ──────────────────────────────────────────────
@@ -172,12 +196,24 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
     # ── Layer 2: Destructive Patterns ────────────────────────────────────────
     destr_result = check_destructive(tool_name, check_str)
     if not destr_result.allowed:
-        # Requires D-SAC approval — not an outright block
-        _log_denial(agent_id, tool_name, tool_input, 2, destr_result.reason, project_root)
+        # Check if a valid D-SAC token is present in tool_input
+        dsac_result = _check_dsac_token(
+            tool_name, tool_input, agent_id, session_id, project_root
+        )
+        if dsac_result and dsac_result.get("allow"):
+            return dsac_result
+
+        # No valid token -- require approval
+        _log_denial(
+            agent_id, tool_name, tool_input, 2,
+            destr_result.reason, project_root,
+        )
         return {
             "allow": False,
             "layer": 2,
-            "reason": f"BLOCKED (Layer 2 - Destructive): {destr_result.reason}",
+            "reason": (
+                f"BLOCKED (Layer 2 - Destructive): {destr_result.reason}"
+            ),
             "requires_approval": True,
         }
 
@@ -334,6 +370,125 @@ def _load_extra_domains(project_root: Path | None) -> list[str]:
         return []
 
 
+def _check_dsac_token(
+    tool_name: str,
+    tool_input: Any,
+    agent_id: str,
+    session_id: str,
+    project_root: "Path | None",
+) -> dict | None:
+    """Check if tool_input contains a valid D-SAC approval token.
+
+    Returns an allow-dict if token is valid, None if no token or invalid.
+
+    Guardian computes operation_hash ITSELF from the actual tool_input.
+    The agent supplies ONLY __dsac_token, NOT any hash.
+    This prevents scope-escalation attacks where an agent gets approval for
+    "rm staging_data" then uses the same token for "rm production_data".
+
+    Uses validate_and_consume_token() (atomic) instead of separate
+    validate + consume.
+
+    [v3.1 Fix A] session_id is resolved via get_or_create_session_id()
+    before validation, so it is NEVER empty when passed to
+    validate_and_consume_token(). This prevents session-binding from
+    being silently skipped when both hook_input and env var are missing.
+    """
+    if not isinstance(tool_input, dict):
+        return None
+
+    try:
+        from ..constants import DSAC_TOKEN_INPUT_KEY
+    except ImportError:
+        return None
+
+    token_str = tool_input.get(DSAC_TOKEN_INPUT_KEY)
+    if not token_str or not isinstance(token_str, str):
+        return None
+
+    if not project_root:
+        return None
+
+    try:
+        from .dsac import DSACGuard, compute_operation_hash_for_tool_call
+
+        guard = DSACGuard(project_root)
+
+        # Compute hash from the ACTUAL tool call
+        operation_hash = compute_operation_hash_for_tool_call(
+            tool_name, tool_input
+        )
+
+        # [v3.1 Fix A] Resolve session_id so it is NEVER empty
+        resolved_session_id = guard.get_or_create_session_id(session_id)
+
+        # Atomic validate-and-consume
+        valid, reason = guard.validate_and_consume_token(
+            token_str=token_str,
+            operation_hash=operation_hash,
+            agent_id=agent_id,
+            session_id=resolved_session_id,  # [v3.1 Fix A] was: session_id
+        )
+
+        if valid:
+            # Log the approved operation
+            try:
+                from .audit_log import AuditLog, SafetyDecision
+
+                audit = AuditLog(project_root)
+                audit.log(
+                    agent_id=agent_id or "unknown",
+                    tool_name=tool_name,
+                    tool_input={
+                        "operation_hash": operation_hash[:16] + "...",
+                        "token": token_str[:8] + "...",
+                    },
+                    decision=SafetyDecision.ALLOWED_WITH_APPROVAL,
+                    layer=9,
+                    reason=f"D-SAC token validated and consumed: {reason}",
+                )
+            except Exception:
+                pass  # Audit failure must not block approved operation
+
+            return {
+                "allow": True,
+                "layer": 9,
+                "reason": f"D-SAC approved: {reason}",
+            }
+        else:
+            # [v3.1 Fix I] Use specific audit decisions for known failure modes
+            try:
+                from .audit_log import AuditLog, SafetyDecision
+
+                # Determine specific denial reason for audit
+                if "mismatch" in reason.lower():
+                    audit_decision = SafetyDecision.DENIED_DSAC_SCOPE_ESCALATION
+                elif "already used" in reason.lower():
+                    audit_decision = SafetyDecision.DENIED_DSAC_REINITIATION
+                else:
+                    audit_decision = SafetyDecision.DENIED_REQUIRES_APPROVAL
+
+                audit = AuditLog(project_root)
+                audit.log(
+                    agent_id=agent_id or "unknown",
+                    tool_name=tool_name,
+                    tool_input={
+                        "operation_hash": operation_hash[:16] + "...",
+                        "token": token_str[:8] + "...",
+                    },
+                    decision=audit_decision,
+                    layer=9,
+                    reason=f"D-SAC token invalid: {reason}",
+                )
+            except Exception:
+                pass
+            return None  # Fall through to normal deny
+
+    except Exception:
+        # D-SAC check failure -- fail CLOSED
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI entry point (called by Claude Code hook system)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -355,8 +510,13 @@ if __name__ == "__main__":
         tool_name = hook_input.get("tool_name", hook_input.get("name", ""))
         tool_input = hook_input.get("tool_input", hook_input.get("input", {}))
         agent_id = hook_input.get("agent_id", "")
+        session_id = hook_input.get("session_id", "")
+        if not session_id:
+            session_id = os.environ.get("CLAUDE_SESSION_ID", "")
 
-        result = pre_tool_hook(tool_name, tool_input, agent_id)
+        result = pre_tool_hook(
+            tool_name, tool_input, agent_id, session_id=session_id
+        )
         print(json.dumps(result))
 
         # Non-zero exit = block the tool call

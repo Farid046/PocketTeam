@@ -75,14 +75,31 @@ class TestKillSwitch:
         from pocketteam.safety.dsac import DSACGuard
 
         guard = DSACGuard(tmp_project)
-        preview = guard.create_dry_run_preview("Bash", "rm file.txt", ["file.txt"])
-        guard.issue_approval_token(preview, "devops", "task-001")
+        preview = guard.create_dry_run_preview(
+            "Bash", "rm file.txt", ["file.txt"],
+            session_id="sess-1", agent_id="devops",
+        )
+        # [v3.1 Fix E] Store token return value for E2E verification
+        token = guard.issue_approval_token(
+            preview, "devops", "task-001",
+            tool_name="Bash",
+            tool_input={"command": "rm file.txt"},
+            session_id="sess-1",
+        )
 
         ks = KillSwitch(tmp_project)
         event = ks.activate("test")
         assert event.tokens_invalidated == 1
 
-        # Token should now be invalid
+        # [v3.1 Fix E] Verify E2E: token is actually rejected after kill switch
+        valid, reason = guard.validate_and_consume_token(
+            token.token, token.operation_hash, "devops",
+            session_id="sess-1",
+        )
+        assert not valid
+        assert "already used" in reason.lower()
+
+        # Also verify via raw token data
         tokens = guard._load_tokens()
         assert all(t["used"] for t in tokens.values())
 

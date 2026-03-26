@@ -109,6 +109,10 @@ MAX_QA_FIX_LOOPS = 5
 DSAC_APPROVAL_TOKEN_TTL = 5 * 60   # Approval tokens expire after 5 min
 DSAC_MAX_BATCH_SIZE = 10           # Max items per destructive batch
 DSAC_BATCH_PAUSE = 1.0             # 1s pause between batch items
+DSAC_TOKEN_INPUT_KEY = "__dsac_token"          # Key in tool_input dict for token passthrough
+DSAC_SEQUENCE_FILE = "dsac_sequence.json"      # Relative to .pocketteam/
+DSAC_MAX_REINITIATIONS = 2                     # Hard block after N re-initiations per session+agent
+DSAC_SESSION_FILE = "dsac_session.txt"         # Persistent session ID fallback
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dashboard
