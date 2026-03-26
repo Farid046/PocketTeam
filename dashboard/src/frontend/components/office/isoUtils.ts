@@ -2,9 +2,9 @@
 // Isometric projection utilities
 // ---------------------------------------------------------------------------
 
-// Tile dimensions: 88px wide, 44px tall (~37% more space between elements)
-export const TILE_W = 88;
-export const TILE_H = 44;
+// Tile dimensions: 120px wide, 60px tall — larger tiles for bigger characters
+export const TILE_W = 120;
+export const TILE_H = 60;
 
 /**
  * Convert a grid (col, row) coordinate to screen (x, y) in isometric projection.
