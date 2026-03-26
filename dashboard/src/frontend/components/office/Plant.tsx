@@ -6,10 +6,10 @@ interface Props {
   scale?: number;
 }
 
-// Pot dimensions
-const POT_W = 14;
-const POT_H = 7;
-const POT_DEPTH = 10;
+// Pot dimensions — scaled up ~1.5x
+const POT_W = 21;
+const POT_H = 11;
+const POT_DEPTH = 15;
 
 const COLOR_POT_TOP   = "#9B6E4C";
 const COLOR_POT_LEFT  = "#7B4E2C";
@@ -43,8 +43,7 @@ function IsoPlant(): React.ReactElement {
   const potRight = `0,${hh} ${hw},${0} ${hw},${POT_DEPTH} 0,${hh + POT_DEPTH}`;
 
   // Leaves: stacked diamonds above the pot
-  // Each leaf is an isometric diamond at progressively higher Y positions
-  const leafOffset = -hh - 6; // just above pot top
+  const leafOffset = -hh - 8;
 
   return (
     <g>
@@ -55,13 +54,14 @@ function IsoPlant(): React.ReactElement {
       {/* Soil (pot top) */}
       <polygon points={potTop} fill={COLOR_SOIL} />
       {/* Pot top rim */}
-      <polygon points={potTop} fill="none" stroke={COLOR_POT_TOP} strokeWidth={1} />
+      <polygon points={potTop} fill="none" stroke={COLOR_POT_TOP} strokeWidth={1.5} />
 
-      {/* Leaf cluster — 3 diamond shapes stacked */}
-      <LeafDiamond cx={0} cy={leafOffset - 8} rx={8} ry={4} fill={COLOR_LEAF_3} />
-      <LeafDiamond cx={-4} cy={leafOffset - 4} rx={7} ry={3.5} fill={COLOR_LEAF_1} />
-      <LeafDiamond cx={4} cy={leafOffset - 4} rx={7} ry={3.5} fill={COLOR_LEAF_2} />
-      <LeafDiamond cx={0} cy={leafOffset} rx={9} ry={4.5} fill={COLOR_LEAF_1} />
+      {/* Leaf cluster — 4 diamond shapes for bigger plant */}
+      <LeafDiamond cx={0}   cy={leafOffset - 14} rx={10} ry={5}   fill={COLOR_LEAF_3} />
+      <LeafDiamond cx={-5}  cy={leafOffset - 8}  rx={9}  ry={4.5} fill={COLOR_LEAF_1} />
+      <LeafDiamond cx={5}   cy={leafOffset - 8}  rx={9}  ry={4.5} fill={COLOR_LEAF_2} />
+      <LeafDiamond cx={0}   cy={leafOffset - 2}  rx={12} ry={6}   fill={COLOR_LEAF_1} />
+      <LeafDiamond cx={0}   cy={leafOffset}      rx={13} ry={6.5} fill={COLOR_LEAF_2} />
     </g>
   );
 }
@@ -77,7 +77,7 @@ function LeafDiamond({
       points={pts}
       fill={fill}
       stroke="#1a3a14"
-      strokeWidth={0.4}
+      strokeWidth={0.5}
     />
   );
 }

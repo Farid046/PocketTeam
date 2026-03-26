@@ -1,175 +1,159 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { AgentState, PocketTeamEvent } from "../../types";
 import { Desk } from "./Desk";
 import { Chair } from "./Chair";
 import { Plant } from "./Plant";
+import { CoffeeMachine } from "./CoffeeMachine";
 import { AgentAvatar } from "./AgentAvatar";
 import { generateAvatar } from "./avatarGenerator";
-import { toIso, tilePath, tileCenter } from "./isoUtils";
+import { tilePath, tileCenter, TILE_W, TILE_H } from "./isoUtils";
 
 // ---------------------------------------------------------------------------
-// SVG canvas and grid dimensions
+// SVG canvas and grid dimensions — 8 cols x 6 rows
 // ---------------------------------------------------------------------------
 
-// Total grid: 12 cols x 10 rows. SVG canvas sized to fit the whole diamond grid.
-// Isometric grid spans: x from -(COLS+ROWS)*TILE_W/2 to +(COLS+ROWS)*TILE_W/2
-// We use a generous viewBox with origin at the center-top.
-const GRID_COLS = 12;
-const GRID_ROWS = 10;
-
-// Canvas dimensions — wider/taller to accommodate larger 88x44 tiles
+const GRID_COLS = 8;
+const GRID_ROWS = 6;
 const SVG_W = 1400;
 const SVG_H = 820;
-
-// The iso grid's leftmost screen X is at (0 - GRID_ROWS) * (TILE_W/2)
-// We translate by OFFSET to center the grid in the SVG.
-const OFFSET_X = SVG_W / 2;  // center horizontally
-const OFFSET_Y = 100;         // push down from top so row 0 is visible
+const OFFSET_X = SVG_W / 2;
+const OFFSET_Y = 120;
 
 // ---------------------------------------------------------------------------
-// Zone definitions — which grid cells belong to which zone
+// Zone definitions
 // ---------------------------------------------------------------------------
 
-type ZoneName = "planning" | "engineering" | "operations" | "support" | "coo" | "corridor" | "empty";
+type ZoneName = "lounge" | "corridor" | "workspace" | "empty";
 
 const ZONE_COLORS: Record<ZoneName, string> = {
-  planning:    "#2a2a3a",
-  engineering: "#2a2833",
-  operations:  "#2a3030",
-  support:     "#2a2a2e",
-  coo:         "#332a20",
-  corridor:    "#1e1e28",
-  empty:       "#181820",
+  lounge:    "#2a2520",
+  corridor:  "#1e1e28",
+  workspace: "#1e2030",
+  empty:     "#181820",
 };
 
 const ZONE_STROKE: Record<ZoneName, string> = {
-  planning:    "#3a3a4e",
-  engineering: "#3a3845",
-  operations:  "#3a4040",
-  support:     "#3a3a3e",
-  coo:         "#453a2e",
-  corridor:    "#282830",
-  empty:       "#202028",
+  lounge:    "#3a3530",
+  corridor:  "#282830",
+  workspace: "#2a2a40",
+  empty:     "#202028",
 };
 
-// Build a lookup: "col,row" -> zone name
 function buildZoneMap(): Map<string, ZoneName> {
   const map = new Map<string, ZoneName>();
-
-  const set = (col: number, row: number, zone: ZoneName) => {
-    map.set(`${col},${row}`, zone);
-  };
-
-  // Fill all tiles as empty first (only fill defined areas)
   for (let c = 0; c < GRID_COLS; c++) {
     for (let r = 0; r < GRID_ROWS; r++) {
-      set(c, r, "empty");
+      if (r <= 1) map.set(`${c},${r}`, "lounge");
+      else if (r === 2) map.set(`${c},${r}`, "corridor");
+      else map.set(`${c},${r}`, "workspace");
     }
   }
-
-  // Planning zone — cols 0-4, rows 0-4
-  for (let c = 0; c <= 4; c++) for (let r = 0; r <= 4; r++) set(c, r, "planning");
-
-  // Engineering zone — cols 0-4, rows 5-9
-  for (let c = 0; c <= 4; c++) for (let r = 5; r <= 9; r++) set(c, r, "engineering");
-
-  // Corridor — col 5, all rows
-  for (let r = 0; r < GRID_ROWS; r++) set(5, r, "corridor");
-
-  // Operations zone — cols 6-10, rows 0-4
-  for (let c = 6; c <= 10; c++) for (let r = 0; r <= 4; r++) set(c, r, "operations");
-
-  // COO office — cols 6-10, rows 5-9
-  for (let c = 6; c <= 10; c++) for (let r = 5; r <= 9; r++) set(c, r, "coo");
-
-  // Support sub-zone — bottom of engineering (rows 7-9, cols 0-3) kept as engineering but visually distinct
-  // (support agents share engineering floor, just their positions differ)
-
   return map;
 }
 
 const ZONE_MAP = buildZoneMap();
 
 // ---------------------------------------------------------------------------
-// Zone labels — placed at zone center tiles
+// Layout positions — 8x6 grid
 // ---------------------------------------------------------------------------
 
-const ZONE_LABELS: Array<{ col: number; row: number; text: string }> = [
-  { col: 2, row: 0, text: "PLANNING" },
-  { col: 2, row: 5, text: "ENGINEERING" },
-  { col: 2, row: 8, text: "SUPPORT" },
-  { col: 8, row: 0, text: "OPERATIONS" },
-  { col: 8, row: 7, text: "COO OFFICE" },
+/** Work desks in workspace rows 3-5 */
+const WORK_DESKS: Array<{ col: number; row: number }> = [
+  { col: 1, row: 3 },
+  { col: 3, row: 3 },
+  { col: 5, row: 3 },
+  { col: 7, row: 3 },
+  { col: 2, row: 5 },
+  { col: 6, row: 5 },
 ];
 
-// ---------------------------------------------------------------------------
-// Desk positions per role — grid (col, row) coordinates
-// ---------------------------------------------------------------------------
+/** COO desk — center of workspace */
+const COO_DESK = { col: 4, row: 4 };
 
-const DESK_GRID: Record<string, { col: number; row: number }> = {
-  product:       { col: 1, row: 1 },
-  planner:       { col: 3, row: 1 },
-  reviewer:      { col: 2, row: 3 },
-  engineer:      { col: 1, row: 5 },
-  qa:            { col: 3, row: 5 },
-  security:      { col: 2, row: 7 },
-  investigator:  { col: 1, row: 8 },
-  documentation: { col: 3, row: 8 },
-  devops:        { col: 7, row: 1 },
-  monitor:       { col: 9, row: 1 },
-  observer:      { col: 8, row: 3 },
-  coo:           { col: 8, row: 6 },
-};
-
-// Plant decoration positions
-const PLANT_GRID: Array<{ col: number; row: number }> = [
-  { col: 0, row: 0 },
+/** Lounge spots for idle/done agents in rows 0-1 */
+const LOUNGE_SPOTS: Array<{ col: number; row: number }> = [
+  { col: 1, row: 0 },
+  { col: 2, row: 0 },
   { col: 4, row: 0 },
-  { col: 0, row: 4 },
-  { col: 4, row: 4 },
   { col: 6, row: 0 },
-  { col: 10, row: 0 },
-  { col: 6, row: 4 },
-  { col: 10, row: 4 },
-  { col: 0, row: 9 },
-  { col: 4, row: 9 },
-  { col: 6, row: 9 },
-  { col: 10, row: 9 },
+  { col: 1, row: 1 },
+  { col: 3, row: 1 },
+  { col: 5, row: 1 },
+  { col: 6, row: 1 },
+  { col: 2, row: 1 },
+  { col: 4, row: 1 },
+  { col: 7, row: 1 },
+  { col: 0, row: 1 },
+];
+
+/** Plants — corners and workspace edges */
+const PLANT_POSITIONS: Array<{ col: number; row: number }> = [
+  { col: 0, row: 0 },
+  { col: 7, row: 0 },
+  { col: 0, row: 1 },
+  { col: 7, row: 1 },
+  { col: 0, row: 5 },
+  { col: 7, row: 5 },
+];
+
+/** Coffee machine in lounge */
+const COFFEE_MACHINE_POS = { col: 1, row: 1 };
+
+/** Couch positions in lounge */
+const COUCH_POSITIONS = [
+  { col: 3, row: 0 },
+  { col: 5, row: 0 },
+];
+
+/** Canonical role order for deterministic lounge placement */
+const ALL_ROLES = [
+  "product", "planner", "reviewer", "engineer", "qa", "security",
+  "investigator", "documentation", "devops", "monitor", "observer",
+  "researcher",
 ];
 
 // ---------------------------------------------------------------------------
-// Helper: convert grid coord to SVG screen coord (with canvas offset)
+// Agent position state machine
 // ---------------------------------------------------------------------------
 
-function gridTileCenter(col: number, row: number): { x: number; y: number } {
-  const center = tileCenter(col, row);
-  return { x: center.x + OFFSET_X, y: center.y + OFFSET_Y };
+interface AgentVisualState {
+  currentX: number;
+  currentY: number;
+  targetX: number;
+  targetY: number;
+  isWalking: boolean;
+  zone: "lounge" | "desk";
+  deskIndex: number;
+  loungeIndex: number;
 }
 
 // ---------------------------------------------------------------------------
-// Floor tile grid — sorted by zOrder for correct isometric rendering
+// Helper: grid position to screen coords
+// ---------------------------------------------------------------------------
+
+function gridCenter(col: number, row: number): { x: number; y: number } {
+  const c = tileCenter(col, row);
+  return { x: c.x + OFFSET_X, y: c.y + OFFSET_Y };
+}
+
+// ---------------------------------------------------------------------------
+// Floor tiles
 // ---------------------------------------------------------------------------
 
 function FloorTiles(): React.ReactElement {
-  // Collect all tiles with their z-order
   const tiles: Array<{ col: number; row: number; zone: ZoneName; z: number }> = [];
-
   for (let c = 0; c < GRID_COLS; c++) {
     for (let r = 0; r < GRID_ROWS; r++) {
-      const zone = ZONE_MAP.get(`${c},${r}`) ?? "empty";
-      tiles.push({ col: c, row: r, zone, z: c + r });
+      tiles.push({ col: c, row: r, zone: ZONE_MAP.get(`${c},${r}`) ?? "empty", z: c + r });
     }
   }
-
-  // Sort by z-order (painter's algorithm)
   tiles.sort((a, b) => a.z - b.z || a.col - b.col);
 
   return (
     <g>
       {tiles.map(({ col, row, zone }) => {
-        const rawPoints = tilePath(col, row);
-        // Offset points by OFFSET_X, OFFSET_Y
-        const points = rawPoints
+        const raw = tilePath(col, row);
+        const pts = raw
           .split(" ")
           .map((pt) => {
             const [px, py] = pt.split(",").map(Number);
@@ -177,16 +161,168 @@ function FloorTiles(): React.ReactElement {
           })
           .join(" ");
 
+        // Corridor row gets a subtle glass/stripe effect
+        const isCorridorTile = zone === "corridor";
+
         return (
-          <polygon
-            key={`${col},${row}`}
-            points={points}
-            fill={ZONE_COLORS[zone]}
-            stroke={ZONE_STROKE[zone]}
-            strokeWidth={0.5}
-          />
+          <g key={`${col},${row}`}>
+            <polygon
+              points={pts}
+              fill={ZONE_COLORS[zone]}
+              stroke={ZONE_STROKE[zone]}
+              strokeWidth={0.5}
+            />
+            {isCorridorTile && (
+              <polygon
+                points={pts}
+                fill="none"
+                stroke="#3a3a55"
+                strokeWidth={0.3}
+                opacity={0.4}
+              />
+            )}
+          </g>
         );
       })}
+    </g>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Walls — north + west, 80px tall with blue window cutouts
+// ---------------------------------------------------------------------------
+
+const WALL_HEIGHT = 80;
+
+function WallLayer(): React.ReactElement {
+  const wallColor = { north: "#1a1a2e", west: "#12121e", top: "#22223a" };
+  const windowColor = "#1a3a5c";
+  const windowGlow = "#2a5a8c";
+
+  const northWallSegments: React.ReactElement[] = [];
+  const westWallSegments: React.ReactElement[] = [];
+
+  // North wall: along row=0
+  for (let c = 0; c < GRID_COLS; c++) {
+    const { x: tx, y: ty } = tileCenter(c, 0);
+    const sx = tx + OFFSET_X;
+    const sy = ty + OFFSET_Y;
+    const hw = TILE_W / 2;
+    const hh = TILE_H / 2;
+
+    const x1 = sx;
+    const y1 = sy - hh;
+    const x2 = sx + hw;
+    const y2 = sy;
+
+    northWallSegments.push(
+      <polygon
+        key={`nw-${c}`}
+        points={`${x1},${y1} ${x2},${y2} ${x2},${y2 - WALL_HEIGHT} ${x1},${y1 - WALL_HEIGHT}`}
+        fill={wallColor.north}
+        stroke="#252545"
+        strokeWidth={0.3}
+      />
+    );
+
+    // Window cutout — centered on wall face
+    const winX1 = x1 + (x2 - x1) * 0.25;
+    const winY1 = y1 + (y2 - y1) * 0.25;
+    const winX2 = x1 + (x2 - x1) * 0.75;
+    const winY2 = y1 + (y2 - y1) * 0.75;
+    const winTop = WALL_HEIGHT * 0.2;
+    const winBot = WALL_HEIGHT * 0.65;
+
+    northWallSegments.push(
+      <polygon
+        key={`nw-win-${c}`}
+        points={`${winX1},${winY1 - winTop} ${winX2},${winY2 - winTop} ${winX2},${winY2 - winBot} ${winX1},${winY1 - winBot}`}
+        fill={windowColor}
+        stroke={windowGlow}
+        strokeWidth={0.6}
+        opacity={0.7}
+      />
+    );
+
+    northWallSegments.push(
+      <line
+        key={`nwt-${c}`}
+        x1={x1} y1={y1 - WALL_HEIGHT}
+        x2={x2} y2={y2 - WALL_HEIGHT}
+        stroke="#303055"
+        strokeWidth={0.8}
+      />
+    );
+  }
+
+  // West wall: along col=0
+  for (let r = 0; r < GRID_ROWS; r++) {
+    const { x: tx, y: ty } = tileCenter(0, r);
+    const sx = tx + OFFSET_X;
+    const sy = ty + OFFSET_Y;
+    const hw = TILE_W / 2;
+    const hh = TILE_H / 2;
+
+    const x1 = sx;
+    const y1 = sy - hh;
+    const x2 = sx - hw;
+    const y2 = sy;
+
+    westWallSegments.push(
+      <polygon
+        key={`ww-${r}`}
+        points={`${x1},${y1} ${x2},${y2} ${x2},${y2 - WALL_HEIGHT} ${x1},${y1 - WALL_HEIGHT}`}
+        fill={wallColor.west}
+        stroke="#1e1e38"
+        strokeWidth={0.3}
+      />
+    );
+
+    // Window cutout on west wall
+    const winX1 = x1 + (x2 - x1) * 0.25;
+    const winY1 = y1 + (y2 - y1) * 0.25;
+    const winX2 = x1 + (x2 - x1) * 0.75;
+    const winY2 = y1 + (y2 - y1) * 0.75;
+    const winTop = WALL_HEIGHT * 0.2;
+    const winBot = WALL_HEIGHT * 0.65;
+
+    westWallSegments.push(
+      <polygon
+        key={`ww-win-${r}`}
+        points={`${winX1},${winY1 - winTop} ${winX2},${winY2 - winTop} ${winX2},${winY2 - winBot} ${winX1},${winY1 - winBot}`}
+        fill={windowColor}
+        stroke={windowGlow}
+        strokeWidth={0.6}
+        opacity={0.7}
+      />
+    );
+
+    westWallSegments.push(
+      <line
+        key={`wwt-${r}`}
+        x1={x1} y1={y1 - WALL_HEIGHT}
+        x2={x2} y2={y2 - WALL_HEIGHT}
+        stroke="#282845"
+        strokeWidth={0.8}
+      />
+    );
+  }
+
+  // Corner pillar
+  const corner = tileCenter(0, 0);
+  const cx = corner.x + OFFSET_X;
+  const cy = corner.y + OFFSET_Y - TILE_H / 2;
+
+  return (
+    <g>
+      {westWallSegments}
+      {northWallSegments}
+      <line
+        x1={cx} y1={cy}
+        x2={cx} y2={cy - WALL_HEIGHT}
+        stroke="#303055"
+        strokeWidth={2}
+      />
     </g>
   );
 }
@@ -196,21 +332,25 @@ function FloorTiles(): React.ReactElement {
 // ---------------------------------------------------------------------------
 
 function ZoneLabels(): React.ReactElement {
+  const labels = [
+    { col: 3, row: 0, text: "LOUNGE" },
+    { col: 3, row: 5, text: "WORKSPACE" },
+  ];
   return (
     <g>
-      {ZONE_LABELS.map(({ col, row, text }) => {
-        const { x, y } = gridTileCenter(col, row);
+      {labels.map(({ col, row, text }) => {
+        const { x, y } = gridCenter(col, row);
         return (
           <text
-            key={text}
+            key={text + col + row}
             x={x}
             y={y}
             textAnchor="middle"
-            fontSize={7}
-            fill="#3a3a50"
+            fontSize={8}
+            fill="#3a3a52"
             fontFamily="monospace"
             fontWeight="700"
-            letterSpacing="1.5"
+            letterSpacing="2"
           >
             {text}
           </text>
@@ -221,164 +361,409 @@ function ZoneLabels(): React.ReactElement {
 }
 
 // ---------------------------------------------------------------------------
-// Corridor label
+// Inline lounge furniture
 // ---------------------------------------------------------------------------
 
-function CorridorLabel(): React.ReactElement {
-  const { x, y } = gridTileCenter(5, 5);
-  return (
-    <text
-      x={x}
-      y={y}
-      textAnchor="middle"
-      fontSize={6}
-      fill="#2a2a38"
-      fontFamily="monospace"
-      fontWeight="700"
-      letterSpacing="2"
-    >
-      CORRIDOR
-    </text>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Furniture layer — desks and chairs, z-sorted
-// ---------------------------------------------------------------------------
-
-interface DeskSlot {
-  role: string;
-  col: number;
-  row: number;
-}
-
-function FurnitureLayer(): React.ReactElement {
-  // Sort desks by z-order so closer ones render on top
-  const slots = Object.entries(DESK_GRID)
-    .map(([role, { col, row }]) => ({ role, col, row, z: col + row }))
-    .sort((a, b) => a.z - b.z);
-
+function Couch({ x, y }: { x: number; y: number }): React.ReactElement {
   return (
     <g>
-      {slots.map(({ role, col, row }) => {
-        const center = gridTileCenter(col, row);
-        // Chair sits slightly in front (lower-right of the desk in iso space)
-        const chairOffset = { x: center.x + 8, y: center.y + 10 };
-        return (
-          <g key={role}>
-            {/* Chair renders first (behind desk in z) */}
-            <Chair x={chairOffset.x} y={chairOffset.y} />
-            <Desk x={center.x} y={center.y} />
-          </g>
-        );
-      })}
+      <polygon
+        points={`${x - 28},${y - 8} ${x},${y - 22} ${x + 28},${y - 8} ${x},${y + 6}`}
+        fill="#3a2845"
+      />
+      <polygon
+        points={`${x - 28},${y - 8} ${x - 28},${y + 6} ${x - 14},${y + 13} ${x - 14},${y - 1}`}
+        fill="#2a1835"
+      />
+      <polygon
+        points={`${x + 28},${y - 8} ${x + 28},${y + 6} ${x + 14},${y + 13} ${x + 14},${y - 1}`}
+        fill="#201030"
+      />
+      <polygon
+        points={`${x - 20},${y - 10} ${x},${y - 22} ${x + 20},${y - 10} ${x},${y - 4}`}
+        fill="#4a3058"
+        opacity={0.5}
+      />
     </g>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Plant decorations
+// Furniture layer
+// ---------------------------------------------------------------------------
+
+function FurnitureLayer({
+  occupiedDesks,
+  showCooDesk,
+}: {
+  occupiedDesks: number;
+  showCooDesk: boolean;
+}): React.ReactElement {
+  const items: Array<{ key: string; z: number; el: React.ReactElement }> = [];
+
+  // Work desks — only render for occupied slots
+  for (let i = 0; i < Math.min(occupiedDesks, WORK_DESKS.length); i++) {
+    const { col, row } = WORK_DESKS[i];
+    const c = gridCenter(col, row);
+    items.push({
+      key: `wdesk-${i}`,
+      z: col + row,
+      el: (
+        <g>
+          <Chair x={c.x + 12} y={c.y + 15} />
+          <Desk x={c.x} y={c.y} />
+        </g>
+      ),
+    });
+  }
+
+  // COO desk
+  if (showCooDesk) {
+    const c = gridCenter(COO_DESK.col, COO_DESK.row);
+    items.push({
+      key: "desk-coo",
+      z: COO_DESK.col + COO_DESK.row,
+      el: (
+        <g>
+          <Chair x={c.x + 12} y={c.y + 15} />
+          <Desk x={c.x} y={c.y} />
+        </g>
+      ),
+    });
+  }
+
+  // Couches
+  for (let i = 0; i < COUCH_POSITIONS.length; i++) {
+    const { col, row } = COUCH_POSITIONS[i];
+    const { x, y } = gridCenter(col, row);
+    items.push({ key: `couch-${i}`, z: col + row, el: <Couch x={x} y={y} /> });
+  }
+
+  items.sort((a, b) => a.z - b.z);
+
+  return (
+    <g>
+      {items.map(({ key, el }) => (
+        <React.Fragment key={key}>{el}</React.Fragment>
+      ))}
+    </g>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plants
 // ---------------------------------------------------------------------------
 
 function PlantLayer(): React.ReactElement {
-  const plants = PLANT_GRID
-    .map(({ col, row }) => ({ col, row, z: col + row }))
+  const sorted = [...PLANT_POSITIONS]
+    .map((p) => ({ ...p, z: p.col + p.row }))
     .sort((a, b) => a.z - b.z);
 
   return (
     <g>
-      {plants.map(({ col, row }) => {
-        const { x, y } = gridTileCenter(col, row);
-        return (
-          <Plant key={`plant-${col}-${row}`} x={x} y={y} scale={0.85} />
-        );
+      {sorted.map(({ col, row }) => {
+        const { x, y } = gridCenter(col, row);
+        return <Plant key={`p-${col}-${row}`} x={x} y={y} scale={1.3} />;
       })}
     </g>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Agent layer — characters at their desks
+// Coffee machine
 // ---------------------------------------------------------------------------
 
-interface AgentLayerProps {
-  agents: AgentState[];
+function CoffeeMachineLayer(): React.ReactElement {
+  const { x, y } = gridCenter(COFFEE_MACHINE_POS.col, COFFEE_MACHINE_POS.row);
+  return <CoffeeMachine x={x} y={y} />;
 }
 
-function AgentLayer({ agents }: AgentLayerProps): React.ReactElement {
-  // Build role -> agent map (prefer working > done > idle)
-  const agentsByRole = new Map<string, AgentState>();
-  for (const agent of agents) {
-    const role = agent.role.toLowerCase();
-    const existing = agentsByRole.get(role);
-    if (!existing || agentPriority(agent) > agentPriority(existing)) {
-      agentsByRole.set(role, agent);
-    }
+// ---------------------------------------------------------------------------
+// Agent layer with smooth walking transitions
+// ---------------------------------------------------------------------------
+
+function agentPriority(a: AgentState): number {
+  if (a.status === "working") return 2;
+  if (a.status === "done") return 1;
+  return 0;
+}
+
+interface AgentPos {
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  isWalking: boolean;
+}
+
+function AgentLayer({ agents }: { agents: AgentState[] }): React.ReactElement {
+  // Dedupe by role
+  const byRole = new Map<string, AgentState>();
+  for (const a of agents) {
+    const r = a.role.toLowerCase();
+    const prev = byRole.get(r);
+    if (!prev || agentPriority(a) > agentPriority(prev)) byRole.set(r, a);
   }
 
-  // Sort by z-order
-  const slots = Object.entries(DESK_GRID)
-    .map(([role, { col, row }]) => ({ role, col, row, z: col + row }))
-    .sort((a, b) => a.z - b.z);
+  const cooAgent = byRole.get("coo") ?? null;
 
-  return (
-    <g>
-      {slots.map(({ role, col, row }) => {
-        const center = gridTileCenter(col, row);
-        // Agent sits in the chair: slightly forward (toward viewer) from desk center
-        const avatarX = center.x + 8;
-        const avatarY = center.y + 6;
+  const working: Array<{ role: string; agent: AgentState }> = [];
+  const lounge: Array<{ role: string; agent: AgentState | null }> = [];
 
-        const agent = agentsByRole.get(role) ?? null;
-        const avatar = generateAvatar(role);
+  for (const [role, agent] of byRole) {
+    if (role === "coo") continue;
+    if (agent.status === "working") working.push({ role, agent });
+    else lounge.push({ role, agent });
+  }
 
-        if (agent === null) {
-          return (
-            <AgentAvatar
-              key={role}
-              x={avatarX}
-              y={avatarY}
-              avatar={avatar}
-              role={role}
-              status="idle"
-            />
-          );
-        }
+  // Ghost agents for roles with no data
+  for (const role of ALL_ROLES) {
+    if (!byRole.has(role)) lounge.push({ role, agent: null });
+  }
 
-        return (
+  lounge.sort((a, b) => {
+    const ai = ALL_ROLES.indexOf(a.role);
+    const bi = ALL_ROLES.indexOf(b.role);
+    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+  });
+
+  // Agent position state for smooth transitions
+  const [positions, setPositions] = useState<Map<string, AgentPos>>(() => new Map());
+  const prevStatusRef = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    const newPositions = new Map(positions);
+    let changed = false;
+
+    // Working agents
+    for (let i = 0; i < working.length && i < WORK_DESKS.length; i++) {
+      const { role, agent } = working[i];
+      const { col, row } = WORK_DESKS[i];
+      const c = gridCenter(col, row);
+      const targetX = c.x + 12;
+      const targetY = c.y + 6;
+
+      const prevStatus = prevStatusRef.current.get(role);
+      const existing = newPositions.get(role);
+
+      if (!existing) {
+        // First time — start at lounge, walk to desk
+        const loungeIdx = ALL_ROLES.indexOf(role) % LOUNGE_SPOTS.length;
+        const lc = gridCenter(LOUNGE_SPOTS[loungeIdx].col, LOUNGE_SPOTS[loungeIdx].row);
+        newPositions.set(role, {
+          x: lc.x,
+          y: lc.y,
+          targetX,
+          targetY,
+          isWalking: true,
+        });
+        changed = true;
+      } else if (prevStatus !== agent.status && (Math.abs(existing.targetX - targetX) > 5 || Math.abs(existing.targetY - targetY) > 5)) {
+        newPositions.set(role, {
+          ...existing,
+          targetX,
+          targetY,
+          isWalking: true,
+        });
+        changed = true;
+      }
+    }
+
+    // Lounge agents
+    for (let i = 0; i < lounge.length && i < LOUNGE_SPOTS.length; i++) {
+      const { role, agent } = lounge[i];
+      const { col, row } = LOUNGE_SPOTS[i];
+      const c = gridCenter(col, row);
+      const targetX = c.x;
+      const targetY = c.y;
+
+      const prevStatus = prevStatusRef.current.get(role);
+      const existing = newPositions.get(role);
+      const currentStatus = agent?.status ?? "idle";
+
+      if (!existing) {
+        // First time — place directly in lounge
+        newPositions.set(role, { x: targetX, y: targetY, targetX, targetY, isWalking: false });
+        changed = true;
+      } else if (prevStatus !== undefined && prevStatus !== currentStatus) {
+        // Status changed → walk to lounge
+        newPositions.set(role, { ...existing, targetX, targetY, isWalking: true });
+        changed = true;
+      }
+    }
+
+    // COO
+    if (cooAgent) {
+      const c = gridCenter(COO_DESK.col, COO_DESK.row);
+      const targetX = c.x + 12;
+      const targetY = c.y + 6;
+      const existing = newPositions.get("coo");
+      if (!existing) {
+        newPositions.set("coo", { x: targetX, y: targetY, targetX, targetY, isWalking: false });
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      setPositions(newPositions);
+    }
+
+    // Update prev status refs
+    for (const [role, agent] of byRole) {
+      prevStatusRef.current.set(role, agent.status);
+    }
+
+    // After walking, stop the walk animation
+    const walkingRoles: string[] = [];
+    for (const [role, pos] of newPositions) {
+      if (pos.isWalking) walkingRoles.push(role);
+    }
+    if (walkingRoles.length > 0) {
+      const timer = setTimeout(() => {
+        setPositions((prev) => {
+          const updated = new Map(prev);
+          for (const role of walkingRoles) {
+            const p = updated.get(role);
+            if (p) {
+              updated.set(role, { x: p.targetX, y: p.targetY, targetX: p.targetX, targetY: p.targetY, isWalking: false });
+            }
+          }
+          return updated;
+        });
+      }, 1600);
+      return () => clearTimeout(timer);
+    }
+  }, [agents]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const items: Array<{ key: string; z: number; el: React.ReactElement }> = [];
+
+  // Working agents
+  for (let i = 0; i < working.length && i < WORK_DESKS.length; i++) {
+    const { role, agent } = working[i];
+    const pos = positions.get(role);
+    const { col, row } = WORK_DESKS[i];
+    const fallback = gridCenter(col, row);
+    const px = pos ? (pos.isWalking ? pos.x : pos.targetX) : fallback.x + 12;
+    const py = pos ? (pos.isWalking ? pos.y : pos.targetY) : fallback.y + 6;
+
+    items.push({
+      key: `w-${role}`,
+      z: col + row + 0.5,
+      el: (
+        <g
+          style={{
+            transform: `translate(${px}px, ${py}px)`,
+            transition: pos?.isWalking ? "transform 1.5s ease-in-out" : "none",
+          }}
+        >
           <AgentAvatar
-            key={role}
-            x={avatarX}
-            y={avatarY}
-            avatar={avatar}
+            x={0}
+            y={0}
+            avatar={generateAvatar(role)}
             role={role}
             status={agent.status}
             description={agent.description}
             toolCallCount={agent.toolCallCount}
           />
-        );
-      })}
+        </g>
+      ),
+    });
+  }
+
+  // Lounge agents
+  for (let i = 0; i < lounge.length && i < LOUNGE_SPOTS.length; i++) {
+    const { role, agent } = lounge[i];
+    const { col, row } = LOUNGE_SPOTS[i];
+    const pos = positions.get(role);
+    const fallback = gridCenter(col, row);
+    const px = pos ? (pos.isWalking ? pos.x : pos.targetX) : fallback.x;
+    const py = pos ? (pos.isWalking ? pos.y : pos.targetY) : fallback.y;
+
+    items.push({
+      key: `l-${role}`,
+      z: col + row + 0.1,
+      el: (
+        <g
+          style={{
+            transform: `translate(${px}px, ${py}px)`,
+            transition: pos?.isWalking ? "transform 1.5s ease-in-out" : "none",
+          }}
+        >
+          <AgentAvatar
+            x={0}
+            y={0}
+            avatar={generateAvatar(role)}
+            role={role}
+            status={agent?.status ?? "idle"}
+            description={agent?.description}
+            toolCallCount={agent?.toolCallCount}
+          />
+        </g>
+      ),
+    });
+  }
+
+  // COO
+  if (cooAgent) {
+    const pos = positions.get("coo");
+    const fallback = gridCenter(COO_DESK.col, COO_DESK.row);
+    const px = pos?.targetX ?? fallback.x + 12;
+    const py = pos?.targetY ?? fallback.y + 6;
+
+    items.push({
+      key: "coo",
+      z: COO_DESK.col + COO_DESK.row + 0.5,
+      el: (
+        <g style={{ transform: `translate(${px}px, ${py}px)` }}>
+          <AgentAvatar
+            x={0}
+            y={0}
+            avatar={generateAvatar("coo")}
+            role="coo"
+            status={cooAgent.status}
+            description={cooAgent.description}
+            toolCallCount={cooAgent.toolCallCount}
+          />
+        </g>
+      ),
+    });
+  }
+
+  items.sort((a, b) => a.z - b.z);
+
+  return (
+    <g>
+      {items.map(({ key, el }) => (
+        <React.Fragment key={key}>{el}</React.Fragment>
+      ))}
     </g>
   );
 }
 
 // ---------------------------------------------------------------------------
-// CSS animations injected as <style> in the SVG
+// CSS animations in SVG defs
 // ---------------------------------------------------------------------------
 
 function SvgStyles(): React.ReactElement {
   return (
     <defs>
       <style>{`
-        @keyframes pulse-ring {
-          0%   { opacity: 0.7; transform: scale(1); }
-          50%  { opacity: 0.3; transform: scale(1.15); }
-          100% { opacity: 0.7; transform: scale(1); }
+        @keyframes agent-type {
+          0%, 100% { transform: translateY(0px); }
+          25%  { transform: translateY(-1px); }
+          50%  { transform: translateY(0px); }
+          75%  { transform: translateY(-0.5px); }
         }
-        @keyframes float-bubble {
-          0%   { transform: translateY(0px); }
-          50%  { transform: translateY(-3px); }
-          100% { transform: translateY(0px); }
+        @keyframes agent-walk {
+          0%, 100% { transform: translateY(0px); }
+          25%  { transform: translateY(-2px) translateX(-1px); }
+          50%  { transform: translateY(0px); }
+          75%  { transform: translateY(-2px) translateX(1px); }
+        }
+        @keyframes steam-rise {
+          0%   { opacity: 0.6; transform: translateY(0px) scaleX(1); }
+          50%  { opacity: 0.3; transform: translateY(-8px) scaleX(1.3); }
+          100% { opacity: 0;   transform: translateY(-15px) scaleX(0.8); }
         }
       `}</style>
     </defs>
@@ -395,6 +780,11 @@ interface Props {
 }
 
 export function FloorPlan({ agents }: Props): React.ReactElement {
+  const workingCount = agents.filter(
+    (a) => a.role.toLowerCase() !== "coo" && a.status === "working",
+  ).length;
+  const hasCoo = agents.some((a) => a.role.toLowerCase() === "coo");
+
   return (
     <svg
       viewBox={`0 0 ${SVG_W} ${SVG_H}`}
@@ -402,29 +792,14 @@ export function FloorPlan({ agents }: Props): React.ReactElement {
       style={{ width: "100%", height: "100%", display: "block" }}
     >
       <SvgStyles />
-
-      {/* ── Layer 0: Background ── */}
-      <rect width={SVG_W} height={SVG_H} fill="#13131c" />
-
-      {/* ── Layer 1: Isometric floor tiles ── */}
+      <rect width={SVG_W} height={SVG_H} fill="#0e0e14" />
+      <WallLayer />
       <FloorTiles />
-
-      {/* ── Layer 2: Zone labels — removed to reduce clutter; agent names identify zones ── */}
-
-      {/* ── Layer 3: Furniture (desks + chairs) ── */}
-      <FurnitureLayer />
-
-      {/* ── Layer 4: Decorative plants ── */}
+      <ZoneLabels />
+      <FurnitureLayer occupiedDesks={workingCount} showCooDesk={hasCoo} />
+      <CoffeeMachineLayer />
       <PlantLayer />
-
-      {/* ── Layer 5: Agent characters ── */}
       <AgentLayer agents={agents} />
     </svg>
   );
-}
-
-function agentPriority(a: AgentState): number {
-  if (a.status === "working") return 2;
-  if (a.status === "done") return 1;
-  return 0;
 }
