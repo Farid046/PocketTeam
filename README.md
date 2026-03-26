@@ -225,6 +225,13 @@ Each session has:
 
 ## Quick Start
 
+### Prerequisites
+
+- **Python 3.11+** — required
+- **[Claude Code CLI](https://docs.anthropic.com/claude-code)** — `npm install -g @anthropic-ai/claude-code`
+- **Docker** — optional, required for `pocketteam dashboard`
+- **Telegram Bot Token** — optional, required for mobile control
+
 ### Installation
 
 ```bash
@@ -253,10 +260,10 @@ You'll be asked:
 
 ### Run Your First Task
 
-Open Claude Code in your project:
+Open Claude Code with PocketTeam safety hooks active:
 
 ```bash
-claude
+pocketteam start
 ```
 
 Then give PocketTeam a task:
@@ -434,6 +441,11 @@ pocketteam dashboard status      # Check if running
 pocketteam dashboard logs        # Show dashboard logs
 pocketteam dashboard configure   # Port, auth, etc.
 ```
+
+> **Security note:** When accessing the dashboard remotely, HTTPS is required.
+> The auth token is embedded in the page DOM and is visible to anyone on the network
+> if transmitted over plain HTTP. Use `pocketteam dashboard configure --domain` to set
+> up a domain with Caddy (HTTPS auto-provisioned) before exposing the dashboard.
 
 ### Analysis & Improvement
 

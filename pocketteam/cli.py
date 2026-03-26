@@ -1,19 +1,24 @@
 """
 PocketTeam CLI
-Entry point for: pocketteam init | status | kill | retro | logs
+Entry point for: pocketteam init | status | kill | retro | logs | health
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Confirm
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 
 console = Console()
 
@@ -100,6 +105,7 @@ def _launch_claude(
       "new"      - start fresh (no resume flag)
     """
     import os
+
     from .config import load_config
 
     root = Path.cwd()
@@ -165,10 +171,10 @@ def status(show_all: bool) -> None:
 
 
 async def _status(show_all: bool) -> None:
-    from .config import load_config
-    from .constants import KILL_SWITCH_FILE, EVENTS_FILE
     import json
-    from datetime import datetime
+
+    from .config import load_config
+    from .constants import EVENTS_FILE, KILL_SWITCH_FILE
 
     project_root = Path.cwd()
     config_path = project_root / ".pocketteam/config.yaml"
@@ -204,7 +210,7 @@ async def _status(show_all: bool) -> None:
                 action = last.get("action", "")
                 table.add_row("Last Activity", f"{agent}: {action} ({ts[:19]})")
         except Exception:
-            pass
+            logger.debug("Failed to read last event", exc_info=True)
 
     console.print(table)
 
@@ -276,6 +282,135 @@ async def _retro(days: int) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# pocketteam health
+# ─────────────────────────────────────────────────────────────────────────────
+
+HEALTH_CHECK_TIMEOUT = 5  # seconds for HTTP health endpoint requests
+
+
+@main.command()
+def health() -> None:
+    """Show system health: project, config, kill switch, last event, dashboard."""
+    asyncio.run(_health())
+
+
+async def _health() -> None:
+    import json
+
+    from .config import load_config
+    from .constants import CONFIG_FILE, EVENTS_FILE, KILL_SWITCH_FILE, POCKETTEAM_DIR
+
+    project_root = Path.cwd()
+    ok = "[bold green]OK[/]"
+    warn = "[bold yellow]WARN[/]"
+    fail = "[bold red]FAIL[/]"
+
+    console.print()
+    console.print("[bold]PocketTeam Health Check[/]")
+    console.print()
+
+    # ── 1. Project directory ──────────────────────────────────────────────────
+    pocketteam_dir = project_root / POCKETTEAM_DIR
+    if pocketteam_dir.is_dir():
+        console.print(f"  Project:      {ok} (.pocketteam/ found)")
+    else:
+        console.print(f"  Project:      {fail} (.pocketteam/ not found — run pocketteam init)")
+        # Further checks are meaningless without the directory
+        console.print()
+        return
+
+    # ── 2. Config validity ────────────────────────────────────────────────────
+    config_path = project_root / CONFIG_FILE
+    if not config_path.exists():
+        console.print(f"  Config:       {warn} (config.yaml missing)")
+        cfg = None
+    else:
+        try:
+            cfg = load_config(project_root)
+            console.print(f"  Config:       {ok} (config.yaml valid)")
+        except Exception as exc:
+            console.print(f"  Config:       {fail} (config.yaml parse error: {exc})")
+            cfg = None
+
+    # ── 3. Kill switch ────────────────────────────────────────────────────────
+    kill_path = project_root / KILL_SWITCH_FILE
+    if kill_path.exists():
+        console.print(f"  Kill Switch:  [bold red]ACTIVE[/] ({kill_path} exists — run pocketteam resume)")
+    else:
+        console.print(f"  Kill Switch:  {ok} (inactive)")
+
+    # ── 4. Last event ─────────────────────────────────────────────────────────
+    events_path = project_root / EVENTS_FILE
+    if not events_path.exists():
+        console.print(f"  Last Event:   {warn} (no events yet)")
+    else:
+        try:
+            lines = [line for line in events_path.read_text().splitlines() if line.strip()]
+            if not lines:
+                console.print(f"  Last Event:   {warn} (stream empty)")
+            else:
+                last = json.loads(lines[-1])
+                ts_raw = last.get("ts", "")
+                agent = last.get("agent", "?")
+                action = last.get("action", last.get("type", ""))
+                # Compute human-readable age
+                age_str = ""
+                if ts_raw:
+                    try:
+                        ts_dt = datetime.fromisoformat(ts_raw.rstrip("Z")).replace(
+                            tzinfo=timezone.utc
+                        )
+                        delta = datetime.now(tz=timezone.utc) - ts_dt
+                        total_secs = int(delta.total_seconds())
+                        if total_secs < 60:
+                            age_str = f"{total_secs}s ago"
+                        elif total_secs < 3600:
+                            age_str = f"{total_secs // 60}m ago"
+                        elif total_secs < 86400:
+                            age_str = f"{total_secs // 3600}h ago"
+                        else:
+                            age_str = f"{total_secs // 86400}d ago"
+                    except ValueError:
+                        age_str = ts_raw[:19]
+                detail = f"{agent}: {action}" if action else agent
+                console.print(
+                    f"  Last Event:   {ok} ({age_str} — {detail})"
+                    if age_str
+                    else f"  Last Event:   {ok} ({detail})"
+                )
+        except Exception as exc:
+            console.print(f"  Last Event:   {warn} (could not read stream: {exc})")
+
+    # ── 5. Dashboard reachability ─────────────────────────────────────────────
+    health_url: str = ""
+    if cfg:
+        health_url = cfg.health_url or ""
+        if not health_url and cfg.dashboard.enabled and cfg.dashboard.port:
+            health_url = f"http://localhost:{cfg.dashboard.port}/api/health"
+
+    if not health_url:
+        console.print(f"  Dashboard:    {warn} (not configured)")
+    else:
+        try:
+            import urllib.error
+            import urllib.request
+            req = urllib.request.Request(health_url, method="GET")
+            with urllib.request.urlopen(req, timeout=HEALTH_CHECK_TIMEOUT) as resp:
+                status_code = resp.getcode()
+            if status_code < 400:
+                console.print(f"  Dashboard:    {ok} ({health_url} → HTTP {status_code})")
+            else:
+                console.print(
+                    f"  Dashboard:    {warn} ({health_url} → HTTP {status_code})"
+                )
+        except Exception as exc:
+            short = str(exc)[:80]
+            console.print(f"  Dashboard:    {warn} ({health_url} unreachable — {short})")
+
+    console.print()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # pocketteam logs
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -283,25 +418,74 @@ async def _retro(days: int) -> None:
 @click.option("--follow", "-f", is_flag=True, help="Follow log output (like tail -f).")
 @click.option("--lines", "-n", default=50, help="Number of lines to show (default: 50).")
 @click.option("--agent", default=None, help="Filter by agent name.")
-def logs(follow: bool, lines: int, agent: str | None) -> None:
+@click.option("--since", default=None, help="Show logs since (e.g., 1h, 30m, 2d).")
+def logs(follow: bool, lines: int, agent: str | None, since: str | None) -> None:
     """Show PocketTeam event log."""
-    asyncio.run(_logs(follow=follow, lines=lines, agent_filter=agent))
+    asyncio.run(_logs(follow=follow, lines=lines, agent_filter=agent, since=since))
 
 
-async def _logs(follow: bool, lines: int, agent_filter: str | None) -> None:
-    import json
+def _parse_since(since: str) -> datetime | None:
+    """Parse a duration string like '1h', '30m', '2d' into a cutoff datetime (UTC).
+
+    Returns None if the string is invalid.
+    """
+    match = re.fullmatch(r"(\d+)(h|m|d)", since.strip())
+    if not match:
+        return None
+    value, unit = int(match.group(1)), match.group(2)
+    delta = {
+        "m": timedelta(minutes=value),
+        "h": timedelta(hours=value),
+        "d": timedelta(days=value),
+    }[unit]
+    return datetime.now(tz=timezone.utc) - delta
+
+
+async def _logs(
+    follow: bool, lines: int, agent_filter: str | None, since: str | None
+) -> None:
     import asyncio
+    import json
+
     from .constants import EVENTS_FILE
-    from datetime import datetime
 
     events_path = Path.cwd() / EVENTS_FILE
     if not events_path.exists():
         console.print("[dim]No events logged yet.[/]")
         return
 
+    # Parse --since into a cutoff timestamp
+    since_cutoff: datetime | None = None
+    if since:
+        since_cutoff = _parse_since(since)
+        if since_cutoff is None:
+            console.print(
+                f"[red]Invalid --since value:[/] '{since}'. "
+                "Use format like 1h, 30m, 2d."
+            )
+            sys.exit(1)
+
+    def _event_passes_since(e: dict) -> bool:
+        """Return True if the event timestamp is at or after since_cutoff."""
+        if since_cutoff is None:
+            return True
+        ts_raw = e.get("ts", "")
+        if not ts_raw:
+            return True
+        try:
+            # Accept ISO-8601 timestamps: "2024-01-15T10:30:00Z" or without Z
+            ts_raw_clean = ts_raw.rstrip("Z")
+            ts_dt = datetime.fromisoformat(ts_raw_clean).replace(tzinfo=timezone.utc)
+            return ts_dt >= since_cutoff
+        except ValueError:
+            return True
+
     def print_event(line: str) -> None:
         try:
             e = json.loads(line)
+            if not _event_passes_since(e):
+                return
+
             ts = e.get("ts", "")[:19]
             ag = e.get("agent", "?")
             action = e.get("action", "")
@@ -327,9 +511,10 @@ async def _logs(follow: bool, lines: int, agent_filter: str | None) -> None:
         except Exception:
             console.print(line)
 
-    # Show last N lines
+    # When --since is set, scan all lines; otherwise show last N
     all_lines = events_path.read_text().splitlines()
-    for line in all_lines[-lines:]:
+    source_lines = all_lines if since_cutoff is not None else all_lines[-lines:]
+    for line in source_lines:
         if line.strip():
             print_event(line)
 
@@ -361,15 +546,15 @@ async def _logs(follow: bool, lines: int, agent_filter: str | None) -> None:
 def run_headless(task: str, skip_product: bool, no_telegram: bool) -> None:
     """Headless pipeline via Agent SDK (for CI/GitHub Actions). Requires ANTHROPIC_API_KEY.
 
-    For normal use, open Claude Code instead: claude
+    For normal interactive use, start Claude Code instead: pocketteam start
     """
     asyncio.run(_run(task, skip_product, no_telegram))
 
 
 async def _run(task: str, skip_product: bool, no_telegram: bool) -> None:
+    from .channels.setup import TelegramChannel
     from .config import load_config
     from .core.orchestrator import run_task
-    from .channels.setup import TelegramChannel
 
     root = Path.cwd()
     cfg = load_config(root)
