@@ -8,7 +8,7 @@ restarts, context compression, or plan mode.
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -62,7 +62,7 @@ def handle(hook_input: dict) -> dict:
             text = match.group(1).strip()
 
     entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "from": hook_input.get("user_id", hook_input.get("sender", "unknown")),
         "text": text[:2000],  # cap at 2000 chars
         "status": "received",
