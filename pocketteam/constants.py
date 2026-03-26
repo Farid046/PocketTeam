@@ -126,6 +126,8 @@ DASHBOARD_PORT_RANGE_END = 3857
 KILL_SWITCH_FILE = ".pocketteam/KILL"
 KILL_SWITCH_CHECK_INTERVAL = 1    # Check every 1 second
 
+RATE_LIMIT_WINDOW_SECONDS = 24 * 60 * 60  # Rolling 24-hour window for rate limiting
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────

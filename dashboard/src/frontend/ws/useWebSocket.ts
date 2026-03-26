@@ -134,7 +134,7 @@ export function useWebSocket(): void {
     const attempt = reconnectAttemptRef.current;
     const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
     reconnectAttemptRef.current += 1;
-    setConnectionStatus(attempt === 0 ? "reconnecting" : "reconnecting");
+    setConnectionStatus("reconnecting");
 
     reconnectTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;

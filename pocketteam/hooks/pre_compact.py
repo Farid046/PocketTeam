@@ -10,18 +10,7 @@ import json
 import time
 from pathlib import Path
 
-
-def _find_pocketteam_dir() -> Path | None:
-    d = Path.cwd()
-    for _ in range(20):
-        candidate = d / ".pocketteam"
-        if candidate.exists():
-            return candidate
-        parent = d.parent
-        if parent == d:
-            break
-        d = parent
-    return None
+from ._utils import _find_pocketteam_dir
 
 
 def handle(hook_input: dict) -> dict:

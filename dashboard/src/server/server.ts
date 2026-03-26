@@ -212,25 +212,23 @@ export function createServer(config: ServerConfig): PocketTeamServer {
     // Serve all static assets without auth (auth middleware already passes non-/api/ paths)
     app.use(express.static(clientDistDir, { index: false }));
 
-    // Serve index.html with auth token injected.
-    // Token replaces __AUTH_TOKEN__ placeholder so the frontend can initiate
-    // authenticated requests without ever putting the token in a URL.
-    app.get("*", (_req, res) => {
-      const indexPath = path.join(clientDistDir, "index.html");
+    // Read and token-inject index.html once at startup, then serve the cached version.
+    // Avoids a readFileSync on every page load; token is static for the lifetime of the server.
+    const indexPath = path.join(clientDistDir, "index.html");
+    let cachedIndexHtml: string | null = null;
+    try {
+      const raw = fs.readFileSync(indexPath, "utf-8");
+      cachedIndexHtml = raw.replace(/%%POCKETTEAM_TOKEN%%/g, authToken);
+    } catch (err) {
+      console.error("[server] Failed to read index.html at startup:", err instanceof Error ? err.message : String(err));
+    }
 
-      if (!fs.existsSync(indexPath)) {
+    app.get("*", (_req, res) => {
+      if (!cachedIndexHtml) {
         res.status(404).send("Dashboard not built. Run: npm run build:client");
         return;
       }
-
-      try {
-        let html = fs.readFileSync(indexPath, "utf-8");
-        html = html.replace(/%%POCKETTEAM_TOKEN%%/g, authToken);
-        res.type("html").send(html);
-      } catch (err) {
-        console.error("[server] index.html read error:", err instanceof Error ? err.message : String(err));
-        res.status(500).send("Internal server error");
-      }
+      res.type("html").send(cachedIndexHtml);
     });
   } else {
     // No frontend built — return 404 for non-API routes

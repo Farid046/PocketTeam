@@ -1,20 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
+import { SessionStatus } from "./types.js";
 
-export interface SessionStatus {
-  contextUsedPct: number | null;
-  contextRemainingPct: number | null;
-  rateLimits: {
-    fiveHour: number | null;
-    fiveHourResetAt: string | null;
-    sevenDay: number | null;
-    sevenDayResetAt: string | null;
-  };
-  cost: number | null;
-  model: string | null;
-  sessionId: string | null;
-  updatedAt: string;
-}
+export type { SessionStatus };
 
 export class SessionStatusReader {
   private filePath: string;
