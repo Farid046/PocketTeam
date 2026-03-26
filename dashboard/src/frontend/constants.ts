@@ -13,4 +13,5 @@ export const ROLE_COLORS: Record<string, string> = {
   monitor: "#92D050",
   observer: "#BF8F00",
   product: "#7030A0",
+  researcher: "#00BCD4",
 };
