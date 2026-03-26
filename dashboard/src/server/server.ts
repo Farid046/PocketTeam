@@ -179,15 +179,15 @@ export function createServer(config: ServerConfig): PocketTeamServer {
   const statusRefreshInterval = setInterval(() => {
     const agents = subagentReader.readAll();
     const clientCount = wsHub.getClientCount();
-    console.log("[refresh]", agents.length, "agents,", clientCount, "ws clients");
     for (const agent of agents) {
       knownAgentIds.add(agent.id);
     }
     // Send full snapshot to all clients (one message instead of N individual updates)
     if (clientCount > 0) {
+      console.log("[refresh]", agents.length, "agents,", clientCount, "ws clients");
       wsHub.broadcastRefreshSnapshot(agents, usageReader);
     }
-  }, 5_000);
+  }, 30_000);
 
   // === REST routes ===
   app.use(

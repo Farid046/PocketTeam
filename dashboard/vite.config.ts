@@ -8,6 +8,19 @@ export default defineConfig({
   build: {
     outDir: "../../dist/client",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (
+            id.includes("three") ||
+            id.includes("@react-three/fiber") ||
+            id.includes("@react-three/drei")
+          ) {
+            return "three-vendor";
+          }
+        },
+      },
+    },
   },
   server: {
     proxy: {
