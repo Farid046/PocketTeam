@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -18,7 +16,7 @@ class SensitivePathResult:
     layer: int = 5
     reason: str = ""
     path: str = ""
-    safe_alternative: Optional[str] = None
+    safe_alternative: str | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -91,16 +89,6 @@ SENSITIVE_PATH_PATTERNS: list[str] = [
 
 _SENSITIVE_RE = [re.compile(p, re.IGNORECASE) for p in SENSITIVE_PATH_PATTERNS]
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Exceptions: agents that may access specific sensitive files
-# ─────────────────────────────────────────────────────────────────────────────
-
-# DevOps may read (never write) deploy config
-DEVOPS_READ_EXCEPTIONS: list[str] = [
-    r".*\.env\.example$",          # Always allowed — it's the template
-    r".*\.env\.template$",
-]
-
 # Safe alternatives to suggest
 SAFE_ALTERNATIVES: dict[str, str] = {
     ".env": ".env.example (template) or environment variables",
@@ -113,7 +101,7 @@ SAFE_ALTERNATIVES: dict[str, str] = {
 def check_sensitive_path(
     tool_name: str,
     path: str,
-    agent_id: Optional[str] = None,
+    agent_id: str | None = None,
 ) -> SensitivePathResult:
     """
     Layer 5: Check if a file path is sensitive.

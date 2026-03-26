@@ -146,7 +146,7 @@ def check_network_safety(
         if pattern.search(url):
             return NetworkCheckResult(
                 allowed=False,
-                reason=f"Suspicious URL pattern detected (possible credential leakage)",
+                reason="Suspicious URL pattern detected (possible credential leakage)",
                 domain=domain,
             )
 
@@ -226,7 +226,7 @@ def extract_url_from_tool_input(tool_name: str, tool_input: str | dict) -> str |
 
     if isinstance(tool_input, str):
         # WebFetch: first argument is typically the URL
-        if tool_name in ("WebFetch", "mcp__tavily*"):
+        if tool_name in ("WebFetch",) or tool_name.startswith("mcp__tavily"):
             parts = tool_input.strip().split()
             if parts and parts[0].startswith(("http://", "https://")):
                 return parts[0]

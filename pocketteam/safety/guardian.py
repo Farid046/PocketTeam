@@ -18,9 +18,12 @@ Usage (invoked by Claude Code hook system):
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
@@ -30,12 +33,12 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
     """
     # Import lazily to avoid import errors if called before install
     try:
-        from .rules import check_never_allow, check_destructive
-        from .mcp_rules import check_mcp_safety
-        from .network_rules import check_network_safety, extract_url_from_tool_input
-        from .sensitive_paths import check_sensitive_path, extract_path_from_tool_input
         from .allowlist import check_agent_allowlist
         from .kill_switch import KillSwitch
+        from .mcp_rules import check_mcp_safety
+        from .network_rules import check_network_safety, extract_url_from_tool_input
+        from .rules import check_destructive, check_never_allow
+        from .sensitive_paths import check_sensitive_path, extract_path_from_tool_input
     except ImportError:
         # Safety modules missing — fail CLOSED, never open
         print(
@@ -146,6 +149,17 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
                 "reason": f"BLOCKED (Layer 6 - Allowlist): {allow_result.reason}",
             }
 
+    # ── Layer 7: Rate Limiting ────────────────────────────────────────────────
+    if agent_id and project_root:
+        rate_result = _check_rate_limit(agent_id, project_root)
+        if not rate_result.get("allow", True):
+            _log_denial(agent_id, tool_name, tool_input, 7, rate_result["reason"])
+            return {
+                "allow": False,
+                "layer": 7,
+                "reason": f"BLOCKED (Layer 7 - Rate Limit): {rate_result['reason']}",
+            }
+
     # ── All layers passed ────────────────────────────────────────────────────
     return {"allow": True, "layer": None, "reason": ""}
 
@@ -182,7 +196,7 @@ def _log_denial(
                 reason=reason,
             )
     except Exception:
-        pass
+        logger.debug("Audit log write failed (non-critical)", exc_info=True)
 
 
 def _find_project_root() -> Path | None:
@@ -196,6 +210,60 @@ def _find_project_root() -> Path | None:
             break
         current = parent
     return None
+
+
+def _check_rate_limit(agent_id: str, project_root: Path) -> dict:
+    """
+    Layer 7: Disk-persistent turn counter for rate limiting.
+    Each hook invocation is a new process, so state is stored in
+    .pocketteam/rate_limit_state.json.
+    Returns {"allow": True} or {"allow": False, "reason": str}.
+    """
+    import json as _json
+    import time as _time
+
+    state_file = project_root / ".pocketteam" / "rate_limit_state.json"
+    from ..constants import AGENT_MAX_TURNS
+
+    # Load existing state (file may not exist yet) — file I/O is best-effort
+    state: dict = {}
+    if state_file.exists():
+        try:
+            state = _json.loads(state_file.read_text())
+        except Exception:
+            state = {}
+
+    agent_data = state.get(agent_id, {"turns": 0, "reset_at": 0})
+
+    # Rolling window: reset counter if more than 24 hours have passed
+    now = _time.time()
+    if now - agent_data.get("reset_at", 0) > 86400:
+        agent_data = {"turns": 0, "reset_at": now}
+
+    max_turns = AGENT_MAX_TURNS.get(agent_id, AGENT_MAX_TURNS.get("engineer", 50))
+    current_turns = agent_data.get("turns", 0)
+
+    # Limit check is NOT wrapped in a fail-open try/except — failure here is fail-closed
+    if current_turns >= max_turns:
+        return {
+            "allow": False,
+            "reason": (
+                f"Agent '{agent_id}' has reached its turn limit "
+                f"({max_turns} turns in rolling 24h window). "
+                "Escalating to CEO."
+            ),
+        }
+
+    # Increment and persist — write failures are best-effort (fail-open for I/O only)
+    agent_data["turns"] = current_turns + 1
+    state[agent_id] = agent_data
+    try:
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(_json.dumps(state))
+    except OSError:
+        pass  # If we can't write, allow the call (don't break everything)
+
+    return {"allow": True}
 
 
 def _load_extra_domains(project_root: Path | None) -> list[str]:

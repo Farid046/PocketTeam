@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Layer 1: NEVER_ALLOW
@@ -170,9 +169,9 @@ def _is_safe_delete_command(tool_input: str) -> bool:
 @dataclass
 class RuleCheckResult:
     allowed: bool
-    layer: Optional[int]
+    layer: int | None
     reason: str
-    pattern: Optional[str] = None
+    pattern: str | None = None
     requires_approval: bool = False
 
 
@@ -212,7 +211,7 @@ def check_destructive(tool_name: str, tool_input: str) -> RuleCheckResult:
             return RuleCheckResult(
                 allowed=False,
                 layer=2,
-                reason=f"Destructive pattern requires plan approval",
+                reason="Destructive pattern requires plan approval",
                 pattern=pattern.pattern,
                 requires_approval=True,
             )

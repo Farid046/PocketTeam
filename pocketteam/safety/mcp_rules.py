@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -117,7 +117,7 @@ def check_mcp_safety(tool_name: str, tool_input: Any) -> McpCheckResult:
     # Normalize input
     if isinstance(tool_input, dict):
         input_str = str(tool_input)
-        sql = tool_input.get("query", tool_input.get("sql", ""))
+        sql = tool_input.get("query") or tool_input.get("sql") or ""
     else:
         input_str = str(tool_input)
         sql = input_str
@@ -150,7 +150,7 @@ def check_mcp_safety(tool_name: str, tool_input: Any) -> McpCheckResult:
         if tool_name.startswith(delete_prefix):
             return McpCheckResult(
                 allowed=False,
-                reason=f"Supabase delete operation requires plan approval",
+                reason="Supabase delete operation requires plan approval",
                 requires_approval=True,
             )
 
@@ -160,7 +160,7 @@ def check_mcp_safety(tool_name: str, tool_input: Any) -> McpCheckResult:
             if pattern.search(sql):
                 return McpCheckResult(
                     allowed=False,
-                    reason=f"SQL injection pattern detected in MCP input",
+                    reason="SQL injection pattern detected in MCP input",
                     requires_approval=False,  # Never allow SQL injection
                 )
 
@@ -190,7 +190,7 @@ def _check_supabase_sql(sql: str) -> McpCheckResult:
                 )
             return McpCheckResult(
                 allowed=False,
-                reason=f"SQL mutation requires plan approval",
+                reason="SQL mutation requires plan approval",
                 requires_approval=True,
             )
 
