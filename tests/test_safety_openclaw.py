@@ -219,15 +219,28 @@ class TestKillSwitchScenario:
             "DELETE FROM old_logs WHERE created_at < '2024-01-01'",
             [f"log_{i}" for i in range(100)],
             is_reversible=True,
+            session_id="sess-1",
+            agent_id="devops",
         )
-        token = guard.issue_approval_token(preview, "devops", "task-001")
+        tool_input = {
+            "query": "DELETE FROM old_logs WHERE created_at < '2024-01-01'"
+        }
+        token = guard.issue_approval_token(
+            preview, "devops", "task-001",
+            tool_name="mcp__supabase__execute_sql",
+            tool_input=tool_input,
+            session_id="sess-1",
+        )
 
         ks = KillSwitch(tmp_project)
-        ks.activate("telegram")  # User sends /kill on Telegram
+        ks.activate("telegram")
 
         # Token should be invalidated
-        valid, reason = guard.validate_token(token.token, preview.preview_hash, "devops")
+        valid, reason = guard.validate_and_consume_token(
+            token.token, token.operation_hash, "devops",
+        )
         assert not valid
+        assert "already used" in reason.lower()  # [v3.1 Fix F]
 
     def test_kill_switch_check_interval(self):
         """Kill switch must check every 1 second (from constants)."""
@@ -376,17 +389,30 @@ class TestContextCompactionSafety:
 
     def test_dsac_tokens_survive_context_loss(self, tmp_project):
         """
-        Approval tokens are stored on DISK — not in conversation context.
+        Approval tokens are stored on DISK -- not in conversation context.
         Simulates context compaction: new DSACGuard instance, same file.
         """
         guard1 = DSACGuard(tmp_project)
-        preview = guard1.create_dry_run_preview("Bash", "rm old.txt", ["old.txt"])
-        token = guard1.issue_approval_token(preview, "devops", "task-001")
+        preview = guard1.create_dry_run_preview(
+            "Bash", "rm old.txt", ["old.txt"],
+            session_id="sess-1", agent_id="devops",
+        )
+        token = guard1.issue_approval_token(
+            preview, "devops", "task-001",
+            tool_name="Bash",
+            tool_input={"command": "rm old.txt"},
+            session_id="sess-1",
+        )
 
         # Simulate context compaction: create fresh guard (no shared memory)
         guard2 = DSACGuard(tmp_project)
-        valid, _ = guard2.validate_token(token.token, preview.preview_hash, "devops")
-        assert valid, "Approval token must survive across guard instances (context compaction)"
+        valid, _ = guard2.validate_and_consume_token(
+            token.token, token.operation_hash, "devops",
+        )
+        assert valid, (
+            "Approval token must survive across guard instances"
+            " (context compaction)"
+        )
 
     def test_kill_switch_survives_context_loss(self, tmp_project):
         """
@@ -419,3 +445,51 @@ class TestContextCompactionSafety:
         denials = audit2.get_recent_denials(hours=1)
         assert len(denials) >= 1
         assert any(d["agent"] == "engineer" for d in denials)
+
+
+class TestCompactionScopeEscalation:
+    """
+    Compaction re-initiation + scope escalation scenario.
+    Agent gets approval for narrow scope, compaction happens, agent
+    re-requests with wider scope. System must flag the re-initiation.
+    """
+
+    def test_full_compaction_reinitiation_scenario(self, tmp_project):
+        guard = DSACGuard(tmp_project)
+
+        # Step 1: First approval (narrow)
+        p1 = guard.create_dry_run_preview(
+            "Bash",
+            "DELETE FROM logs WHERE created_at < '2024-01-01'",
+            [f"log_{i}" for i in range(10)],
+            session_id="sess-1",
+            agent_id="devops",
+        )
+        assert p1.reinitiation_count == 0
+        tool_input = {
+            "command": "DELETE FROM logs WHERE created_at < '2024-01-01'"
+        }
+        t1 = guard.issue_approval_token(
+            p1, "devops", "task-001",
+            tool_name="Bash",
+            tool_input=tool_input,
+            session_id="sess-1",
+        )
+
+        # Step 2: Token consumed
+        guard.validate_and_consume_token(
+            t1.token, t1.operation_hash, "devops",
+        )
+
+        # Step 3: Context compacted (agent loses memory)
+
+        # Step 4: Agent re-requests with wider scope
+        p2 = guard.create_dry_run_preview(
+            "Bash",
+            "DELETE FROM logs",
+            [f"log_{i}" for i in range(1000)],
+            session_id="sess-1",
+            agent_id="devops",
+        )
+        assert p2.reinitiation_count == 1
+        assert "RE-INITIATION WARNING" in p2.to_human_readable()
