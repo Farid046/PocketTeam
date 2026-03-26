@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -57,8 +59,10 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
     else:
         check_str = input_str
 
-    # ── Layer 10: Kill Switch (checked first, highest priority) ──────────────
+    # Compute project root once — reused by Layer 10, Layer 4, Layer 7, and _log_denial
     project_root = _find_project_root()
+
+    # ── Layer 10: Kill Switch (checked first, highest priority) ──────────────
     if project_root:
         ks = KillSwitch(project_root)
         if ks.is_active:
@@ -71,7 +75,7 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
     # ── Layer 1: NEVER_ALLOW ─────────────────────────────────────────────────
     result = check_never_allow(tool_name, check_str)
     if not result.allowed:
-        _log_denial(agent_id, tool_name, tool_input, 1, result.reason)
+        _log_denial(agent_id, tool_name, tool_input, 1, result.reason, project_root)
         return {
             "allow": False,
             "layer": 1,
@@ -84,7 +88,7 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
         for path in paths:
             path_result = check_sensitive_path(tool_name, path, agent_id)
             if path_result.blocked:
-                _log_denial(agent_id, tool_name, tool_input, 5, path_result.reason)
+                _log_denial(agent_id, tool_name, tool_input, 5, path_result.reason, project_root)
                 return {
                     "allow": False,
                     "layer": 5,
@@ -97,14 +101,14 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
         if not mcp_result.allowed:
             if mcp_result.requires_approval:
                 # D-SAC flow needed — return requires_approval flag
-                _log_denial(agent_id, tool_name, tool_input, 3, mcp_result.reason)
+                _log_denial(agent_id, tool_name, tool_input, 3, mcp_result.reason, project_root)
                 return {
                     "allow": False,
                     "layer": 3,
                     "reason": f"BLOCKED (Layer 3 - MCP Safety): {mcp_result.reason}",
                     "requires_approval": True,
                 }
-            _log_denial(agent_id, tool_name, tool_input, 3, mcp_result.reason)
+            _log_denial(agent_id, tool_name, tool_input, 3, mcp_result.reason, project_root)
             return {
                 "allow": False,
                 "layer": 3,
@@ -112,14 +116,15 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
             }
 
     # ── Layer 4: Network Safety ──────────────────────────────────────────────
-    if tool_name in ("WebFetch", "WebSearch") or "curl" in input_str or "wget" in input_str:
+    input_str_lower = input_str.lower()
+    if tool_name in ("WebFetch", "WebSearch") or "curl" in input_str_lower or "wget" in input_str_lower:
         url = extract_url_from_tool_input(tool_name, tool_input)
         if url:
             # Load extra approved domains from config
             extra_domains = _load_extra_domains(project_root)
             net_result = check_network_safety(url, extra_approved_domains=extra_domains)
             if not net_result.allowed:
-                _log_denial(agent_id, tool_name, tool_input, 4, net_result.reason)
+                _log_denial(agent_id, tool_name, tool_input, 4, net_result.reason, project_root)
                 return {
                     "allow": False,
                     "layer": 4,
@@ -130,7 +135,7 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
     destr_result = check_destructive(tool_name, check_str)
     if not destr_result.allowed:
         # Requires D-SAC approval — not an outright block
-        _log_denial(agent_id, tool_name, tool_input, 2, destr_result.reason)
+        _log_denial(agent_id, tool_name, tool_input, 2, destr_result.reason, project_root)
         return {
             "allow": False,
             "layer": 2,
@@ -142,7 +147,7 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
     if agent_id:
         allow_result = check_agent_allowlist(agent_id, tool_name)
         if not allow_result.allowed:
-            _log_denial(agent_id, tool_name, tool_input, 6, allow_result.reason)
+            _log_denial(agent_id, tool_name, tool_input, 6, allow_result.reason, project_root)
             return {
                 "allow": False,
                 "layer": 6,
@@ -153,7 +158,7 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
     if agent_id and project_root:
         rate_result = _check_rate_limit(agent_id, project_root)
         if not rate_result.get("allow", True):
-            _log_denial(agent_id, tool_name, tool_input, 7, rate_result["reason"])
+            _log_denial(agent_id, tool_name, tool_input, 7, rate_result["reason"], project_root)
             return {
                 "allow": False,
                 "layer": 7,
@@ -170,10 +175,12 @@ def _log_denial(
     tool_input: Any,
     layer: int,
     reason: str,
+    project_root: "Path | None" = None,
 ) -> None:
     """Write denial to audit log without crashing."""
     try:
-        project_root = _find_project_root()
+        if project_root is None:
+            project_root = _find_project_root()
         if project_root:
             from .audit_log import AuditLog, SafetyDecision
             audit = AuditLog(project_root)
@@ -223,7 +230,7 @@ def _check_rate_limit(agent_id: str, project_root: Path) -> dict:
     import time as _time
 
     state_file = project_root / ".pocketteam" / "rate_limit_state.json"
-    from ..constants import AGENT_MAX_TURNS
+    from ..constants import AGENT_MAX_TURNS, RATE_LIMIT_WINDOW_SECONDS
 
     # Load existing state (file may not exist yet) — file I/O is best-effort
     state: dict = {}
@@ -235,9 +242,9 @@ def _check_rate_limit(agent_id: str, project_root: Path) -> dict:
 
     agent_data = state.get(agent_id, {"turns": 0, "reset_at": 0})
 
-    # Rolling window: reset counter if more than 24 hours have passed
+    # Rolling window: reset counter if window has expired
     now = _time.time()
-    if now - agent_data.get("reset_at", 0) > 86400:
+    if now - agent_data.get("reset_at", 0) > RATE_LIMIT_WINDOW_SECONDS:
         agent_data = {"turns": 0, "reset_at": now}
 
     max_turns = AGENT_MAX_TURNS.get(agent_id, AGENT_MAX_TURNS.get("engineer", 50))
@@ -254,12 +261,21 @@ def _check_rate_limit(agent_id: str, project_root: Path) -> dict:
             ),
         }
 
-    # Increment and persist — write failures are best-effort (fail-open for I/O only)
+    # Increment and persist atomically — concurrent agents won't corrupt each other
     agent_data["turns"] = current_turns + 1
     state[agent_id] = agent_data
     try:
         state_file.parent.mkdir(parents=True, exist_ok=True)
-        state_file.write_text(_json.dumps(state))
+        fd, tmp = tempfile.mkstemp(dir=str(state_file.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                _json.dump(state, f)
+            os.replace(tmp, str(state_file))
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
     except OSError:
         pass  # If we can't write, allow the call (don't break everything)
 

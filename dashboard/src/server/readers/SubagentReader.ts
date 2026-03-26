@@ -285,8 +285,6 @@ export class SubagentReader {
       gitBranch: "",
     };
 
-    if (!fs.existsSync(jsonlPath)) return defaultStats;
-
     let startedAt: string | null = null;
     let lastActivity: string | null = null;
     let toolCallCount = 0;
