@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import crypto from "crypto";
+import crypto, { timingSafeEqual } from "crypto";
 
 // Ticket: 60s TTL, single-use (S1 — WS ticket system to avoid token in URL)
 interface WsTicket {
@@ -37,9 +37,12 @@ export class AuthManager {
         return;
       }
 
-      // All /api/* routes require Bearer token
+      // All /api/* routes require Bearer token.
+      // Use timingSafeEqual to prevent timing-based token oracle attacks.
       const auth = req.headers.authorization;
-      if (!auth || auth !== `Bearer ${this.authToken}`) {
+      const expected = Buffer.from(`Bearer ${this.authToken}`);
+      const received = Buffer.from(auth || "");
+      if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
@@ -85,9 +88,13 @@ export class AuthManager {
     return true;
   }
 
-  // Validate a Bearer token directly (used by non-HTTP upgrade paths)
+  // Validate a Bearer token directly (used by non-HTTP upgrade paths).
+  // Uses timingSafeEqual to prevent timing-based token oracle attacks.
   validateToken(token: string): boolean {
-    return typeof token === "string" && token === this.authToken;
+    if (typeof token !== "string") return false;
+    const expected = Buffer.from(this.authToken);
+    const received = Buffer.from(token);
+    return expected.length === received.length && timingSafeEqual(expected, received);
   }
 
   getToken(): string {

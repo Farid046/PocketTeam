@@ -4,6 +4,7 @@ import { SubagentReader } from "../readers/SubagentReader.js";
 import { EventStreamReader } from "../readers/EventStreamReader.js";
 import { AuditLogReader } from "../readers/AuditLogReader.js";
 import { KillSwitchReader } from "../readers/KillSwitchReader.js";
+import { UsageReader } from "../readers/UsageReader.js";
 import { redactPayload, stripSensitiveContent } from "../redaction.js";
 
 export interface RouteReaders {
@@ -11,6 +12,7 @@ export interface RouteReaders {
   eventStreamReader: EventStreamReader;
   auditLogReader: AuditLogReader;
   killSwitchReader: KillSwitchReader;
+  usageReader: UsageReader;
 }
 
 // Apply both redaction layers and send as JSON.
@@ -84,6 +86,25 @@ export function createRouter(
       sendRedacted(res, stats);
     } catch (err) {
       console.error("[routes] /audit/stats error:", err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // GET /api/v1/usage?sessionId=... — token/cost usage for a session
+  router.get("/usage", (req: Request, res: Response) => {
+    try {
+      const agents = readers.subagentReader.readAll();
+      const sessionId = typeof req.query["sessionId"] === "string"
+        ? req.query["sessionId"]
+        : agents.length > 0 ? agents[0].sessionId : null;
+      if (!sessionId) {
+        res.json(null);
+        return;
+      }
+      const usage = readers.usageReader.computeSessionUsage(sessionId, agents);
+      sendRedacted(res, usage);
+    } catch (err) {
+      console.error("[routes] /usage error:", err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: "Internal server error" });
     }
   });
