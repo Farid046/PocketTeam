@@ -74,23 +74,29 @@ PocketTeam gives you a full autonomous IT team where:
 
 Each agent has specialized skills for their domain:
 
-**Product**: market-research, competitive-analysis, product-brief, win-loss-analysis
+**Product**: market-research, competitive-analysis, product-brief
 
-**Planning**: task-breakdown, risk-assessment, breaking-change-plan, dependency-mapping
+**Planning**: task-breakdown, risk-assessment, breaking-change-plan
 
-**Engineering**: scaffold, debug, hotfix, refactor, test-generation, docs-generation
+**Engineering**: scaffold, debug, hotfix, architecture-review, design-review, performance-review
 
-**QA**: smoke-test, visual-qa, test-data-setup, load-test, accessibility-test
+**QA**: smoke-test, visual-qa, test-data-setup, browse
 
-**Security**: owasp-audit, dependency-scan, threat-model, secrets-detection, cwe-analysis
+**Security**: owasp-audit, dependency-scan, threat-model
 
-**DevOps**: dashboard-deploy, service-deploy, canary-release, rollback, ci-cd-setup
+**DevOps**: dashboard-deploy, service-deploy, rollback
 
-**Monitoring**: health-check, log-analysis, escalation, metric-analysis
+**Investigator**: timeline-reconstruction, db-diagnostics, handoff-spec
 
-**Documentation**: update-readme, architecture-docs, stale-doc-audit, api-docs
+**Monitoring**: health-check, log-analysis, escalation
 
-And 20+ more, including Telegram integration and custom skill loading.
+**Documentation**: update-readme, architecture-docs, stale-doc-audit
+
+**Observer**: retro, propose-improvements, weekly-digest
+
+**Workflow modes**: autopilot, ralph, quick
+
+And more, including Telegram integration and custom skill loading.
 
 ### Real-Time 3D Isometric Office Dashboard
 
@@ -107,20 +113,194 @@ Accessed via `pocketteam dashboard start` or embedded in Claude Code.
 
 ### ptbrowse: Own Browser Automation CLI
 
-A lightweight, accessibility-tree-based browser automation tool that's **10–20x cheaper** than Playwright MCP:
+A lightweight, accessibility-tree-based browser automation tool built on Playwright and Bun. It exposes a persistent daemon so every command reuses the same browser instance — no cold-start overhead per step.
+
+After `pocketteam init`, the `ptbrowse` alias is available directly in your shell:
 
 ```bash
-ptbrowse screenshot https://example.com
-ptbrowse click "Sign in"
-ptbrowse fill_form '{"email": "test@example.com", "password": "..."}'
-ptbrowse extract_table "Users"
+ptbrowse goto https://app.example.com
+ptbrowse snapshot -i
+ptbrowse fill @e3 user@example.com
+ptbrowse click @e5
+ptbrowse assert text "Dashboard"
 ```
 
-**Why ptbrowse?**
-- Accessibility tree snapshots instead of full screenshots (smaller tokens)
-- Playwright-based but optimized for AI: fewer irrelevant DOM nodes
-- ~$0.01 per command vs $0.10+ with Playwright MCP
-- Used by QA and Investigator agents for real browser testing
+#### ptbrowse vs Alternatives
+
+| Capability | ptbrowse | Playwright MCP | gstack /browse |
+|---|---|---|---|
+| **Cost per step** | ~$0.01 | ~$0.10–$0.30 | ~$0.10+ |
+| **Token source** | Accessibility tree text | Full screenshot pixels | Full screenshot pixels |
+| **Persistent daemon** | Yes (one Chromium, reused) | No (new context per call) | No |
+| **Structured refs** | `@e1`…`@eN` (stable across steps) | CSS selectors | Not exposed |
+| **Diff snapshots** | Yes (`snapshot -D`) | No | No |
+| **Headed mode** | `PTBROWSE_HEADED=1` | Configurable | Configurable |
+| **Assertion exit codes** | 0/1/2/3 (CI-friendly) | No | No |
+| **JS eval** | Yes (opt-in, `PTBROWSE_ALLOW_EVAL=1`) | Yes | No |
+
+#### Token-Cost Breakdown
+
+A typical login + dashboard check with Playwright MCP sends a full viewport screenshot (~150 KB PNG) as each step response. With Claude Sonnet at ~$3 per million input tokens, a 150 KB image encodes to roughly 1,500–3,000 tokens:
+
+```
+Playwright MCP — 10 steps:
+  10 × ~2,000 image tokens  = 20,000 tokens  ≈ $0.06
+
+ptbrowse — 10 steps:
+  10 × ~200 text tokens     =  2,000 tokens  ≈ $0.006
+
+Savings per test run: ~90%
+Savings at 100 runs/day:  ~$5.40/day  →  ~$162/month
+```
+
+Accessibility tree text is 10–15x smaller than a screenshot for the same page because it omits visual styling, images, and layout noise that AI models don't need to locate elements.
+
+#### Architecture
+
+```
+ptbrowse <cmd> [args]
+    │
+    │  HTTP POST /command  (localhost, token-authenticated)
+    ▼
+ptbrowse daemon  (server.ts, Bun process, auto-started on first call)
+    │
+    │  Playwright API
+    ▼
+Chromium (headless by default, headed with PTBROWSE_HEADED=1)
+```
+
+The daemon writes its PID, port, and auth token to `~/.pocketteam/browse.json`. Subsequent `ptbrowse` calls connect to the running daemon in milliseconds. The daemon auto-restarts if it crashes.
+
+#### Command Reference
+
+**Navigation**
+
+| Command | Description |
+|---|---|
+| `ptbrowse goto <url>` | Navigate to URL, reset snapshot refs |
+| `ptbrowse back` | Go back in history |
+| `ptbrowse forward` | Go forward in history |
+| `ptbrowse reload` | Reload current page |
+
+**Snapshot**
+
+| Command | Description |
+|---|---|
+| `ptbrowse snapshot` | Full accessibility tree with `@e` refs |
+| `ptbrowse snapshot -i` | Interactive elements only (buttons, links, inputs) |
+| `ptbrowse snapshot -c` | Compact one-line format (`@e1 button "Submit"`) |
+| `ptbrowse snapshot -D` | Diff since last snapshot (shows added/removed elements) |
+
+**Interaction**
+
+| Command | Description |
+|---|---|
+| `ptbrowse click <ref>` | Click element (e.g. `@e1`) |
+| `ptbrowse fill <ref> <text>` | Fill input field (clears first) |
+| `ptbrowse type <ref> <text>` | Type keystroke-by-keystroke (for apps watching keydown) |
+| `ptbrowse select <ref> <value>` | Select dropdown option by value or label |
+| `ptbrowse key <key>` | Press keyboard key (`Enter`, `Escape`, `Tab`, `ArrowDown`…) |
+| `ptbrowse hover <ref>` | Hover element (triggers tooltips / dropdowns) |
+| `ptbrowse scroll <ref> <dir> <px>` | Scroll `up` or `down` N pixels at element |
+
+**Wait**
+
+| Command | Description |
+|---|---|
+| `ptbrowse wait text <text>` | Wait until text appears (default 10 s) |
+| `ptbrowse wait selector <css>` | Wait until CSS selector exists |
+| `ptbrowse wait idle [ms]` | Wait for network idle (default 2000 ms, non-fatal) |
+| `ptbrowse wait url <pattern>` | Wait for URL to match regex pattern |
+
+**Assertions** (exit 1 on failure — CI-friendly)
+
+| Command | Description |
+|---|---|
+| `ptbrowse assert text <text>` | Page contains text |
+| `ptbrowse assert no-text <text>` | Page does NOT contain text |
+| `ptbrowse assert visible <ref>` | Element is visible |
+| `ptbrowse assert enabled <ref>` | Element is enabled (not disabled) |
+| `ptbrowse assert url <pattern>` | Current URL matches regex |
+
+**Read**
+
+| Command | Description |
+|---|---|
+| `ptbrowse text` | Extract full page text (max 8000 chars) |
+| `ptbrowse screenshot [path]` | Save PNG (default: `~/.pocketteam/screenshots/<timestamp>.png`) |
+| `ptbrowse console` | Show captured browser console messages |
+| `ptbrowse eval <expr>` | Evaluate JS expression (requires `PTBROWSE_ALLOW_EVAL=1`) |
+
+**Meta**
+
+| Command | Description |
+|---|---|
+| `ptbrowse viewport <w> <h>` | Set viewport size (e.g. `375 812` for mobile) |
+| `ptbrowse status` | Show daemon status (port, uptime, current URL, ref count) |
+| `ptbrowse close` | Close browser and stop daemon |
+
+#### The `@e` Reference System
+
+Every `snapshot` assigns short refs (`@e1`, `@e2`, …) to all elements in the accessibility tree. These refs are stable within a snapshot session — you use them directly in interaction commands:
+
+```bash
+# Step 1: take snapshot and find the email input
+ptbrowse snapshot -i
+# Output:
+#   @e1 link "Home"
+#   @e2 textbox "Email"
+#   @e3 textbox "Password"
+#   @e4 button "Sign in"
+
+# Step 2: interact using refs — no fragile CSS selectors
+ptbrowse fill @e2 user@example.com
+ptbrowse fill @e3 hunter2
+ptbrowse click @e4
+```
+
+Refs are reset on every `goto`, `back`, `forward`, or `reload`. If a ref is used after page navigation without a new snapshot, exit code 2 is returned.
+
+#### Headed vs Headless
+
+```bash
+# Headless (default — CI and agent use)
+ptbrowse goto https://example.com
+
+# Headed (watch the browser — useful for QA debugging)
+PTBROWSE_HEADED=1 ptbrowse goto https://example.com
+```
+
+#### Exit Codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Assertion failed or element error |
+| `2` | Stale ref (page navigated — run `snapshot` again) |
+| `3` | Timeout or daemon unreachable |
+
+#### Quick Example: E2E Login Test
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+ptbrowse goto https://app.example.com/login
+ptbrowse wait selector "#login-form"
+ptbrowse snapshot -i
+
+# Refs assigned: @e1=email, @e2=password, @e3=submit button
+ptbrowse fill @e1 testuser@example.com
+ptbrowse fill @e2 supersecret
+ptbrowse click @e3
+
+# Wait for redirect to dashboard
+ptbrowse wait url "/dashboard"
+ptbrowse assert text "Welcome"
+
+echo "Login test passed"
+ptbrowse close
+```
 
 ### 10-Layer Safety Guardian
 
@@ -229,6 +409,7 @@ Each session has:
 
 - **Python 3.11+** — required
 - **[Claude Code CLI](https://docs.anthropic.com/claude-code)** — `npm install -g @anthropic-ai/claude-code`
+- **[Bun](https://bun.sh)** — required for ptbrowse (browser automation) and the Dashboard server; install with `curl -fsSL https://bun.sh/install | bash`
 - **Docker** — optional, required for `pocketteam dashboard`
 - **Telegram Bot Token** — optional, required for mobile control
 
@@ -491,8 +672,10 @@ your-project/
 | **Agents** | 12 | 0 | 32 | 5 | Role-based |
 | **Skills** | 37 | 25 | 28 | 0 | Custom |
 | **Browser Automation** | ptbrowse (10–20x cheaper) | /browse | No | No | No |
+| **Browser Test Cost** | ~$0.01/step | ~$0.10+/step | N/A | N/A | N/A |
 | **Real-time Dashboard** | 3D isometric office | No | No | No | No |
-| **Safety Layers** | 10 (runtime hooks) | 0 | 0 | 8 (broken) | None |
+| **Safety Layers** | 10 (runtime hooks) | 0 | 0 | 8 (context-only) | None |
+| **Safety Architecture** | Runtime hooks (survives compaction) | Prompt-based | Prompt-based | Prompt-based (lost on compaction) | None |
 | **Kill Switch** | < 1 second out-of-band | No | No | Missing | No |
 | **Cost Model** | Subscription ($20–$200/mo) | API tokens | API tokens | API tokens | API tokens |
 | **Telegram Integration** | Full control + approvals | No | No | No | No |
@@ -501,6 +684,20 @@ your-project/
 | **Session Persistence** | Full transcripts + artifacts | Limited | No | No | No |
 | **Audit Trail** | Every action logged | No | No | No | No |
 | **Open Source** | MIT | MIT | MIT | MIT (insecure) | MIT |
+
+> **OpenClaw footnote:** OpenClaw's 8 safety "layers" were implemented as system-prompt instructions. When Claude's context window compacted during a long session, those instructions were summarized or dropped. An agent proceeded to delete 200+ emails with no safety check triggering. This is a known failure mode of prompt-based safety — it cannot survive context compaction.
+
+### Production Safety: The Critical Difference
+
+Most agent frameworks treat safety as a conversation concern: they inject rules into the system prompt and hope the model follows them. This works until it doesn't.
+
+PocketTeam treats safety as an infrastructure concern. Every tool call — regardless of which agent makes it, regardless of context window state — passes through `.claude/settings.json` runtime hooks before execution. These hooks are loaded fresh by Claude Code on every session start and run as pre/post-tool callbacks outside the model's context. The model cannot read, modify, or reason about them.
+
+**What this means in practice:**
+- An agent 150,000 tokens into a session has the same safety guarantees as one at token 0
+- A jailbreak prompt cannot disable the hooks — they are not in the conversation
+- The kill switch (`touch .pocketteam/KILL`) is checked by a hook, not a prompt instruction
+- Budget limits, file scope, and domain allowlists enforce themselves
 
 **Key Advantages:**
 - **Most comprehensive safety** (10 layers as structural runtime hooks)
@@ -626,7 +823,12 @@ This is the ultimate proof that the system works.
 - [x] Session persistence
 - [ ] Slack integration
 - [ ] Multi-project dashboard
-- [ ] VS Code extension with embedded dashboard
+- [ ] **VS Code Extension** (Target: Q3 2026)
+  - Embedded Dashboard in VS Code Sidebar (WebView)
+  - Live agent status, event feed, cost tracking
+  - One-click Kill Switch
+  - Session management
+  - Reuses existing Dashboard WebSocket API — no new backend needed
 - [ ] Custom agent/skill marketplace
 - [ ] Auto-deployment policies (e.g., "auto-deploy if tests pass + security clean")
 
@@ -634,9 +836,10 @@ This is the ultimate proof that the system works.
 
 ## Inspired By
 
-- **[gstack](https://github.com/garrytan/gstack)** — Skills system, company hierarchy, "Boil the Lake" philosophy
-- **[Oh-My-ClaudeCode](https://github.com/oh-my-claude/oh-my-clausecode)** — Agent specialization, autopilot/ralph modes
-- **[OpenClaw](https://github.com/evals-evals/openclaw)** — Multi-agent orchestration (but we fixed the safety flaws)
+- **[gstack](https://github.com/garrytan/gstack)** — Skills system, company hierarchy, completeness-first planning philosophy
+- **[Oh-My-ClaudeCode](https://github.com/oh-my-claude/oh-my-clausecode)** — Agent specialization, autopilot/ralph workflow modes
+- **[OpenClaw](https://github.com/evals-evals/openclaw)** — Multi-agent orchestration patterns (informed our decision to use runtime hooks instead of prompt-based safety)
+- **[autoresearch](https://github.com/autoresearch/autoresearch)** — Parallel agent spawning and deep-dive research patterns
 - **[claude-hud](https://github.com/anthropics/claude-hud)** — Terminal statusline inspiration
 - **[claude-usage](https://github.com/anthropics/claude-usage)** — Token/cost tracking
 - **[Devin](https://www.devin.ai/)** — Autonomous coding agent (we scale it to teams + fix safety)
