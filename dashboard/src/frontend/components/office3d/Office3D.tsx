@@ -7,7 +7,7 @@ import { Chair3D } from "./Chair3D";
 import { Plant3D } from "./Plant3D";
 import { CoffeeMachine3D } from "./CoffeeMachine3D";
 import { Character3D } from "./Character3D";
-import { generateAvatar } from "../office/avatarGenerator";
+import { generateAvatar } from "./avatarGenerator";
 
 // ---------------------------------------------------------------------------
 // Layout constants
