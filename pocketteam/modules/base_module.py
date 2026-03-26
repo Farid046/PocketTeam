@@ -11,7 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -35,7 +35,7 @@ class BaseModule(ABC):
     can be enabled/disabled per project.
     """
 
-    def __init__(self, project_root: Path, config: Optional[ModuleConfig] = None) -> None:
+    def __init__(self, project_root: Path, config: ModuleConfig | None = None) -> None:
         self.project_root = project_root
         self.config = config or ModuleConfig(name=self.module_name)
 

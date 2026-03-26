@@ -19,12 +19,12 @@ import asyncio
 import json
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ..constants import EVENTS_FILE
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data structures
@@ -37,7 +37,7 @@ class Message:
     to_agent: str          # "*" for broadcast
     channel: str           # Named channel, e.g. "plan_ready", "review_done"
     content: Any
-    reply_to: Optional[str] = None   # message_id this replies to
+    reply_to: str | None = None   # message_id this replies to
     message_id: str = field(default_factory=lambda: f"msg-{uuid.uuid4().hex[:12]}")
     ts: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"))
 
@@ -90,7 +90,7 @@ class CoordinationHub:
         to_agent: str,
         channel: str,
         content: Any,
-        reply_to: Optional[str] = None,
+        reply_to: str | None = None,
     ) -> Message:
         """Send a message to a specific agent or broadcast (to_agent='*')."""
         msg = Message(
@@ -154,7 +154,7 @@ class CoordinationHub:
         channel: str,
         content: Any,
         timeout: float = 30.0,
-    ) -> Optional[Message]:
+    ) -> Message | None:
         """
         Send a message and wait for a reply.
         Returns the reply message, or None on timeout.
@@ -172,7 +172,7 @@ class CoordinationHub:
 
         try:
             return await asyncio.wait_for(fut, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             async with self._lock:
                 self._reply_futures.pop(msg.message_id, None)
             return None
@@ -228,7 +228,7 @@ class CoordinationHub:
             },
         )
 
-    def get_pending_handoff(self, agent_id: str) -> Optional[HandoffPackage]:
+    def get_pending_handoff(self, agent_id: str) -> HandoffPackage | None:
         """Check if there's a pending handoff for this agent."""
         for msg in self.peek_mail(agent_id):
             if msg.channel == "handoff":

@@ -22,7 +22,6 @@ import urllib.error
 import urllib.request
 import webbrowser
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
 
@@ -157,7 +156,7 @@ def _install_docker(os_type: str) -> None:
             username = get_real_username()
             console.print()
             console.print("[yellow]Docker group membership required.[/]")
-            console.print(f"  This grants effective root access via Docker.")
+            console.print("  This grants effective root access via Docker.")
             group_confirm = input(f"  Add '{username}' to docker group? (y/n) ")
             if group_confirm.lower() == "y":
                 subprocess.run(
@@ -266,7 +265,7 @@ def find_free_port(
                 return port
     console.print(f"[red]Ports {start}–{end} all in use.[/]")
     console.print(
-        f"Free one, or run: [bold]pocketteam dashboard configure --port <port>[/]"
+        "Free one, or run: [bold]pocketteam dashboard configure --port <port>[/]"
     )
     sys.exit(1)
 
@@ -566,7 +565,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
     result = subprocess.run(start_cmd, check=False)
     if result.returncode != 0:
         console.print("[red]Failed to start dashboard container.[/]")
-        console.print(f"  Check: [bold]pocketteam dashboard logs[/]")
+        console.print("  Check: [bold]pocketteam dashboard logs[/]")
         console.print(f"  Compose file: {compose_file}")
         return
 
@@ -586,7 +585,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _load_dashboard_config(project_root: Optional[Path] = None) -> tuple[PocketTeamConfig, Path]:
+def _load_dashboard_config(project_root: Path | None = None) -> tuple[PocketTeamConfig, Path]:
     """Load config and return (cfg, compose_file). Exits if dashboard not configured."""
     root = project_root or Path.cwd()
     cfg = load_config(root)
@@ -602,8 +601,16 @@ def _load_dashboard_config(project_root: Optional[Path] = None) -> tuple[PocketT
     return cfg, compose_file
 
 
+ALLOWED_COMPOSE_COMMANDS = {"docker compose", "docker-compose"}
+
+
 def _build_compose_cmd(cfg: PocketTeamConfig, compose_file: Path) -> list[str]:
     """Build the compose command prefix with context and file flag."""
+    if cfg.dashboard.compose_command not in ALLOWED_COMPOSE_COMMANDS:
+        raise ValueError(
+            f"Invalid compose_command: {cfg.dashboard.compose_command!r}. "
+            f"Allowed values: {sorted(ALLOWED_COMPOSE_COMMANDS)}"
+        )
     compose_parts = cfg.dashboard.compose_command.split()
     ctx = cfg.dashboard.docker_context
 
@@ -615,7 +622,7 @@ def _build_compose_cmd(cfg: PocketTeamConfig, compose_file: Path) -> list[str]:
         return compose_parts + ["-f", str(compose_file)]
 
 
-def dashboard_start_cmd(project_root: Optional[Path] = None) -> None:
+def dashboard_start_cmd(project_root: Path | None = None) -> None:
     """Start the dashboard container (compose up -d)."""
     root = project_root or Path.cwd()
     cfg, compose_file = _load_dashboard_config(root)
@@ -648,7 +655,7 @@ def dashboard_start_cmd(project_root: Optional[Path] = None) -> None:
         console.print(f"[yellow]Dashboard starting: {url}[/]")
 
 
-def dashboard_stop_cmd(project_root: Optional[Path] = None) -> None:
+def dashboard_stop_cmd(project_root: Path | None = None) -> None:
     """Stop the dashboard container (compose down)."""
     root = project_root or Path.cwd()
     cfg, compose_file = _load_dashboard_config(root)
@@ -659,7 +666,7 @@ def dashboard_stop_cmd(project_root: Optional[Path] = None) -> None:
     console.print("Dashboard stopped.")
 
 
-def dashboard_status_cmd(project_root: Optional[Path] = None) -> None:
+def dashboard_status_cmd(project_root: Path | None = None) -> None:
     """
     Show dashboard status: container state, URL, volume health.
     Exits with non-zero if container is not running (Errata Q7).
@@ -696,7 +703,7 @@ def dashboard_status_cmd(project_root: Optional[Path] = None) -> None:
     port = cfg.dashboard.port
     url = f"http://localhost:{port}"
 
-    console.print(f"\n[bold]Dashboard Status[/]")
+    console.print("\n[bold]Dashboard Status[/]")
     console.print(f"  Container:  {container_status}")
     console.print(f"  URL:        {url}")
     console.print(f"  Image:      {cfg.dashboard.image}:{cfg.dashboard.image_version}")
@@ -726,15 +733,15 @@ def dashboard_status_cmd(project_root: Optional[Path] = None) -> None:
 
     pocketteam_dir = Path(cfg.dashboard.project_root) / ".pocketteam"
     if pocketteam_dir.exists():
-        console.print(f"  [green].pocketteam/ exists[/]")
+        console.print("  [green].pocketteam/ exists[/]")
     else:
-        console.print(f"  [red].pocketteam/ missing — run pocketteam init[/]")
+        console.print("  [red].pocketteam/ missing — run pocketteam init[/]")
 
     if exit_code != 0:
         sys.exit(exit_code)
 
 
-def dashboard_logs_cmd(project_root: Optional[Path] = None) -> None:
+def dashboard_logs_cmd(project_root: Path | None = None) -> None:
     """Follow dashboard container logs (compose logs -f)."""
     root = project_root or Path.cwd()
     cfg, compose_file = _load_dashboard_config(root)
@@ -747,7 +754,7 @@ def dashboard_logs_cmd(project_root: Optional[Path] = None) -> None:
         pass
 
 
-def dashboard_update_cmd(project_root: Optional[Path] = None) -> None:
+def dashboard_update_cmd(project_root: Path | None = None) -> None:
     """Rebuild dashboard from local source."""
     root = project_root or Path.cwd()
     cfg = load_config(root)
@@ -761,19 +768,19 @@ def dashboard_update_cmd(project_root: Optional[Path] = None) -> None:
     # Restart container with new image
     compose_file = Path(cfg.dashboard.compose_dir) / "docker-compose.yml"
     if compose_file.exists():
-        compose_cmd = cfg.dashboard.compose_command.split()
-        subprocess.run([*compose_cmd, "-f", str(compose_file), "down"], check=False)
-        subprocess.run([*compose_cmd, "-f", str(compose_file), "up", "-d"], check=True)
+        cmd = _build_compose_cmd(cfg, compose_file)
+        subprocess.run(cmd + ["down"], check=False)
+        subprocess.run(cmd + ["up", "-d"], check=True)
         console.print("[green]Dashboard updated and restarted.[/]")
     else:
         console.print("[yellow]No compose file found. Run: pocketteam init[/]")
 
 
 def dashboard_configure_cmd(
-    project_root: Optional[Path] = None,
-    port: Optional[int] = None,
-    domain: Optional[str] = None,
-    project_root_override: Optional[str] = None,
+    project_root: Path | None = None,
+    port: int | None = None,
+    domain: str | None = None,
+    project_root_override: str | None = None,
     reset: bool = False,
 ) -> None:
     """
@@ -857,11 +864,11 @@ def dashboard_configure_cmd(
     subprocess.run(compose_cmd + ["up", "-d"], check=False)
 
     wait_for_healthy(cfg.dashboard.port)
-    console.print(f"[green]Dashboard reconfigured and restarted.[/]")
+    console.print("[green]Dashboard reconfigured and restarted.[/]")
     console.print(f"  URL: http://localhost:{cfg.dashboard.port}")
 
 
-def dashboard_install_cmd(project_root: Optional[Path] = None) -> None:
+def dashboard_install_cmd(project_root: Path | None = None) -> None:
     """
     Install dashboard for users who ran `pocketteam init --no-dashboard`.
     Runs the full dashboard setup flow. (Errata Q5)

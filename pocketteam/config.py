@@ -8,7 +8,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -107,7 +106,7 @@ class PocketTeamConfig:
     project_root: Path = field(default_factory=Path.cwd, repr=False)
 
 
-def load_config(project_root: Optional[Path] = None) -> PocketTeamConfig:
+def load_config(project_root: Path | None = None) -> PocketTeamConfig:
     """Load config from .pocketteam/config.yaml in the given project root."""
     root = project_root or Path.cwd()
     config_path = root / CONFIG_FILE
@@ -281,8 +280,11 @@ def _load_dotenv(project_root: Path) -> None:
 
 
 def _resolve_env(value: str) -> str:
-    """Resolve ${ENV_VAR} references in config values."""
+    """Resolve ${ENV_VAR} and $ENV_VAR references in config values."""
     if value.startswith("${") and value.endswith("}"):
         env_var = value[2:-1]
+        return os.environ.get(env_var, "")
+    elif value.startswith("$") and not value.startswith("${"):
+        env_var = value[1:]
         return os.environ.get(env_var, "")
     return value

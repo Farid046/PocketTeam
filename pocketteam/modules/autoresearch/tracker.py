@@ -11,7 +11,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -43,7 +43,7 @@ class Experiment:
     created_at: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"))
 
     @property
-    def best_result(self) -> Optional[dict]:
+    def best_result(self) -> dict | None:
         """Get the best result based on maximize/minimize."""
         if not self.results:
             return None
@@ -112,7 +112,7 @@ class ExperimentTracker:
         experiment_name: str,
         variation: str,
         metric_value: float,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> bool:
         """
         Record a result. Returns True if experiment is still active.
@@ -137,7 +137,7 @@ class ExperimentTracker:
 
         return not experiment.is_complete
 
-    def get_experiment(self, name: str) -> Optional[Experiment]:
+    def get_experiment(self, name: str) -> Experiment | None:
         """Get an experiment by name (from memory or disk)."""
         if name in self._experiments:
             return self._experiments[name]

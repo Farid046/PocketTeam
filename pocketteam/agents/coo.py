@@ -10,8 +10,6 @@ delegates via Pipeline or direct spawn_subagent() calls.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from .base import AgentContext, AgentResult, BaseAgent
 
 
@@ -33,7 +31,7 @@ class COOAgent(BaseAgent):
     def _get_agent_id(self) -> str:
         return "coo"
 
-    async def _run(self, task: str, context: Optional[AgentContext]) -> AgentResult:
+    async def _run(self, task: str, context: AgentContext | None) -> AgentResult:
         """
         Run the COO reasoning pass.
 

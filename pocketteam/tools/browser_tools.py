@@ -18,7 +18,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -27,7 +27,7 @@ class BrowserResult:
     success: bool
     output: str = ""
     screenshots: list[Path] = field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
 
 
@@ -71,7 +71,7 @@ class BrowserTool:
     async def screenshot(
         self,
         url: str,
-        filename: Optional[str] = None,
+        filename: str | None = None,
     ) -> BrowserResult:
         """Take a screenshot of a URL. Returns path to the saved file."""
         if not _playwright_available():
@@ -107,7 +107,7 @@ class BrowserTool:
 
     async def check_page_loads(
         self,
-        urls: Optional[list[str]] = None,
+        urls: list[str] | None = None,
         timeout_ms: int = 10_000,
     ) -> BrowserResult:
         """
@@ -300,7 +300,7 @@ class BrowserTool:
             )
             try:
                 stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.communicate()
                 return BrowserResult(

@@ -17,11 +17,19 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from .config import PocketTeamConfig, TelegramConfig, AuthConfig, save_config
+from .config import PocketTeamConfig, TelegramConfig, save_config
 from .constants import (
-    AGENTS_DIR, AUDIT_DIR, CLAUDE_DIR, CONFIG_FILE, EVENTS_FILE,
-    INCIDENTS_DIR, LEARNINGS_DIR, PLANS_DIR, POCKETTEAM_DIR,
-    REVIEWS_DIR, SESSIONS_DIR, SKILLS_DIR,
+    AGENTS_DIR,
+    AUDIT_DIR,
+    CLAUDE_DIR,
+    EVENTS_FILE,
+    INCIDENTS_DIR,
+    LEARNINGS_DIR,
+    PLANS_DIR,
+    POCKETTEAM_DIR,
+    REVIEWS_DIR,
+    SESSIONS_DIR,
+    SKILLS_DIR,
 )
 
 console = Console()
@@ -276,7 +284,7 @@ async def _interview(
     if not accept_defaults:
         if tg_configured:
             change_tg = Confirm.ask(
-                f"  Telegram is configured. Reconfigure?",
+                "  Telegram is configured. Reconfigure?",
                 default=False,
             )
             if not change_tg:
@@ -1056,7 +1064,7 @@ async def run_uninstall(keep_artifacts: bool) -> None:
     pt_dir = project_root / POCKETTEAM_DIR
     if pt_dir.exists():
         if keep_artifacts:
-            console.print(f"  [dim]Keeping .pocketteam/ artifacts (--keep-artifacts)[/]")
+            console.print("  [dim]Keeping .pocketteam/ artifacts (--keep-artifacts)[/]")
         else:
             confirmed = Confirm.ask(
                 f"Delete [bold]{pt_dir}[/] (contains plans, audits, learnings)?",

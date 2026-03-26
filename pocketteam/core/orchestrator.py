@@ -5,24 +5,25 @@ Connects the pipeline to Telegram channels, loads config, starts monitoring.
 
 from __future__ import annotations
 
-import asyncio
 import json
+import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
 
-from ..config import PocketTeamConfig, load_config
 from ..constants import EVENTS_FILE
 from .context import SharedContext
 from .pipeline import Pipeline
 
+logger = logging.getLogger(__name__)
+
 
 async def run_task(
     task_description: str,
-    project_root: Optional[Path] = None,
+    project_root: Path | None = None,
     skip_product: bool = True,
-    on_status: Optional[Callable] = None,
-    on_approval: Optional[Callable] = None,
+    on_status: Callable | None = None,
+    on_approval: Callable | None = None,
 ) -> bool:
     """
     Run a task through the full pipeline.
@@ -38,7 +39,6 @@ async def run_task(
         True if pipeline completed successfully
     """
     root = project_root or Path.cwd()
-    cfg = load_config(root)
 
     context = SharedContext.create_new(
         task_description=task_description,
@@ -65,13 +65,14 @@ async def run_task(
     return success
 
 
-async def run_retro(days: int = 7, project_root: Optional[Path] = None) -> None:
+async def run_retro(days: int = 7, project_root: Path | None = None) -> None:
     """
     Run a retrospective: analyze activity, agent learnings, bottlenecks.
     """
+    import json
+
     from rich.console import Console
     from rich.table import Table
-    import json
 
     console = Console()
     root = project_root or Path.cwd()
@@ -97,7 +98,7 @@ async def run_retro(days: int = 7, project_root: Optional[Path] = None) -> None:
                         str(p.get("count", 0)),
                     )
             except Exception:
-                pass
+                logger.debug("Failed to parse learnings file %s", yaml_file, exc_info=True)
         console.print(table)
 
     # Audit stats
@@ -106,7 +107,7 @@ async def run_retro(days: int = 7, project_root: Optional[Path] = None) -> None:
         from ..safety.audit_log import AuditLog
         audit = AuditLog(root)
         stats = audit.get_stats()
-        console.print(f"\n[bold]Safety Stats (today)[/]")
+        console.print("\n[bold]Safety Stats (today)[/]")
         console.print(f"  Total checks: {stats['total']}")
         console.print(f"  Allowed: {stats['allowed']}")
         console.print(f"  Denied: {stats['denied']}")
@@ -126,10 +127,10 @@ async def run_retro(days: int = 7, project_root: Optional[Path] = None) -> None:
                 if e.get("status") == "awake":
                     agent_activity[ag] = agent_activity.get(ag, 0) + 1
             except Exception:
-                pass
+                logger.debug("Failed to parse event stream line", exc_info=True)
 
         if agent_activity:
-            console.print(f"\n[bold]Agent Activity[/]")
+            console.print("\n[bold]Agent Activity[/]")
             for agent, count in sorted(agent_activity.items(), key=lambda x: -x[1]):
                 console.print(f"  {agent:15} {count} tasks")
 
@@ -154,4 +155,4 @@ def _log_event(
         with open(events_path, "a") as f:
             f.write(json.dumps(event) + "\n")
     except Exception:
-        pass
+        logger.debug("Event logging failed (non-critical)", exc_info=True)

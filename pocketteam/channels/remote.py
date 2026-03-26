@@ -10,9 +10,7 @@ Wraps `claude --remote-control` and `claude --resume` for:
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
-from typing import Optional
 
 
 class RemoteSession:
@@ -25,12 +23,12 @@ class RemoteSession:
     - Telegram (via TelegramChannel routing)
     """
 
-    def __init__(self, project_root: Path, session_id: Optional[str] = None) -> None:
+    def __init__(self, project_root: Path, session_id: str | None = None) -> None:
         self.project_root = project_root
         self.session_id = session_id
-        self._process: Optional[asyncio.subprocess.Process] = None
+        self._process: asyncio.subprocess.Process | None = None
 
-    async def start(self, task: Optional[str] = None) -> bool:
+    async def start(self, task: str | None = None) -> bool:
         """
         Start a new remote Claude Code session.
         Returns True if session started successfully.
@@ -51,7 +49,7 @@ class RemoteSession:
         except FileNotFoundError:
             return False
 
-    async def resume(self, session_id: Optional[str] = None) -> bool:
+    async def resume(self, session_id: str | None = None) -> bool:
         """
         Resume an existing session.
         Uses stored session_id or the provided one.
@@ -74,7 +72,7 @@ class RemoteSession:
         except FileNotFoundError:
             return False
 
-    async def send_message(self, message: str) -> Optional[str]:
+    async def send_message(self, message: str) -> str | None:
         """
         Send a message to the running session.
         Returns the response, or None if session isn't running.
@@ -101,7 +99,7 @@ class RemoteSession:
             self._process.terminate()
             try:
                 await asyncio.wait_for(self._process.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._process.kill()
 
     @property

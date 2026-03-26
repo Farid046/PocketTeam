@@ -15,21 +15,21 @@ Flow:
 
 from __future__ import annotations
 
-import asyncio
-import time
+import logging
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from ..config import PocketTeamConfig, load_config
 from ..constants import MAX_AUTO_FIX_ATTEMPTS
 from .escalation import EscalationManager, Incident
 
+logger = logging.getLogger(__name__)
+
 
 async def handle_health_failure(
     health_url: str,
     http_status: str,
-    project_root: Optional[Path] = None,
+    project_root: Path | None = None,
 ) -> dict:
     """
     Called by GitHub Actions when health check fails.
@@ -88,7 +88,7 @@ async def handle_health_failure(
 async def handle_log_anomaly(
     error_summary: str,
     error_count: int,
-    project_root: Optional[Path] = None,
+    project_root: Path | None = None,
 ) -> dict:
     """
     Called when log analysis detects anomalies.
@@ -99,7 +99,7 @@ async def handle_log_anomaly(
 
     incident_id = f"log-{uuid.uuid4().hex[:8]}"
     escalation = EscalationManager(root)
-    incident = escalation.create_incident(
+    escalation.create_incident(
         incident_id=incident_id,
         severity="medium",
         description=f"Log anomaly: {error_count} errors detected. {error_summary}",
@@ -195,8 +195,8 @@ async def _run_fix_pipeline(
     Steps: Investigator → Engineer → QA → verify.
     """
     try:
-        from ..agents.investigator import InvestigatorAgent
         from ..agents.engineer import EngineerAgent
+        from ..agents.investigator import InvestigatorAgent
         from ..agents.qa import QAAgent
 
         # Step 1: Investigator diagnoses
@@ -244,4 +244,4 @@ async def _notify_telegram(bot_token: str, chat_id: str, message: str) -> None:
                 "parse_mode": "HTML",
             })
     except Exception:
-        pass
+        logger.debug("Telegram notification failed in healer", exc_info=True)

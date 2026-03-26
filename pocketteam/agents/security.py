@@ -18,8 +18,6 @@ import json
 import re
 import shutil
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional
 
 from .base import AgentContext, AgentResult, BaseAgent
 
@@ -51,7 +49,7 @@ class SecurityAgent(BaseAgent):
     def _get_agent_id(self) -> str:
         return "security"
 
-    async def _run(self, task: str, context: Optional[AgentContext]) -> AgentResult:
+    async def _run(self, task: str, context: AgentContext | None) -> AgentResult:
         result = await self._run_with_sdk(task)
         if result.success and result.output:
             result.artifacts["security_report"] = result.output
@@ -126,7 +124,7 @@ class SecurityAgent(BaseAgent):
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return DependencyScanResult(
                 success=False, output="pip-audit timed out", scanner="pip-audit"
             )
@@ -173,7 +171,7 @@ class SecurityAgent(BaseAgent):
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
-        except (asyncio.TimeoutError, FileNotFoundError) as exc:
+        except (TimeoutError, FileNotFoundError) as exc:
             return DependencyScanResult(
                 success=False, output=str(exc), scanner="npm-audit"
             )
@@ -207,7 +205,7 @@ class SecurityAgent(BaseAgent):
         Not exhaustive — just a quick sanity check when pip-audit is absent.
         """
         # Known packages with serious historical CVEs
-        KNOWN_DANGEROUS = {
+        known_dangerous = {
             "pyyaml<6.0": "CVE-2020-14343 (YAML deserialization RCE)",
             "pillow<10.0.1": "CVE-2023-50447 (heap overflow)",
             "requests<2.32.0": "CVE-2024-35195 (SSRF via proxy)",
@@ -227,7 +225,7 @@ class SecurityAgent(BaseAgent):
 
         content = req_file.read_text()
         warnings: list[str] = []
-        for pattern, cve in KNOWN_DANGEROUS.items():
+        for pattern, cve in known_dangerous.items():
             pkg = pattern.split("<")[0]
             if re.search(rf"^{re.escape(pkg)}\b", content, re.MULTILINE | re.IGNORECASE):
                 warnings.append(f"WARNING: {pkg} may be vulnerable — {cve}")

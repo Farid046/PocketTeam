@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -53,7 +53,7 @@ class SharedContext:
         task_id: str,
         task_description: str,
         project_root: Path,
-        plan_id: Optional[str] = None,
+        plan_id: str | None = None,
     ) -> None:
         self.task_id = task_id
         self.task_description = task_description
@@ -92,7 +92,7 @@ class SharedContext:
         self._persist()
         return artifact
 
-    def get_artifact(self, name: str) -> Optional[Artifact]:
+    def get_artifact(self, name: str) -> Artifact | None:
         """Get an artifact by name."""
         return self._artifacts.get(name)
 
@@ -100,12 +100,12 @@ class SharedContext:
         """Get all artifacts of a given type."""
         return [a for a in self._artifacts.values() if a.artifact_type == artifact_type]
 
-    def get_latest_plan(self) -> Optional[Artifact]:
+    def get_latest_plan(self) -> Artifact | None:
         """Get the most recent plan artifact."""
         plans = self.get_artifacts_by_type("plan")
         return plans[-1] if plans else None
 
-    def get_latest_review(self) -> Optional[Artifact]:
+    def get_latest_review(self) -> Artifact | None:
         """Get the most recent review artifact."""
         reviews = self.get_artifacts_by_type("review")
         return reviews[-1] if reviews else None
@@ -182,7 +182,7 @@ class SharedContext:
             pass  # Context persistence must never crash the pipeline
 
     @classmethod
-    def load(cls, task_id: str, project_root: Path) -> Optional["SharedContext"]:
+    def load(cls, task_id: str, project_root: Path) -> SharedContext | None:
         """Load a previously persisted context."""
         ctx_path = project_root / ".pocketteam/sessions" / f"{task_id}.json"
         if not ctx_path.exists():
@@ -220,7 +220,7 @@ class SharedContext:
         cls,
         task_description: str,
         project_root: Path,
-    ) -> "SharedContext":
+    ) -> SharedContext:
         """Create a fresh context for a new task."""
         task_id = f"task-{uuid.uuid4().hex[:8]}"
         return cls(

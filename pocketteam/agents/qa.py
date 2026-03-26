@@ -12,9 +12,6 @@ Two modes:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
-
 from .base import AgentContext, AgentResult, BaseAgent
 
 
@@ -22,7 +19,7 @@ class QAAgent(BaseAgent):
     def _get_agent_id(self) -> str:
         return "qa"
 
-    async def _run(self, task: str, context: Optional[AgentContext]) -> AgentResult:
+    async def _run(self, task: str, context: AgentContext | None) -> AgentResult:
         result = await self._run_with_sdk(task)
         if result.success and result.output:
             result.artifacts["qa_report"] = result.output
@@ -32,7 +29,7 @@ class QAAgent(BaseAgent):
 
     async def run_tests_now(
         self,
-        args: Optional[list[str]] = None,
+        args: list[str] | None = None,
         timeout: int = 300,
     ) -> AgentResult:
         """
