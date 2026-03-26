@@ -56,28 +56,10 @@ export const useStore = create<DashboardStore>((set, get) => ({
 
   setSnapshot: (snapshot) => {
     const prev = get();
-    const events = [...prev.events];
-
-    // Generate COO activity event if the lastToolCall changed and is not Idle
-    if (
-      snapshot.cooActivity?.lastToolCall &&
-      snapshot.cooActivity.lastToolCall !== prev.cooActivity?.lastToolCall &&
-      snapshot.cooActivity.lastToolCall !== "Idle"
-    ) {
-      events.push({
-        ts: new Date().toISOString(),
-        agent: "COO",
-        type: "tool",
-        tool: snapshot.cooActivity.lastToolCall.split(":")[0] ?? "",
-        status: "working",
-        action: snapshot.cooActivity.lastToolCall,
-      });
-      if (events.length > 200) events.splice(0, events.length - 200);
-    }
 
     return set({
       agents: snapshot.agents,
-      events,
+      events: prev.events,
       auditStats: snapshot.auditStats,
       auditEntries: snapshot.auditEntries ?? prev.auditEntries,
       killSwitch: snapshot.killSwitch,

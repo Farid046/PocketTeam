@@ -6,7 +6,7 @@ import { SubagentReader } from "../readers/SubagentReader.js";
 import { EventStreamReader } from "../readers/EventStreamReader.js";
 import { AuditLogReader } from "../readers/AuditLogReader.js";
 import { KillSwitchReader } from "../readers/KillSwitchReader.js";
-import { redactPayload, stripSensitiveContent } from "../redaction.js";
+import { redactPayloadFull } from "../redaction.js";
 import {
   AgentState,
   PocketTeamEvent,
@@ -211,7 +211,7 @@ export class WebSocketHub {
   private emitToAllClients(msg: WsMessage): void {
     if (this.clients.size === 0) return;
 
-    const safePayload = redactPayload(stripSensitiveContent(msg.payload));
+    const safePayload = redactPayloadFull(msg.payload);
     const safeMsg: WsMessage = { type: msg.type, payload: safePayload };
     const serialized = JSON.stringify(safeMsg);
 
@@ -232,7 +232,7 @@ export class WebSocketHub {
   // Single-client emission — used for the initial snapshot.
   // Applies the same redaction gate as emitToAllClients.
   private emitToClient(ws: WebSocket, msg: WsMessage): void {
-    const safePayload = redactPayload(stripSensitiveContent(msg.payload));
+    const safePayload = redactPayloadFull(msg.payload);
     const safeMsg: WsMessage = { type: msg.type, payload: safePayload };
 
     if (ws.readyState === WebSocket.OPEN) {

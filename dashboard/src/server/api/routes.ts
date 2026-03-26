@@ -5,7 +5,7 @@ import { EventStreamReader } from "../readers/EventStreamReader.js";
 import { AuditLogReader } from "../readers/AuditLogReader.js";
 import { KillSwitchReader } from "../readers/KillSwitchReader.js";
 import { UsageReader } from "../readers/UsageReader.js";
-import { redactPayload, stripSensitiveContent } from "../redaction.js";
+import { redactPayloadFull } from "../redaction.js";
 
 export interface RouteReaders {
   subagentReader: SubagentReader;
@@ -18,7 +18,7 @@ export interface RouteReaders {
 // Apply both redaction layers and send as JSON.
 // All REST responses MUST go through this function.
 function sendRedacted(res: Response, data: unknown): void {
-  const safe = redactPayload(stripSensitiveContent(data));
+  const safe = redactPayloadFull(data);
   res.json(safe);
 }
 

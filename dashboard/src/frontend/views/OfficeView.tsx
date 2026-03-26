@@ -3,9 +3,12 @@ import type { AgentState, CooActivity } from "../types";
 import { useStore } from "../store/useStore";
 import { EventFeed } from "../components/EventFeed";
 import { EmptyState } from "./EmptyState";
-import { Office3D } from "../components/office3d/Office3D";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import type { PocketTeamEvent } from "../types";
+
+const Office3D = React.lazy(() =>
+  import("../components/office3d/Office3D").then((m) => ({ default: m.Office3D }))
+);
 
 interface Props {
   agents: AgentState[];
@@ -69,7 +72,13 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
               3D view failed to initialize. WebGL may not be available.
             </div>
           }>
-            <Office3D agents={normalizedAgents} />
+            <React.Suspense fallback={
+              <div className="flex items-center justify-center h-full text-gray-500 text-sm font-mono">
+                Loading 3D office...
+              </div>
+            }>
+              <Office3D agents={normalizedAgents} />
+            </React.Suspense>
           </ErrorBoundary>
         )}
       </div>
