@@ -70,9 +70,9 @@ export function SafetyView({ auditStats, auditEntries }: Props): React.ReactElem
   const hasData = auditStats !== null && auditStats.total > 0;
 
   return (
-    <div className="flex gap-4 h-full">
-      {/* Left column — summary */}
-      <div className="w-64 flex-shrink-0 flex flex-col gap-4">
+    <div className="flex flex-col md:flex-row gap-4 h-full">
+      {/* Summary panel — full width on mobile, fixed sidebar on desktop */}
+      <div className="w-full md:w-64 flex-shrink-0 flex flex-col gap-4">
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
             Audit Summary
@@ -139,7 +139,9 @@ export function SafetyView({ auditStats, auditEntries }: Props): React.ReactElem
         {criticalAlerts.length > 0 && (
           <div className="bg-red-950/40 border border-red-900 rounded-lg p-3">
             <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">
-              Denied ({criticalAlerts.length})
+              {criticalAlerts.length <= 5
+                ? `Denied (${criticalAlerts.length})`
+                : `Denied (showing 5 of ${criticalAlerts.length})`}
             </h3>
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
               {criticalAlerts.slice(-5).reverse().map((entry, i) => (
@@ -177,7 +179,7 @@ export function SafetyView({ auditStats, auditEntries }: Props): React.ReactElem
                   <th className="text-left px-3 py-2 text-gray-500 font-medium w-20">Time</th>
                   <th className="text-left px-3 py-2 text-gray-500 font-medium w-28">Agent</th>
                   <th className="text-left px-3 py-2 text-gray-500 font-medium w-32">Tool</th>
-                  <th className="text-left px-3 py-2 text-gray-500 font-medium w-36">Decision</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium w-48">Decision</th>
                   <th className="text-left px-3 py-2 text-gray-500 font-medium">Reason</th>
                 </tr>
               </thead>

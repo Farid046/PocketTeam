@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useState } from "react";
 import type { PocketTeamEvent } from "../types";
 import { ROLE_COLORS } from "../constants";
 
@@ -8,6 +8,26 @@ function getRoleColor(role: string): string {
     if (normalized.includes(key)) {
       return ROLE_COLORS[key];
     }
+  }
+  return "#6B7280";
+}
+
+const TOOL_COLORS: Record<string, string> = {
+  Read: "#60A5FA",
+  Edit: "#FBBF24",
+  Write: "#34D399",
+  Bash: "#F97316",
+  Grep: "#A78BFA",
+  Glob: "#A78BFA",
+  Agent: "#EC4899",
+  WebFetch: "#06B6D4",
+  WebSearch: "#06B6D4",
+};
+
+function getToolColor(tool: string): string {
+  if (!tool) return "#6B7280";
+  for (const [key, color] of Object.entries(TOOL_COLORS)) {
+    if (tool.toLowerCase().includes(key.toLowerCase())) return color;
   }
   return "#6B7280";
 }
@@ -26,15 +46,30 @@ interface Props {
   events: PocketTeamEvent[];
 }
 
-const MAX_EVENTS = 20;
+const MAX_EVENTS = 50;
+
+function getTypeIndicatorColor(type: string, tool: string): string {
+  switch (type) {
+    case "spawn":
+      return "#22D3EE"; // cyan
+    case "status":
+      return "#FBBF24"; // yellow
+    case "complete":
+      return "#6B7280"; // gray
+    case "tool":
+      return getToolColor(tool);
+    default:
+      return "#6B7280";
+  }
+}
 
 export function EventFeed({ events }: Props): React.ReactElement {
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const recent = events.slice(-MAX_EVENTS);
+  const recent = events.slice(-MAX_EVENTS).reverse();
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [events.length]);
+  function toggleExpand(index: number): void {
+    setExpandedIndex((prev) => (prev === index ? null : index));
+  }
 
   return (
     <aside className="flex flex-col h-full bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
@@ -43,30 +78,60 @@ export function EventFeed({ events }: Props): React.ReactElement {
           Event Feed
         </h2>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
         {recent.length === 0 ? (
           <p className="text-xs text-gray-600 text-center mt-4">No events yet</p>
         ) : (
           recent.map((evt, i) => {
-            const color = getRoleColor(evt.agent);
+            const roleColor = getRoleColor(evt.agent);
+            const dotColor = getTypeIndicatorColor(evt.type, evt.tool);
+            const isExpanded = expandedIndex === i;
+            const isExpandable = Boolean(evt.action || evt.tool);
             return (
               <div
                 key={`${evt.ts}-${evt.agent}-${evt.tool}-${i}`}
-                className="flex flex-col gap-0.5 p-1.5 rounded bg-gray-950/60 border border-gray-800/50"
+                className={`flex flex-col gap-1 p-2 rounded bg-gray-950/60 border border-gray-800/50 ${
+                  isExpandable ? "cursor-pointer hover:border-gray-700 hover:bg-gray-900/60" : ""
+                }`}
+                onClick={isExpandable ? () => toggleExpand(i) : undefined}
+                title={isExpandable && !isExpanded ? (evt.action || evt.tool) : undefined}
               >
-                <div className="flex items-center justify-between">
-                  <span
-                    className="text-xs font-medium truncate max-w-[120px]"
-                    style={{ color }}
-                  >
-                    {evt.agent || "unknown"}
-                  </span>
-                  <span className="text-xs text-gray-600 flex-shrink-0">
-                    {relativeTime(evt.ts)}
-                  </span>
+                <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className="flex-shrink-0 w-2 h-2 rounded-full"
+                      style={{ backgroundColor: dotColor }}
+                    />
+                    <span
+                      className="text-xs font-medium truncate"
+                      style={{ color: roleColor }}
+                    >
+                      {evt.agent || "unknown"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-xs text-gray-600">
+                      {relativeTime(evt.ts)}
+                    </span>
+                    {isExpandable && (
+                      <span className="text-gray-700 text-xs leading-none select-none">
+                        {isExpanded ? "\u25B4" : "\u25BE"}
+                      </span>
+                    )}
+                  </div>
                 </div>
+                {evt.action && (
+                  <span
+                    className={`text-xs text-gray-500 pl-3.5 ${isExpanded ? "whitespace-pre-wrap break-words" : "truncate"}`}
+                  >
+                    {evt.action}
+                  </span>
+                )}
                 {evt.tool && (
-                  <span className="text-xs text-gray-500 truncate">
+                  <span
+                    className={`text-xs pl-3.5 ${isExpanded ? "whitespace-pre-wrap break-words" : "truncate"}`}
+                    style={{ color: getToolColor(evt.tool) }}
+                  >
                     {evt.tool}
                   </span>
                 )}
@@ -74,7 +139,6 @@ export function EventFeed({ events }: Props): React.ReactElement {
             );
           })
         )}
-        <div ref={bottomRef} />
       </div>
     </aside>
   );

@@ -1,8 +1,10 @@
 import React from "react";
-import type { AgentState } from "../types";
+import type { AgentState, CooActivity } from "../types";
+import { useStore } from "../store/useStore";
 import { EventFeed } from "../components/EventFeed";
 import { EmptyState } from "./EmptyState";
-import { FloorPlan } from "../components/office/FloorPlan";
+import { Office3D } from "../components/office3d/Office3D";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import type { PocketTeamEvent } from "../types";
 
 interface Props {
@@ -11,6 +13,8 @@ interface Props {
 }
 
 export function OfficeView({ agents, events }: Props): React.ReactElement {
+  const cooActivity = useStore((s) => s.cooActivity);
+
   const agentsByRole = new Map<string, AgentState>();
   for (const agent of agents) {
     const role = agent.role.toLowerCase();
@@ -24,24 +28,29 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
     (a) => a.status === "working" || a.status === "done"
   );
 
-  // COO is the main session (parent) — always active when subagents exist
+  // COO is the main session — use real activity from main session JSONL
   if (hasAnyActive && !agentsByRole.has("coo")) {
-    // COO is "working" when the SESSION is active (parent JSONL being written)
-    // not just when subagents are working — COO works between agent spawns too
-    const sessionIsActive = agents.some((a) => a.sessionActive);
-    const cooStatus = sessionIsActive ? "working" : "done";
+    const anySubagentWorking = agents.some((a) => a.status === "working");
+    // COO is "working" when main session JSONL written in last 60s OR a subagent is working
+    const cooIsActive = (cooActivity?.isActive ?? false) || anySubagentWorking;
+    const cooStatus = cooIsActive ? "working" : "done";
+    const zeroTokens = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
+
     agentsByRole.set("coo", {
       id: "coo-main-session",
       role: "coo",
       agentType: "orchestrator",
-      description: "Orchestrating tasks, delegating to agents",
+      description: cooActivity?.lastToolCall ?? "Idle",
       status: cooStatus,
       startedAt: agents[0]?.startedAt ?? new Date().toISOString(),
-      lastActivity: new Date().toISOString(),
-      toolCallCount: agents.length,
-      messageCount: 0,
+      lastActivity: cooActivity?.lastActivity ?? new Date().toISOString(),
+      toolCallCount: cooActivity?.toolCallCount ?? 0,
+      messageCount: cooActivity?.messageCount ?? 0,
       sessionId: agents[0]?.sessionId ?? "",
-      sessionActive: agents.some((a) => a.sessionActive),
+      sessionActive: cooActivity?.isActive ?? false,
+      tokenUsage: cooActivity?.tokenUsage ?? zeroTokens,
+      model: cooActivity?.model ?? "",
+      gitBranch: cooActivity?.gitBranch ?? "",
     });
   }
 
@@ -49,18 +58,24 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
   const normalizedAgents = Array.from(agentsByRole.values());
 
   return (
-    <div className="flex gap-4 h-full">
-      {/* Main office floor plan */}
-      <div className="flex-1 min-w-0" style={{ minHeight: "400px" }}>
+    <div className="flex flex-col md:flex-row gap-2 flex-1 min-h-0 h-full">
+      {/* Main 3D office — fills all available space */}
+      <div className="flex-1 min-w-0 min-h-0 h-full">
         {!hasAnyActive ? (
           <EmptyState agents={agents} />
         ) : (
-          <FloorPlan agents={normalizedAgents} events={events} />
+          <ErrorBoundary fallback={
+            <div className="flex items-center justify-center h-full text-red-400 text-sm font-mono p-4">
+              3D view failed to initialize. WebGL may not be available.
+            </div>
+          }>
+            <Office3D agents={normalizedAgents} />
+          </ErrorBoundary>
         )}
       </div>
 
-      {/* Right sidebar — event feed */}
-      <div className="w-56 flex-shrink-0 h-full" style={{ minHeight: "400px" }}>
+      {/* Event feed — full width on mobile (max 40vh), fixed sidebar on desktop */}
+      <div className="w-full md:w-64 flex-shrink-0 min-h-0 max-h-[40vh] md:max-h-none">
         <EventFeed events={events} />
       </div>
     </div>
