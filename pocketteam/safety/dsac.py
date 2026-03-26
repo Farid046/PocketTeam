@@ -22,9 +22,8 @@ import secrets
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
 
-from ..constants import DSAC_APPROVAL_TOKEN_TTL, DSAC_BATCH_PAUSE, DSAC_MAX_BATCH_SIZE
+from ..constants import DSAC_APPROVAL_TOKEN_TTL, DSAC_MAX_BATCH_SIZE
 
 
 @dataclass
@@ -41,20 +40,20 @@ class DryRunPreview:
     def to_human_readable(self) -> str:
         """Format for display to CEO."""
         lines = [
-            f"⚠️  DESTRUCTIVE OPERATION PREVIEW",
-            f"",
+            "⚠️  DESTRUCTIVE OPERATION PREVIEW",
+            "",
             f"Operation: {self.operation}",
             f"Tool: {self.tool_name}",
             f"Items affected: {self.item_count}",
             f"Reversible: {'✅ Yes' if self.is_reversible else '❌ No'}",
-            f"",
+            "",
             f"Scope ({min(self.item_count, 10)} of {self.item_count} shown):",
         ]
         for item in self.scope[:10]:
             lines.append(f"  - {item}")
         if self.item_count > 10:
             lines.append(f"  ... and {self.item_count - 10} more")
-        lines.append(f"")
+        lines.append("")
         lines.append(f"Preview hash: {self.preview_hash[:12]}...")
         return "\n".join(lines)
 

@@ -7,7 +7,6 @@ A planner cannot write files. A monitor cannot make destructive changes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from ..constants import AGENT_ALLOWED_TOOLS
 
@@ -125,16 +124,6 @@ def check_agent_allowlist(agent_id: str, tool_name: str) -> AllowlistResult:
 
     # Check if tool is in allowlist
     if tool_name in allowed_tools:
-        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
-
-    # Agent-specific tool permissions
-    if agent_id == "qa" and tool_name in ("browser_tools", "playwright"):
-        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
-
-    if agent_id == "devops" and tool_name in ("deploy_tools", "health_check"):
-        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
-
-    if agent_id == "monitor" and tool_name in ("health_check",):
         return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
 
     # TodoWrite/TodoRead: allowed for all agents (task tracking)

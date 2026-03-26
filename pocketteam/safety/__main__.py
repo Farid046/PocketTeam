@@ -14,8 +14,8 @@ mode = sys.argv[1] if len(sys.argv) > 1 else "pre"
 try:
     hook_input = json.loads(sys.stdin.read())
 except (json.JSONDecodeError, EOFError):
-    print(json.dumps({"allow": True, "reason": "Could not parse hook input"}))
-    sys.exit(0)
+    print(json.dumps({"allow": False, "reason": "Malformed hook input — cannot verify safety"}), file=sys.stderr)
+    sys.exit(1)
 
 tool_name = hook_input.get("tool_name", hook_input.get("name", ""))
 tool_input = hook_input.get("tool_input", hook_input.get("input", {}))

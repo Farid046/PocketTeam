@@ -17,16 +17,17 @@ Three ways to activate:
 from __future__ import annotations
 
 import asyncio
-import os
-import signal
+import logging
 import subprocess
 import threading
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
 
 from ..constants import KILL_SWITCH_CHECK_INTERVAL, KILL_SWITCH_FILE
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -47,14 +48,14 @@ class KillSwitch:
     def __init__(
         self,
         project_root: Path,
-        on_kill: Optional[Callable[[KillSwitchEvent], None]] = None,
+        on_kill: Callable[[KillSwitchEvent], None] | None = None,
     ) -> None:
         self.project_root = project_root
         self.kill_file = project_root / KILL_SWITCH_FILE
         self.on_kill = on_kill
         self._running = False
-        self._thread: Optional[threading.Thread] = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: threading.Thread | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def is_active(self) -> bool:
@@ -109,6 +110,7 @@ class KillSwitch:
                 time.sleep(KILL_SWITCH_CHECK_INTERVAL)
             except Exception:
                 # Kill switch must never crash
+                logger.debug("Kill switch watcher loop error", exc_info=True)
                 time.sleep(KILL_SWITCH_CHECK_INTERVAL)
 
     def _execute_kill(self, trigger_source: str) -> KillSwitchEvent:
@@ -127,25 +129,25 @@ class KillSwitch:
             guard = DSACGuard(self.project_root)
             event.tokens_invalidated = guard.invalidate_all_tokens()
         except Exception:
-            pass
+            logger.debug("Kill switch: DSACGuard token invalidation failed", exc_info=True)
 
         # 2. Git stash if there are uncommitted changes (preserve work)
         event.changes_stashed = self._stash_changes()
 
         # 3. Log the kill event
         try:
-            from .audit_log import AuditLog, SafetyDecision
+            from .audit_log import AuditLog
             audit = AuditLog(self.project_root)
             audit.log_kill_switch(trigger_source, self.project_root)
         except Exception:
-            pass
+            logger.debug("Kill switch: audit log write failed", exc_info=True)
 
         # 4. Notify via callback (e.g. send Telegram message)
         if self.on_kill:
             try:
                 self.on_kill(event)
             except Exception:
-                pass
+                logger.debug("Kill switch: on_kill callback failed", exc_info=True)
 
         return event
 
@@ -199,7 +201,7 @@ class KillSwitchGuard:
         if self.kill_switch.is_active:
             raise KillSwitchError("Kill switch is active — halting operation")
 
-    def __enter__(self) -> "KillSwitchGuard":
+    def __enter__(self) -> KillSwitchGuard:
         self.check()
         return self
 

@@ -8,16 +8,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..constants import AUDIT_DIR
 
 
-class SafetyDecision(str, Enum):
+class SafetyDecision(StrEnum):
     ALLOWED = "ALLOWED"
     DENIED = "DENIED"
     DENIED_NEVER_ALLOW = "DENIED_NEVER_ALLOW"
@@ -57,10 +56,10 @@ class AuditLog:
         tool_name: str,
         tool_input: Any,
         decision: SafetyDecision,
-        layer: Optional[int],
+        layer: int | None,
         reason: str,
-        task_id: Optional[str] = None,
-        plan_id: Optional[str] = None,
+        task_id: str | None = None,
+        plan_id: str | None = None,
     ) -> None:
         """Append a safety decision to the audit log."""
         # Hash the input — never store raw tool input (may contain secrets)
