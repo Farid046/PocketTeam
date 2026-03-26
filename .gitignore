@@ -19,6 +19,7 @@ venv/
 .claude/CLAUDE.md.backup
 .claude/settings.json
 .claude/settings.json.backup
+.claude/settings.local.json
 .claude/agents/pocketteam/
 .claude/skills/pocketteam/
 .github/workflows/pocketteam-monitor.yml
