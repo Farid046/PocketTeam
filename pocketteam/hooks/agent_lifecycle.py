@@ -7,7 +7,7 @@ instant updates instead of relying on 5s polling.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -50,7 +50,7 @@ def _count_tool_calls_from_transcript(transcript_path: str) -> int:
         if not path.exists():
             return 0
         count = 0
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -81,7 +81,7 @@ def handle_start(hook_input: dict) -> None:
     model = hook_input.get("model", "")
 
     _write_event({
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "agent": agent_type or "unknown",
         "type": "spawn",
         "tool": "",
@@ -112,7 +112,7 @@ def handle_stop(hook_input: dict) -> None:
     duration_s = round(duration_ms / 1000) if duration_ms else 0
 
     _write_event({
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "agent": agent_type or "unknown",
         "type": "complete",
         "tool": "",

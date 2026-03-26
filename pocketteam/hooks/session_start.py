@@ -6,7 +6,7 @@ and outputs them so the COO sees them immediately.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -34,10 +34,9 @@ def handle(hook_input: dict) -> dict:
         return {}
 
     # Read all entries
-    entries = []
     lines = []
     try:
-        with open(inbox_path, "r") as f:
+        with open(inbox_path) as f:
             lines = f.readlines()
     except OSError:
         return {}
@@ -59,7 +58,7 @@ def handle(hook_input: dict) -> dict:
             unread.append(entry)
             # Mark as presented
             entry["status"] = "presented"
-            entry["presented_at"] = datetime.now(timezone.utc).isoformat()
+            entry["presented_at"] = datetime.now(UTC).isoformat()
 
         updated_lines.append(json.dumps(entry, default=str))
 
