@@ -83,6 +83,10 @@ SENSITIVE_PATH_PATTERNS: list[str] = [
     r".*\.npmrc$",
     r".*\.pypirc$",
     r".*\.netrc$",
+
+    # PocketTeam internal sensitive files
+    r".*[/\\]\.pocketteam[/\\]browse\.json$",       # browser session state (may contain cookies/tokens)
+    r".*[/\\]\.pocketteam[/\\]dsac_tokens\.json$",  # D-SAC approval tokens
 ]
 
 _SENSITIVE_RE = [re.compile(p, re.IGNORECASE) for p in SENSITIVE_PATH_PATTERNS]

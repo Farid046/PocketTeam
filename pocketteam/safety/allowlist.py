@@ -62,8 +62,22 @@ def check_agent_allowlist(agent_id: str, tool_name: str) -> AllowlistResult:
     MCP tools (mcp__*) are checked separately in mcp_rules.py
     """
     if not agent_id:
-        # Unknown agent — allow all (safety applied by other layers)
-        return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
+        # Unknown agent (includes sub-agents spawned by COO).
+        # Allow standard tools but block Agent spawning (only COO delegates).
+        blocked_for_unknown = {"Agent"}
+        if tool_name in blocked_for_unknown:
+            return AllowlistResult(
+                allowed=False,
+                reason="Unknown agent — only the COO can delegate to other agents",
+                agent_id=agent_id,
+                tool_name=tool_name,
+            )
+        return AllowlistResult(
+            allowed=True,
+            reason="Unknown agent — standard tools allowed, delegation blocked",
+            agent_id=agent_id,
+            tool_name=tool_name,
+        )
 
     # MCP tools: checked by Layer 3, not here
     if tool_name.startswith("mcp__"):
