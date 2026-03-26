@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -110,6 +111,8 @@ class DSACGuard:
     def _save_tokens(self, tokens: dict[str, dict]) -> None:
         self._tokens_path.parent.mkdir(parents=True, exist_ok=True)
         self._tokens_path.write_text(json.dumps(tokens, indent=2))
+        # Restrict to owner read/write — approval tokens are sensitive credentials.
+        os.chmod(self._tokens_path, 0o600)
 
     def create_dry_run_preview(
         self,

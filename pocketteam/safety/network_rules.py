@@ -121,6 +121,18 @@ def check_network_safety(
     if _is_local(domain):
         return NetworkCheckResult(allowed=True, reason="Local/internal address", domain=domain)
 
+    # Block cloud provider Instance Metadata Service (IMDS) endpoints.
+    # These can expose IAM credentials — must be blocked before any allowlist check.
+    if _is_cloud_metadata(domain):
+        return NetworkCheckResult(
+            allowed=False,
+            reason=(
+                f"Domain {domain} is a cloud metadata service endpoint (IMDS). "
+                "Access to instance metadata is blocked to prevent credential theft."
+            ),
+            domain=domain,
+        )
+
     # Check blocked list first
     if domain in BLOCKED_DOMAINS or any(domain.endswith(f".{b}") for b in BLOCKED_DOMAINS):
         return NetworkCheckResult(
@@ -182,6 +194,24 @@ def _is_local(domain: str) -> bool:
         return True
     # .local domains (mDNS)
     if domain.endswith(".local"):
+        return True
+    return False
+
+
+def _is_cloud_metadata(domain: str) -> bool:
+    """
+    Check if a domain targets a cloud provider Instance Metadata Service (IMDS).
+    These endpoints expose credentials and must never be reachable from agent code.
+    Covers AWS, GCP, Azure, and generic link-local IMDS addresses.
+    """
+    # AWS/GCP/Azure link-local IMDS IP
+    if domain == "169.254.169.254":
+        return True
+    # Entire link-local range (169.254.0.0/16) — no legitimate public use
+    if domain.startswith("169.254."):
+        return True
+    # GCP metadata domain
+    if domain == "metadata.google.internal":
         return True
     return False
 

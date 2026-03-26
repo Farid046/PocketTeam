@@ -37,8 +37,12 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
         from .allowlist import check_agent_allowlist
         from .kill_switch import KillSwitch
     except ImportError:
-        # If modules not yet installed, allow (bootstrap phase)
-        return {"allow": True, "reason": "safety modules not yet installed"}
+        # Safety modules missing — fail CLOSED, never open
+        print(
+            json.dumps({"allow": False, "reason": "safety modules not installed — cannot verify safety"}),
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     input_str = json.dumps(tool_input) if not isinstance(tool_input, str) else tool_input
 
@@ -218,9 +222,12 @@ if __name__ == "__main__":
     try:
         hook_input = json.loads(sys.stdin.read())
     except (json.JSONDecodeError, EOFError):
-        # Malformed input — allow (don't block legitimate operations)
-        print(json.dumps({"allow": True, "reason": "Could not parse hook input"}))
-        sys.exit(0)
+        # Malformed input — fail CLOSED, never open
+        print(
+            json.dumps({"allow": False, "reason": "Malformed hook input — cannot verify safety"}),
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     if mode == "pre":
         tool_name = hook_input.get("tool_name", hook_input.get("name", ""))
