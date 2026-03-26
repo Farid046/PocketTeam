@@ -16,7 +16,6 @@ No IPC, no network — all in-process via SharedContext.
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 import uuid
 from collections.abc import Callable
@@ -25,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from ..constants import EVENTS_FILE
+from ..utils import append_jsonl
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data structures
@@ -286,8 +286,7 @@ class CoordinationHub:
                 # Don't log full content — may be large or contain sensitive data
                 "content_preview": str(msg.content)[:100] if msg.content else "",
             }
-            with open(events_path, "a") as f:
-                f.write(json.dumps(event) + "\n")
+            append_jsonl(events_path, event)
         except Exception:
             pass  # Logging must never crash coordination
 

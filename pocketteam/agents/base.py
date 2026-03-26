@@ -8,7 +8,6 @@ All agents log events to the activity stream for the dashboard.
 
 from __future__ import annotations
 
-import json
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -16,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ..constants import AGENT_BUDGETS, AGENT_MAX_TURNS, AGENT_MODELS, EVENTS_FILE
+from ..utils import append_jsonl
 
 
 @dataclass
@@ -152,8 +152,7 @@ class BaseAgent(ABC):
             if self.context:
                 event["task_id"] = self.context.task_id
 
-            with open(events_path, "a") as f:
-                f.write(json.dumps(event) + "\n")
+            append_jsonl(events_path, event)
         except Exception:
             pass  # Event logging must never crash agent execution
 

@@ -32,6 +32,19 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
     """
     Main pre-tool-use safety check.
     Returns {"allow": True/False, "reason": str, "layer": int}
+
+    Security note — agent_id trust level:
+    The agent_id comes from hook_input["agent_id"], which is set by Claude Code's
+    hook system from the agent's frontmatter (the YAML header in .claude/agents/).
+    Claude Code sets this field before invoking the hook — it is NOT user-supplied
+    free text that an agent can forge at runtime.  The agent_id is therefore
+    considered TRUSTED for allowlist and rate-limit lookups (Layer 6 and 7).
+    An agent cannot escalate its own privileges by manipulating agent_id because:
+      1. The hook runs in a separate process outside conversation context.
+      2. The agent_id is injected by Claude Code, not read from the agent's output.
+    Risk level: LOW.  If Claude Code's hook injection mechanism were compromised
+    the entire safety system would be bypassed regardless, so no additional
+    cryptographic verification is warranted here.
     """
     # Import lazily to avoid import errors if called before install
     try:
@@ -117,7 +130,32 @@ def pre_tool_hook(tool_name: str, tool_input: Any, agent_id: str = "") -> dict:
 
     # ── Layer 4: Network Safety ──────────────────────────────────────────────
     input_str_lower = input_str.lower()
-    if tool_name in ("WebFetch", "WebSearch") or "curl" in input_str_lower or "wget" in input_str_lower:
+    # Hardened detection: cover obfuscated forms of curl/wget invocations.
+    # Patterns covered:
+    #   - Direct names: "curl", "wget"
+    #   - Dynamic lookup: "$(which curl)", "$(which wget)", "`which curl`"
+    #   - Variable assignment then use: not feasible to block statically, but
+    #     any Bash command containing an unrecognised URL is flagged below.
+    #   - Base64-encoded: detect "curl" / "wget" inside decoded base64 payloads.
+    #     Base64 of "curl" = "Y3VybA==", of "wget" = "d2dldA=="
+    _CURL_WGET_PATTERNS = (
+        "curl",
+        "wget",
+        "$(which curl)",
+        "$(which wget)",
+        "`which curl`",
+        "`which wget`",
+        "y3vyba",   # base64 "curl" (lowercase, case-insensitive match below)
+        "d2dlda",   # base64 "wget" (lowercase)
+    )
+    _has_curl_wget = any(pat in input_str_lower for pat in _CURL_WGET_PATTERNS)
+    # Also flag Bash commands that contain bare http(s):// URLs even without
+    # curl/wget — an agent could use python -c, nc, or other network tools.
+    _has_bare_url = (
+        tool_name == "Bash"
+        and ("http://" in input_str_lower or "https://" in input_str_lower)
+    )
+    if tool_name in ("WebFetch", "WebSearch") or _has_curl_wget or _has_bare_url:
         url = extract_url_from_tool_input(tool_name, tool_input)
         if url:
             # Load extra approved domains from config

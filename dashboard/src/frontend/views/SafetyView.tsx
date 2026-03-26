@@ -1,6 +1,7 @@
 import React from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { AuditEntry, AuditStats } from "../types";
+import { formatTs } from "../utils/formatTime";
 
 interface Props {
   auditStats: AuditStats | null;
@@ -10,15 +11,6 @@ interface Props {
 function pct(n: number, total: number): string {
   if (total === 0) return "0%";
   return `${Math.round((n / total) * 100)}%`;
-}
-
-function formatTs(isoTs: string): string {
-  try {
-    const d = new Date(isoTs);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  } catch {
-    return isoTs;
-  }
 }
 
 interface DecisionBadgeProps {

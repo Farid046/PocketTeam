@@ -12,6 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..constants import EVENTS_FILE
+from ..utils import append_jsonl
 from .context import SharedContext
 from .pipeline import Pipeline
 
@@ -152,7 +153,6 @@ def _log_event(
             "status": "working",
             "action": action,
         }
-        with open(events_path, "a") as f:
-            f.write(json.dumps(event) + "\n")
+        append_jsonl(events_path, event)
     except Exception:
         logger.debug("Event logging failed (non-critical)", exc_info=True)

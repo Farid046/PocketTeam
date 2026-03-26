@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import type { AgentState } from "../types";
 import { EmptyState } from "./EmptyState";
 import { ROLE_COLORS } from "../constants";
+import { formatAxisTime } from "../utils/formatTime";
 
 // Layout constants
 const ROW_HEIGHT = 30;
@@ -22,13 +23,6 @@ function formatDuration(ms: number): string {
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m ${sec % 60}s`;
   return `${Math.floor(min / 60)}h ${min % 60}m`;
-}
-
-function formatAxisTime(ts: number): string {
-  const d = new Date(ts);
-  const h = d.getHours().toString().padStart(2, "0");
-  const m = d.getMinutes().toString().padStart(2, "0");
-  return `${h}:${m}`;
 }
 
 interface GanttRow {

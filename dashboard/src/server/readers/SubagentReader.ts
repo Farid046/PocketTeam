@@ -27,6 +27,21 @@ interface ParsedJsonlStats {
   gitBranch: string;
 }
 
+/**
+ * Extract and accumulate token usage from an assistant message's usage object.
+ * Mutates the provided tokenUsage accumulator in place.
+ */
+function parseTokenUsage(
+  usage: Record<string, unknown> | undefined,
+  accumulator: TokenUsage
+): void {
+  if (!usage) return;
+  accumulator.inputTokens += (usage["input_tokens"] as number) ?? 0;
+  accumulator.outputTokens += (usage["output_tokens"] as number) ?? 0;
+  accumulator.cacheCreationTokens += (usage["cache_creation_input_tokens"] as number) ?? 0;
+  accumulator.cacheReadTokens += (usage["cache_read_input_tokens"] as number) ?? 0;
+}
+
 export class SubagentReader {
   private projectDir: string;
 
@@ -202,13 +217,7 @@ export class SubagentReader {
 
         if (typeof message["model"] === "string") model = message["model"] as string;
 
-        const usage = message["usage"] as Record<string, unknown> | undefined;
-        if (usage) {
-          tokenUsage.inputTokens += (usage["input_tokens"] as number) ?? 0;
-          tokenUsage.outputTokens += (usage["output_tokens"] as number) ?? 0;
-          tokenUsage.cacheCreationTokens += (usage["cache_creation_input_tokens"] as number) ?? 0;
-          tokenUsage.cacheReadTokens += (usage["cache_read_input_tokens"] as number) ?? 0;
-        }
+        parseTokenUsage(message["usage"] as Record<string, unknown> | undefined, tokenUsage);
 
         const content = message["content"];
         if (Array.isArray(content)) {
@@ -343,13 +352,7 @@ export class SubagentReader {
           }
 
           // Extract token usage
-          const usage = message["usage"] as Record<string, unknown> | undefined;
-          if (usage) {
-            tokenUsage.inputTokens += (usage["input_tokens"] as number) ?? 0;
-            tokenUsage.outputTokens += (usage["output_tokens"] as number) ?? 0;
-            tokenUsage.cacheCreationTokens += (usage["cache_creation_input_tokens"] as number) ?? 0;
-            tokenUsage.cacheReadTokens += (usage["cache_read_input_tokens"] as number) ?? 0;
-          }
+          parseTokenUsage(message["usage"] as Record<string, unknown> | undefined, tokenUsage);
 
           // Track most recent model
           if (typeof message["model"] === "string") {

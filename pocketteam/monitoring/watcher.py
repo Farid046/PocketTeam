@@ -12,13 +12,13 @@ When anomalies are detected, escalates to the healer.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
 
 from ..config import PocketTeamConfig, load_config
+from ..utils import append_jsonl
 from ..constants import (
     EVENTS_FILE,
     MONITOR_INTERVAL_ANOMALY,
@@ -146,8 +146,7 @@ class Watcher:
                 "status": "working",
                 "action": message,
             }
-            with open(events_path, "a") as f:
-                f.write(json.dumps(event) + "\n")
+            append_jsonl(events_path, event)
         except Exception:
             logger.debug("Watcher event logging failed (non-critical)", exc_info=True)
 
@@ -172,7 +171,6 @@ class Watcher:
                 "status_code": health.status_code,
                 "response_time_ms": health.response_time_ms,
             }
-            with open(events_path, "a") as f:
-                f.write(json.dumps(event) + "\n")
+            append_jsonl(events_path, event)
         except Exception:
             logger.debug("Watcher health check event logging failed (non-critical)", exc_info=True)

@@ -138,16 +138,16 @@ async def run_init(
 
     # Active features summary
     features = []
-    features.append("  [green]✓[/] Effort: [bold]high[/] (maximale Reasoning-Qualität)")
-    features.append("  [green]✓[/] Remote Control: [bold]aktiv[/] (claude.ai/code + Mobile)")
-    features.append("  [green]✓[/] Auto Memory: [bold]aktiv[/]")
-    features.append("  [green]✓[/] PocketTeam HUD: [bold]konfiguriert[/]")
+    features.append("  [green]✓[/] Effort: [bold]high[/] (maximum reasoning quality)")
+    features.append("  [green]✓[/] Remote Control: [bold]active[/] (claude.ai/code + Mobile)")
+    features.append("  [green]✓[/] Auto Memory: [bold]active[/]")
+    features.append("  [green]✓[/] PocketTeam HUD: [bold]configured[/]")
     features.append("  [green]✓[/] Safety Hooks: [bold]10-Layer Guardian[/]")
     if tg_active:
-        features.append("  [green]✓[/] Telegram: [bold]konfiguriert[/]")
+        features.append("  [green]✓[/] Telegram: [bold]configured[/]")
     if cfg.dashboard.enabled:
         features.append(f"  [green]✓[/] Dashboard: [bold cyan]http://localhost:{cfg.dashboard.port}[/]")
-    features.append("  [dim]💡 Tipp: Auto Dream über /memory aktivieren[/]")
+    features.append("  [dim]Tip: Enable Auto Dream via /memory[/]")
 
     # Dynamic next steps
     next_steps = []

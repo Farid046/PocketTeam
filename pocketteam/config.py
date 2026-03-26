@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import yaml
 
@@ -49,7 +50,7 @@ class BudgetConfig:
 
 @dataclass
 class AuthConfig:
-    mode: str = "subscription"   # "subscription" | "api_key" | "hybrid"
+    mode: Literal["subscription", "api_key", "hybrid"] = "subscription"
     api_key: str = ""            # Only used in api_key / hybrid mode
 
 

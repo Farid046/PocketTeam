@@ -85,7 +85,7 @@ export const useStore = create<DashboardStore>((set, get) => ({
       };
       return {
         agents: [...state.agents.filter((a) => a.id !== agent.id), agent],
-        events: [...state.events.slice(-199), newEvent],
+        events: [...state.events.slice(-200), newEvent],
       };
     }),
 
@@ -106,11 +106,10 @@ export const useStore = create<DashboardStore>((set, get) => ({
               ? `Finished (${agent.toolCallCount} tool calls)`
               : agent.description,
         });
-        if (events.length > 200) events.splice(0, events.length - 200);
       }
       return {
         agents: state.agents.map((a) => (a.id === agent.id ? agent : a)),
-        events,
+        events: events.slice(-200),
       };
     }),
 
@@ -129,13 +128,13 @@ export const useStore = create<DashboardStore>((set, get) => ({
         agents: state.agents.map((a) =>
           a.id === id ? { ...a, status: "done" as const } : a
         ),
-        events: [...state.events.slice(-199), newEvent],
+        events: [...state.events.slice(-200), newEvent],
       };
     }),
 
   addEvent: (event) =>
     set((state) => ({
-      events: [...state.events.slice(-199), event],
+      events: [...state.events.slice(-200), event],
     })),
 
   addAudit: (entry) =>

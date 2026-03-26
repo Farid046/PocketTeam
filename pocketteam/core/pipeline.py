@@ -354,12 +354,11 @@ class Pipeline:
 
     def _log_event(self, event_type: str, detail: str) -> None:
         """Log pipeline event to stream.jsonl."""
-        import json
         import time
         try:
             from ..constants import EVENTS_FILE
+            from ..utils import append_jsonl
             events_path = self.context.project_root / EVENTS_FILE
-            events_path.parent.mkdir(parents=True, exist_ok=True)
             event = {
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "agent": "pipeline",
@@ -367,8 +366,7 @@ class Pipeline:
                 "status": "working",
                 "action": detail,
             }
-            with open(events_path, "a") as f:
-                f.write(json.dumps(event) + "\n")
+            append_jsonl(events_path, event)
         except Exception:
             logger.debug("Pipeline event logging failed (non-critical)", exc_info=True)
 

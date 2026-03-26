@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from ..constants import AUDIT_DIR
+from ..utils import append_jsonl
 
 
 class SafetyDecision(StrEnum):
@@ -81,8 +82,7 @@ class AuditLog:
             entry["plan_id"] = plan_id
 
         try:
-            with open(self._log_path(), "a") as f:
-                f.write(json.dumps(entry) + "\n")
+            append_jsonl(self._log_path(), entry)
         except OSError:
             # Audit log must never crash the safety system
             pass
@@ -104,8 +104,7 @@ class AuditLog:
             "project": str(project_root),
         }
         try:
-            with open(self._log_path(), "a") as f:
-                f.write(json.dumps(entry) + "\n")
+            append_jsonl(self._log_path(), entry)
         except OSError:
             pass
 
@@ -116,8 +115,7 @@ class AuditLog:
         """
         critical_path = self._log_dir / "CRITICAL_ALERTS.jsonl"
         try:
-            with open(critical_path, "a") as f:
-                f.write(json.dumps({"alert": True, **entry}) + "\n")
+            append_jsonl(critical_path, {"alert": True, **entry})
         except OSError:
             pass
 
