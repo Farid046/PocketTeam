@@ -15,9 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -27,7 +26,7 @@ class DeployResult:
     output: str = ""
     version: str = ""
     rollback_info: str = ""
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
 
 
@@ -46,7 +45,7 @@ class DeployTools:
         self,
         tag: str = "latest",
         dockerfile: str = "Dockerfile",
-        build_args: Optional[dict[str, str]] = None,
+        build_args: dict[str, str] | None = None,
     ) -> DeployResult:
         """Build a Docker image."""
         cmd = ["docker", "build", "-t", tag, "-f", dockerfile]
@@ -64,7 +63,7 @@ class DeployTools:
 
     async def docker_compose_up(
         self,
-        service: Optional[str] = None,
+        service: str | None = None,
         detach: bool = True,
         compose_file: str = "docker-compose.yml",
     ) -> DeployResult:
@@ -87,7 +86,7 @@ class DeployTools:
 
     async def docker_compose_restart(
         self,
-        service: Optional[str] = None,
+        service: str | None = None,
         compose_file: str = "docker-compose.yml",
     ) -> DeployResult:
         """Restart services (common for deploying new code)."""
@@ -155,7 +154,7 @@ class DeployTools:
                 stdout, _ = await asyncio.wait_for(
                     proc.communicate(), timeout=timeout
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.communicate()
                 return DeployResult(

@@ -16,26 +16,24 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
-from typing import Any, Optional
 
 import yaml
 
-from .base import AgentContext, AgentResult, BaseAgent
 from ..constants import EVENTS_FILE, LEARNINGS_DIR
+from .base import AgentContext, AgentResult, BaseAgent
 
 
 class ObserverAgent(BaseAgent):
     def _get_agent_id(self) -> str:
         return "observer"
 
-    async def _run(self, task: str, context: Optional[AgentContext]) -> AgentResult:
+    async def _run(self, task: str, context: AgentContext | None) -> AgentResult:
         result = await self._run_with_sdk(task)
         if result.success and result.output:
             result.artifacts["observations"] = result.output
         return result
 
-    async def analyze_task(self, task_id: Optional[str] = None) -> AgentResult:
+    async def analyze_task(self, task_id: str | None = None) -> AgentResult:
         """
         Programmatic post-task analysis — no SDK needed.
 
@@ -64,7 +62,7 @@ class ObserverAgent(BaseAgent):
             artifacts={"patterns": patterns},
         )
 
-    def _read_recent_events(self, task_id: Optional[str] = None) -> list[dict]:
+    def _read_recent_events(self, task_id: str | None = None) -> list[dict]:
         """Read recent events from stream.jsonl."""
         events_path = self.project_root / EVENTS_FILE
         if not events_path.exists():

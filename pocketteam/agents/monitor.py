@@ -8,8 +8,6 @@ Uses Haiku (cheap) because it runs continuously and mostly just reads.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from .base import AgentContext, AgentResult, BaseAgent
 
 
@@ -17,7 +15,7 @@ class MonitorAgent(BaseAgent):
     def _get_agent_id(self) -> str:
         return "monitor"
 
-    async def _run(self, task: str, context: Optional[AgentContext]) -> AgentResult:
+    async def _run(self, task: str, context: AgentContext | None) -> AgentResult:
         result = await self._run_with_sdk(task)
         if result.success and result.output:
             result.artifacts["health_report"] = result.output

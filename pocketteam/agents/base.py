@@ -8,13 +8,12 @@ All agents log events to the activity stream for the dashboard.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..constants import AGENT_BUDGETS, AGENT_MAX_TURNS, AGENT_MODELS, EVENTS_FILE
 
@@ -26,7 +25,7 @@ class AgentResult:
     success: bool
     output: str
     artifacts: dict[str, Any] = field(default_factory=dict)
-    error: Optional[str] = None
+    error: str | None = None
     turns_used: int = 0
     spend_usd: float = 0.0
     duration_seconds: float = 0.0
@@ -38,7 +37,7 @@ class AgentContext:
     task_id: str
     task_description: str
     project_root: Path
-    plan_id: Optional[str] = None
+    plan_id: str | None = None
     artifacts: dict[str, Any] = field(default_factory=dict)
     approved_files: list[str] = field(default_factory=list)
     phase: str = "init"
@@ -54,7 +53,7 @@ class BaseAgent(ABC):
     def __init__(
         self,
         project_root: Path,
-        context: Optional[AgentContext] = None,
+        context: AgentContext | None = None,
     ) -> None:
         self.project_root = project_root
         self.context = context
@@ -62,7 +61,7 @@ class BaseAgent(ABC):
         self._model = AGENT_MODELS.get(self.agent_id, "claude-sonnet-4-6")
         self._max_turns = AGENT_MAX_TURNS.get(self.agent_id, 50)
         self._max_budget = AGENT_BUDGETS.get(self.agent_id, 5.0)
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
 
     def _get_agent_id(self) -> str:
         """Return the agent's ID. Override in subclasses (e.g. return 'engineer')."""
@@ -93,7 +92,7 @@ class BaseAgent(ABC):
         if ks.is_active:
             raise KillSwitchError(f"Kill switch active — {self.agent_id} halted")
 
-    async def execute(self, task: str, context: Optional[AgentContext] = None) -> AgentResult:
+    async def execute(self, task: str, context: AgentContext | None = None) -> AgentResult:
         """
         Execute a task. Wraps the actual run with:
         - Kill switch check
@@ -122,15 +121,15 @@ class BaseAgent(ABC):
             await self._log_event("sleeping", None)
 
     @abstractmethod
-    async def _run(self, task: str, context: Optional[AgentContext]) -> AgentResult:
+    async def _run(self, task: str, context: AgentContext | None) -> AgentResult:
         """Implement agent-specific logic here."""
         ...
 
     async def spawn_subagent(
         self,
-        subagent_class: type["BaseAgent"],
+        subagent_class: type[BaseAgent],
         task: str,
-        context: Optional[AgentContext] = None,
+        context: AgentContext | None = None,
     ) -> AgentResult:
         """Spawn a sub-agent for specialized work."""
         self._check_kill_switch()
@@ -138,7 +137,7 @@ class BaseAgent(ABC):
         await self._log_event("delegating", f"→ {subagent.agent_id}: {task[:50]}")
         return await subagent.execute(task, context)
 
-    async def _log_event(self, status: str, action: Optional[str]) -> None:
+    async def _log_event(self, status: str, action: str | None) -> None:
         """Append event to stream.jsonl for dashboard/monitoring."""
         try:
             events_path = self.project_root / EVENTS_FILE
@@ -168,7 +167,7 @@ class BaseAgent(ABC):
             "cwd": str(self.project_root),
         }
 
-    async def _run_with_sdk(self, task: str) -> "AgentResult":
+    async def _run_with_sdk(self, task: str) -> AgentResult:
         """
         HEADLESS/CI FALLBACK: Run a task via the Claude Agent SDK.
 
@@ -208,7 +207,7 @@ class BaseAgent(ABC):
             tool_name: str,
             tool_input: dict[str, Any],
             ctx: Any,
-        ) -> "PermissionResultAllow | PermissionResultDeny":
+        ) -> PermissionResultAllow | PermissionResultDeny:
             decision = pre_tool_hook(tool_name, tool_input, agent_id)
             if decision.get("allow"):
                 return PermissionResultAllow(behavior="allow")

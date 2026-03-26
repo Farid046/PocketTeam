@@ -13,19 +13,21 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from ..config import PocketTeamConfig, load_config
 from ..constants import (
-    ERROR_BUDGET_THRESHOLD,
     EVENTS_FILE,
     MONITOR_INTERVAL_ANOMALY,
     MONITOR_INTERVAL_STEADY,
     RESPONSE_TIME_THRESHOLD,
 )
 from ..tools.health_check import HealthChecker, HealthResult, LogAnalyzer
+
+logger = logging.getLogger(__name__)
 
 
 class Watcher:
@@ -40,10 +42,10 @@ class Watcher:
     def __init__(
         self,
         project_root: Path,
-        config: Optional[PocketTeamConfig] = None,
-        on_anomaly: Optional[Callable] = None,
-        on_health_failure: Optional[Callable] = None,
-        on_status: Optional[Callable] = None,
+        config: PocketTeamConfig | None = None,
+        on_anomaly: Callable | None = None,
+        on_health_failure: Callable | None = None,
+        on_status: Callable | None = None,
     ) -> None:
         self.project_root = project_root
         self.config = config or load_config(project_root)
@@ -130,7 +132,7 @@ class Watcher:
                 if asyncio.iscoroutine(result):
                     await result
             except Exception:
-                pass
+                logger.debug("Health failure callback raised an exception", exc_info=True)
 
     async def _log(self, message: str) -> None:
         """Log a watcher event."""
@@ -147,7 +149,7 @@ class Watcher:
             with open(events_path, "a") as f:
                 f.write(json.dumps(event) + "\n")
         except Exception:
-            pass
+            logger.debug("Watcher event logging failed (non-critical)", exc_info=True)
 
         if self.on_status:
             try:
@@ -155,7 +157,7 @@ class Watcher:
                 if asyncio.iscoroutine(result):
                     await result
             except Exception:
-                pass
+                logger.debug("Watcher status callback raised an exception", exc_info=True)
 
     def _log_check_event(self, health: HealthResult) -> None:
         """Log health check result to event stream."""
@@ -173,4 +175,4 @@ class Watcher:
             with open(events_path, "a") as f:
                 f.write(json.dumps(event) + "\n")
         except Exception:
-            pass
+            logger.debug("Watcher health check event logging failed (non-critical)", exc_info=True)

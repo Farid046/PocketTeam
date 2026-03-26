@@ -16,12 +16,11 @@ import re
 import shutil
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Optional
 
 
-class TestFramework(str, Enum):
+class TestFramework(StrEnum):
     PYTEST = "pytest"
     NPM = "npm"
     COMPOSER = "composer"
@@ -94,7 +93,7 @@ class TestRunner:
 
     async def run_pytest(
         self,
-        args: Optional[list[str]] = None,
+        args: list[str] | None = None,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> TestResult:
         """Run pytest and return structured results."""
@@ -134,7 +133,7 @@ class TestRunner:
             )
             try:
                 stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.communicate()
                 return TestResult(

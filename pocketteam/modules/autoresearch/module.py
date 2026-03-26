@@ -21,13 +21,11 @@ Flow:
 
 from __future__ import annotations
 
-import json
-import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..base_module import BaseModule, ModuleConfig
-from .tracker import ExperimentTracker, Experiment, ExperimentResult
+from .tracker import Experiment, ExperimentTracker
 
 
 class AutoResearchModule(BaseModule):
@@ -46,7 +44,7 @@ class AutoResearchModule(BaseModule):
     def __init__(
         self,
         project_root: Path,
-        config: Optional[ModuleConfig] = None,
+        config: ModuleConfig | None = None,
     ) -> None:
         super().__init__(project_root, config)
         self.tracker = ExperimentTracker(project_root)
@@ -106,7 +104,7 @@ class AutoResearchModule(BaseModule):
         experiment_name: str,
         variation: str,
         metric_value: float,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> None:
         """Record a result for an experiment iteration."""
         self.tracker.record_result(
@@ -116,7 +114,7 @@ class AutoResearchModule(BaseModule):
             metadata=metadata,
         )
 
-    def get_best(self, experiment_name: str) -> Optional[dict]:
+    def get_best(self, experiment_name: str) -> dict | None:
         """Get the best result for an experiment."""
         experiment = self.tracker.get_experiment(experiment_name)
         if not experiment:

@@ -16,12 +16,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ..config import PocketTeamConfig, load_config
 from ..constants import EVENTS_FILE, SESSIONS_DIR
+
+logger = logging.getLogger(__name__)
 
 
 class TelegramChannel:
@@ -41,15 +45,15 @@ class TelegramChannel:
     def __init__(
         self,
         project_root: Path,
-        config: Optional[PocketTeamConfig] = None,
+        config: PocketTeamConfig | None = None,
     ) -> None:
         self.project_root = project_root
         self.config = config or load_config(project_root)
         self.bot_token = self.config.telegram.bot_token
         self.chat_id = self.config.telegram.chat_id
         self._running = False
-        self._on_message: Optional[Callable] = None
-        self._on_approval_response: Optional[Callable] = None
+        self._on_message: Callable | None = None
+        self._on_approval_response: Callable | None = None
         self._pending_approvals: dict[str, asyncio.Future] = {}
 
     @property
@@ -80,6 +84,7 @@ class TelegramChannel:
                 })
                 return resp.status_code == 200
         except Exception:
+            logger.debug("Telegram send failed", exc_info=True)
             return False
 
     async def send_approval_request(
@@ -111,6 +116,7 @@ class TelegramChannel:
                     "reply_markup": keyboard,
                 })
         except Exception:
+            logger.debug("Telegram send failed", exc_info=True)
             return False
 
         # Wait for callback
@@ -120,7 +126,7 @@ class TelegramChannel:
 
         try:
             return await asyncio.wait_for(future, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending_approvals.pop(request_id, None)
             await self.send_message(f"Approval request timed out: {request_id}")
             return False
@@ -162,6 +168,7 @@ class TelegramChannel:
             except asyncio.CancelledError:
                 break
             except Exception:
+                logger.debug("Telegram polling error, retrying in 5s", exc_info=True)
                 await asyncio.sleep(5)
 
     def stop(self) -> None:
@@ -226,7 +233,7 @@ class TelegramChannel:
                     "text": text,
                 })
         except Exception:
-            pass
+            logger.debug("Telegram answer_callback failed", exc_info=True)
 
     async def _send_status(self) -> None:
         """Send current project status via Telegram."""
@@ -245,7 +252,7 @@ class TelegramChannel:
                     e = json.loads(lines[-1])
                     last_event = f"{e.get('agent', '?')}: {e.get('action', '')} ({e.get('ts', '')[:19]})"
             except Exception:
-                pass
+                logger.debug("Failed to parse last event for status", exc_info=True)
 
         status_text = (
             f"<b>{self.config.project_name}</b>\n\n"
@@ -284,10 +291,10 @@ class SessionManager:
                     "modified": time.ctime(f.stat().st_mtime),
                 })
             except Exception:
-                pass
+                logger.debug("Failed to parse session file %s", f, exc_info=True)
         return sessions
 
-    def get_latest_session_id(self) -> Optional[str]:
+    def get_latest_session_id(self) -> str | None:
         """Get the most recently modified session ID."""
         sessions = self.list_sessions()
         return sessions[0]["task_id"] if sessions else None

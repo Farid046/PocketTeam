@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from ..constants import DEFAULT_BUDGET_USD
 
@@ -80,7 +79,7 @@ class BudgetTracker:
         self._persist()
         return not self._budget.is_over_budget
 
-    def check(self, agent_id: Optional[str] = None) -> tuple[bool, str]:
+    def check(self, agent_id: str | None = None) -> tuple[bool, str]:
         """
         Check if budget is available.
         Returns (ok, reason).

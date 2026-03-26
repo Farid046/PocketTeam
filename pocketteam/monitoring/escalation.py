@@ -10,16 +10,17 @@ Escalation levels:
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from ..constants import (
-    EVENTS_FILE,
     INCIDENTS_DIR,
     MAX_AUTO_FIX_ATTEMPTS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,7 +32,7 @@ class Incident:
     detected_at: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"))
     fix_attempts: int = 0
     resolved: bool = False
-    resolved_at: Optional[str] = None
+    resolved_at: str | None = None
     resolution: str = ""
     escalated_to_ceo: bool = False
 
@@ -136,7 +137,7 @@ class EscalationManager:
         """Get all unresolved incidents."""
         return [i for i in self._active_incidents.values() if not i.resolved]
 
-    def get_incident(self, incident_id: str) -> Optional[Incident]:
+    def get_incident(self, incident_id: str) -> Incident | None:
         return self._active_incidents.get(incident_id)
 
     def _persist_incident(self, incident: Incident) -> None:
@@ -146,7 +147,7 @@ class EscalationManager:
             path = self._incidents_dir / f"{incident.incident_id}.json"
             path.write_text(json.dumps(incident.to_dict(), indent=2))
         except Exception:
-            pass
+            logger.debug("Failed to persist incident %s", incident.incident_id, exc_info=True)
 
     def load_incidents(self) -> None:
         """Load incidents from disk."""
@@ -159,4 +160,4 @@ class EscalationManager:
                 incident = Incident(**data)
                 self._active_incidents[incident.incident_id] = incident
             except Exception:
-                pass
+                logger.debug("Failed to load incident from %s", f, exc_info=True)

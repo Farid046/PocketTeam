@@ -10,16 +10,19 @@ Phase timeouts prevent deadlocks.
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum, auto
-from pathlib import Path
-from typing import Any, Callable, Optional
+from enum import StrEnum
+from typing import Any
 
 from ..constants import PHASE_TIMEOUTS
 from .context import SharedContext
 
+logger = logging.getLogger(__name__)
 
-class Phase(str, Enum):
+
+class Phase(StrEnum):
     INIT = "init"
     PRODUCT = "product"
     PLANNING = "planning"
@@ -37,9 +40,9 @@ class PhaseResult:
     success: bool
     output: str
     artifacts: dict[str, Any]
-    error: Optional[str] = None
+    error: str | None = None
     awaiting_approval: bool = False
-    approval_prompt: Optional[str] = None
+    approval_prompt: str | None = None
 
 
 class PipelineError(Exception):
@@ -65,8 +68,8 @@ class Pipeline:
     def __init__(
         self,
         context: SharedContext,
-        on_human_gate: Optional[Callable] = None,
-        on_status_update: Optional[Callable] = None,
+        on_human_gate: Callable | None = None,
+        on_status_update: Callable | None = None,
     ) -> None:
         self.context = context
         self.on_human_gate = on_human_gate      # Called when CEO input needed
@@ -99,7 +102,7 @@ class Pipeline:
 
             try:
                 result = await self._run_with_timeout(runner, phase)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._log_event("phase_timeout", phase.value)
                 await self._notify(
                     f"⚠️ Phase '{phase.value}' timed out after "
@@ -197,11 +200,11 @@ class Pipeline:
 
     async def _run_implementation(self) -> PhaseResult:
         """Engineer implements, Reviewer reviews, QA tests, Security audits."""
-        from ..agents.engineer import EngineerAgent
-        from ..agents.reviewer import ReviewerAgent
-        from ..agents.qa import QAAgent
-        from ..agents.security import SecurityAgent
         from ..agents.documentation import DocumentationAgent
+        from ..agents.engineer import EngineerAgent
+        from ..agents.qa import QAAgent
+        from ..agents.reviewer import ReviewerAgent
+        from ..agents.security import SecurityAgent
         from ..constants import MAX_CODE_REVIEW_LOOPS
 
         plan = self.context.get_latest_plan()
@@ -221,7 +224,7 @@ class Pipeline:
         # Review loop (max 3 rounds)
         reviewer = ReviewerAgent(self.context.project_root, self.context)
         for round_num in range(MAX_CODE_REVIEW_LOOPS):
-            review = await reviewer.execute(f"Review the implementation")
+            review = await reviewer.execute("Review the implementation")
             if "APPROVED" in (review.output or "").upper():
                 break
             if round_num < MAX_CODE_REVIEW_LOOPS - 1:
@@ -351,7 +354,8 @@ class Pipeline:
 
     def _log_event(self, event_type: str, detail: str) -> None:
         """Log pipeline event to stream.jsonl."""
-        import json, time
+        import json
+        import time
         try:
             from ..constants import EVENTS_FILE
             events_path = self.context.project_root / EVENTS_FILE
@@ -366,7 +370,7 @@ class Pipeline:
             with open(events_path, "a") as f:
                 f.write(json.dumps(event) + "\n")
         except Exception:
-            pass
+            logger.debug("Pipeline event logging failed (non-critical)", exc_info=True)
 
     async def _notify(self, message: str) -> None:
         """Send status update to CEO."""

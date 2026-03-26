@@ -15,7 +15,6 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -25,7 +24,7 @@ class HealthResult:
     url: str = ""
     status_code: int = 0
     response_time_ms: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
