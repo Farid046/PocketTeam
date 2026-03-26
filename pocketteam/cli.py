@@ -44,13 +44,61 @@ async def _init(project_name: str | None, yes: bool, no_dashboard: bool) -> None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# pocketteam start — launch Claude Code with Telegram channel
+# pocketteam start — launch Claude Code (auto mode → fallback skip-permissions)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@main.command()
+@main.group(invoke_without_command=True)
 @click.option("--no-telegram", is_flag=True, help="Start without Telegram channel.")
-def start(no_telegram: bool) -> None:
-    """Start Claude Code with PocketTeam (and Telegram if configured)."""
+@click.pass_context
+def start(ctx: click.Context, no_telegram: bool) -> None:
+    """Start Claude Code with PocketTeam safety enabled.
+
+    Uses --dangerously-skip-permissions with PocketTeam's 10-layer safety hooks.
+
+    Default (no subcommand): starts a fresh new session.
+    Use 'pocketteam start continue' to resume the last session.
+    """
+    ctx.ensure_object(dict)
+    ctx.obj["no_telegram"] = no_telegram
+    if ctx.invoked_subcommand is None:
+        # Default: fresh new session (avoids O(n²) context growth from long sessions)
+        _launch_claude(no_telegram=no_telegram, resume="new", session_id=None)
+
+
+@start.command("continue")
+@click.pass_context
+def start_continue(ctx: click.Context) -> None:
+    """Continue the last session."""
+    no_telegram = ctx.parent.obj.get("no_telegram", False) if ctx.parent else False
+    _launch_claude(no_telegram=no_telegram, resume="continue", session_id=None)
+
+
+@start.command("resume")
+@click.argument("session_id", required=False, default=None)
+@click.pass_context
+def start_resume(ctx: click.Context, session_id: str | None) -> None:
+    """Resume a specific session by ID, or open session picker if no ID given."""
+    no_telegram = ctx.parent.obj.get("no_telegram", False) if ctx.parent else False
+    _launch_claude(no_telegram=no_telegram, resume="pick" if not session_id else "id", session_id=session_id)
+
+
+def _launch_claude(
+    *,
+    no_telegram: bool,
+    resume: str,  # "continue" | "pick" | "id" | "new"
+    session_id: str | None,
+) -> None:
+    """Launch Claude Code with --dangerously-skip-permissions.
+
+    PocketTeam's 10-layer safety hooks run on every tool call regardless.
+    Auto mode (--permission-mode auto) will be added when available on Max plan.
+
+    resume modes:
+      "continue" - auto-resume last session (--continue)
+      "pick"     - open interactive session picker (--resume)
+      "id"       - resume specific session (--resume <id>)
+      "new"      - start fresh (no resume flag)
+    """
     import os
     from .config import load_config
 
@@ -68,12 +116,8 @@ def start(no_telegram: bool) -> None:
         and not no_telegram
     )
 
-    # Safety hooks (10-layer guardian) handle ALL security — not Claude's permission prompts.
-    # This allows autonomous operation while hooks block dangerous commands deterministically.
-    cmd = ["claude", "--dangerously-skip-permissions"]
-
+    # Load Telegram env
     if tg_active:
-        # Load Telegram token from .pocketteam/telegram.env
         env_file = root / ".pocketteam/telegram.env"
         if env_file.exists():
             for line in env_file.read_text().splitlines():
@@ -81,26 +125,30 @@ def start(no_telegram: bool) -> None:
                     key, val = line.split("=", 1)
                     os.environ[key.strip()] = val.strip()
 
+    # Build command: skip-permissions + medium effort for COO (Planner gets Opus for deep thinking)
+    cmd = ["claude", "--dangerously-skip-permissions", "--effort", "medium"]
+
+    # Session handling
+    if resume == "continue":
+        cmd.append("--continue")
+        console.print("[dim]Continuing last session...[/]")
+    elif resume == "pick":
+        cmd.append("--resume")
+        console.print("[dim]Opening session picker...[/]")
+    elif resume == "id" and session_id:
+        cmd.extend(["--resume", session_id])
+        console.print(f"Resuming session [cyan]{session_id}[/]")
+    else:
+        console.print("[dim]Starting new session...[/]")
+
+    # Telegram channel
+    if tg_active:
         cmd.extend(["--channels", "plugin:telegram@claude-plugins-official"])
-        console.print(f"Starting Claude Code with [cyan]Telegram channel[/] for [bold]{cfg.project_name}[/]")
-        console.print("[dim]Telegram messages will arrive in your Claude Code session.[/]")
+        console.print(f"[cyan]Telegram channel[/] active for [bold]{cfg.project_name}[/]")
     else:
         console.print(f"Starting Claude Code for [bold]{cfg.project_name}[/]")
 
-    # Check Claude Code version supports channels
-    if tg_active:
-        import subprocess as sp
-        try:
-            ver_out = sp.run(["claude", "--version"], capture_output=True, text=True).stdout.strip()
-            ver_num = ver_out.split()[0] if ver_out else "0"
-            parts = ver_num.split(".")
-            if len(parts) >= 3 and int(parts[0]) <= 2 and int(parts[1]) <= 1 and int(parts[2]) < 80:
-                console.print(f"\n  [yellow]Claude Code {ver_num} detected. Channels need v2.1.80+[/]")
-                console.print("  Update: [bold]claude update[/]")
-                console.print()
-        except Exception:
-            pass
-
+    console.print("[green]PocketTeam[/] — 10-layer safety hooks active")
     console.print()
     os.execvp(cmd[0], cmd)
 
