@@ -15,6 +15,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from ..utils import append_jsonl
+
 
 def _find_project_root() -> Path | None:
     """Walk up from cwd to find .pocketteam/ directory."""
@@ -57,8 +59,7 @@ def log_activity(tool_name: str, tool_input: str, agent_id: str = "") -> None:
     log_path = audit_dir / f"{date}.jsonl"
 
     try:
-        with open(log_path, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        append_jsonl(log_path, entry)
     except OSError:
         pass  # Activity logging must never crash the system
 

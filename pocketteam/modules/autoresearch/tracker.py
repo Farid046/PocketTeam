@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ...utils import append_jsonl
+
 
 @dataclass
 class ExperimentResult:
@@ -191,13 +193,11 @@ class ExperimentTracker:
     def _append_log(self, experiment_name: str, result: ExperimentResult) -> None:
         """Append result to JSONL log."""
         try:
-            self._dir.mkdir(parents=True, exist_ok=True)
             log_path = self._dir / f"{experiment_name}.jsonl"
-            with open(log_path, "a") as f:
-                entry = {
-                    "experiment": experiment_name,
-                    **result.to_dict(),
-                }
-                f.write(json.dumps(entry) + "\n")
+            entry = {
+                "experiment": experiment_name,
+                **result.to_dict(),
+            }
+            append_jsonl(log_path, entry)
         except Exception:
             pass

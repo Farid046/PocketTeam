@@ -6,12 +6,12 @@ and saves it to .pocketteam/telegram-inbox.jsonl for recovery after session
 restarts, context compression, or plan mode.
 """
 
-import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 from ._utils import _find_pocketteam_dir
+from ..utils import append_jsonl
 
 
 def handle(hook_input: dict) -> dict:
@@ -59,8 +59,7 @@ def handle(hook_input: dict) -> dict:
     }
 
     try:
-        with open(inbox_path, "a") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
+        append_jsonl(inbox_path, entry, default=str)
     except OSError:
         pass
 

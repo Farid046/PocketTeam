@@ -11,6 +11,8 @@ import sys
 import time
 from pathlib import Path
 
+from ..utils import append_jsonl
+
 
 def log_activity(
     agent_id: str,
@@ -35,8 +37,7 @@ def log_activity(
             "action": action,
         }
 
-        with open(events_path, "a") as f:
-            f.write(json.dumps(event) + "\n")
+        append_jsonl(events_path, event)
     except Exception:
         pass  # Activity logging must never crash hook execution
 

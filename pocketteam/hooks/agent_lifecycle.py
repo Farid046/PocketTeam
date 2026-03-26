@@ -30,10 +30,9 @@ def _write_event(event: dict) -> None:
     stream = _find_event_stream()
     if not stream:
         return
-    stream.parent.mkdir(parents=True, exist_ok=True)
-    line = json.dumps(event, default=str) + "\n"
-    with open(stream, "a") as f:
-        f.write(line)
+    # Import here to avoid circular imports; this module is used as a standalone hook
+    from ..utils import append_jsonl
+    append_jsonl(stream, event, default=str)
 
 
 def _count_tool_calls_from_transcript(transcript_path: str) -> int:

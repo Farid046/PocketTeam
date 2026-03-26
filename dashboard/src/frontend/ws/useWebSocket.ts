@@ -158,15 +158,18 @@ export function useWebSocket(): void {
         });
         if (res.ok) {
           const agents = await res.json();
-          useStore.getState().setSnapshot({
+          // Use functional updater pattern to avoid race conditions: read the
+          // latest store state at the moment of the update, not at fetch time.
+          const state = useStore.getState();
+          state.setSnapshot({
             agents,
-            events: useStore.getState().events,
-            auditStats: useStore.getState().auditStats ?? { total: 0, allowed: 0, denied: 0, byLayer: {}, byTool: {} },
-            auditEntries: useStore.getState().auditEntries,
-            killSwitch: useStore.getState().killSwitch,
-            sessionUsage: useStore.getState().sessionUsage,
-            cooActivity: useStore.getState().cooActivity,
-            sessionStatus: useStore.getState().sessionStatus,
+            events: state.events,
+            auditStats: state.auditStats ?? { total: 0, allowed: 0, denied: 0, byLayer: {}, byTool: {} },
+            auditEntries: state.auditEntries,
+            killSwitch: state.killSwitch,
+            sessionUsage: state.sessionUsage,
+            cooActivity: state.cooActivity,
+            sessionStatus: state.sessionStatus,
           });
         }
       } catch {

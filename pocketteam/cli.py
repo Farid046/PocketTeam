@@ -22,6 +22,19 @@ logger = logging.getLogger(__name__)
 
 console = Console()
 
+# Rich color names for each agent role used in log output
+AGENT_COLORS: dict[str, str] = {
+    "coo": "yellow",
+    "engineer": "blue",
+    "reviewer": "cyan",
+    "qa": "green",
+    "security": "red",
+    "devops": "magenta",
+    "planner": "bright_blue",
+    "monitor": "bright_green",
+    "observer": "bright_yellow",
+}
+
 
 @click.group()
 @click.version_option(package_name="pocketteam")
@@ -495,17 +508,7 @@ async def _logs(
             if agent_filter and ag != agent_filter:
                 return
 
-            color = {
-                "coo": "yellow",
-                "engineer": "blue",
-                "reviewer": "cyan",
-                "qa": "green",
-                "security": "red",
-                "devops": "magenta",
-                "planner": "bright_blue",
-                "monitor": "bright_green",
-                "observer": "bright_yellow",
-            }.get(ag, "white")
+            color = AGENT_COLORS.get(ag, "white")
 
             console.print(f"[dim]{ts}[/] [[{color}]{ag:12}[/]] {action or etype or status}")
         except Exception:
