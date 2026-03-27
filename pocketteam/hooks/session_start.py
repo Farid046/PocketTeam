@@ -26,7 +26,7 @@ def _notify_telegram(pt_dir: Path, message: str) -> None:
 
         bot_token = ""
         for line in env_file.read_text().splitlines():
-            if line.startswith("BOT_TOKEN="):
+            if line.startswith("TELEGRAM_BOT_TOKEN="):
                 bot_token = line.split("=", 1)[1].strip()
                 break
 
