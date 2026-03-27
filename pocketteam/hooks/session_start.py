@@ -7,7 +7,6 @@ and outputs them so the COO sees them immediately.
 
 import json
 from datetime import UTC, datetime
-from pathlib import Path
 
 from ._utils import _find_pocketteam_dir
 

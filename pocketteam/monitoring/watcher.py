@@ -18,7 +18,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..config import PocketTeamConfig, load_config
-from ..utils import append_jsonl
 from ..constants import (
     EVENTS_FILE,
     MONITOR_INTERVAL_ANOMALY,
@@ -26,6 +25,7 @@ from ..constants import (
     RESPONSE_TIME_THRESHOLD,
 )
 from ..tools.health_check import HealthChecker, HealthResult, LogAnalyzer
+from ..utils import append_jsonl
 
 logger = logging.getLogger(__name__)
 

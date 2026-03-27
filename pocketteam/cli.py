@@ -9,7 +9,7 @@ import asyncio
 import logging
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import click
@@ -371,9 +371,9 @@ async def _health() -> None:
                 if ts_raw:
                     try:
                         ts_dt = datetime.fromisoformat(ts_raw.rstrip("Z")).replace(
-                            tzinfo=timezone.utc
+                            tzinfo=UTC
                         )
-                        delta = datetime.now(tz=timezone.utc) - ts_dt
+                        delta = datetime.now(tz=UTC) - ts_dt
                         total_secs = int(delta.total_seconds())
                         if total_secs < 60:
                             age_str = f"{total_secs}s ago"
@@ -451,7 +451,7 @@ def _parse_since(since: str) -> datetime | None:
         "h": timedelta(hours=value),
         "d": timedelta(days=value),
     }[unit]
-    return datetime.now(tz=timezone.utc) - delta
+    return datetime.now(tz=UTC) - delta
 
 
 async def _logs(
@@ -488,7 +488,7 @@ async def _logs(
         try:
             # Accept ISO-8601 timestamps: "2024-01-15T10:30:00Z" or without Z
             ts_raw_clean = ts_raw.rstrip("Z")
-            ts_dt = datetime.fromisoformat(ts_raw_clean).replace(tzinfo=timezone.utc)
+            ts_dt = datetime.fromisoformat(ts_raw_clean).replace(tzinfo=UTC)
             return ts_dt >= since_cutoff
         except ValueError:
             return True
