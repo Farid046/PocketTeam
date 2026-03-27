@@ -1,6 +1,5 @@
 import React from "react";
 import type { SessionUsage, TokenUsage } from "../types";
-import { ROLE_COLORS } from "../constants";
 
 interface Props {
   usage: SessionUsage | null;
@@ -89,42 +88,54 @@ function ModelDonut({ byModel }: { byModel: Record<string, TokenUsage> }): React
   );
 }
 
+const MODEL_COLORS: Record<string, string> = {
+  opus: "#FFD700",
+  sonnet: "#5B9BD5",
+  haiku: "#70AD47",
+  unknown: "#808080",
+};
+
 // Per-agent breakdown table
-function AgentTable({ byAgent }: { byAgent: Record<string, { role: string; tokens: TokenUsage; cost: number }> }): React.ReactElement {
+function AgentTable({ byAgent }: { byAgent: Record<string, { role: string; model: string; tokens: TokenUsage; cost: number }> }): React.ReactElement {
   const entries = Object.entries(byAgent)
-    .map(([id, data]) => ({ id, ...data, total: totalTokenCount(data.tokens) }))
-    .sort((a, b) => b.total - a.total);
+    .map(([id, data]) => ({ id, ...data, total: totalTokenCount(data.tokens) }));
 
-  // Count how many times each role appears so duplicates get a "#N" suffix
-  const roleCount: Record<string, number> = {};
-  for (const e of entries) {
-    roleCount[e.role] = (roleCount[e.role] ?? 0) + 1;
+  // Group by role and sum tokens; keep the most-common model for display
+  const byRole = new Map<string, { role: string; model: string; total: number; cost: number; count: number }>();
+  for (const entry of entries) {
+    const existing = byRole.get(entry.role);
+    if (existing) {
+      existing.total += entry.total;
+      existing.cost += entry.cost;
+      existing.count += 1;
+    } else {
+      byRole.set(entry.role, { role: entry.role, model: entry.model, total: entry.total, cost: entry.cost, count: 1 });
+    }
   }
-  const roleSeen: Record<string, number> = {};
-  const disambiguated = entries.map((e) => {
-    roleSeen[e.role] = (roleSeen[e.role] ?? 0) + 1;
-    const label =
-      roleCount[e.role] > 1
-        ? `${e.role} #${roleSeen[e.role]}`
-        : e.role;
-    return { ...e, label };
-  });
+  const grouped = Array.from(byRole.values()).sort((a, b) => b.total - a.total);
 
-  const maxTokens = disambiguated.length > 0 ? disambiguated[0].total : 1;
+  const maxTokens = grouped.length > 0 ? grouped[0].total : 1;
 
   return (
     <div className="space-y-1">
-      {disambiguated.map(({ id, label, role, total, cost }) => {
+      {grouped.map(({ role, model, total, cost, count }) => {
         const pct = (total / maxTokens) * 100;
-        const color = ROLE_COLORS[role] ?? "#808080";
+        const color = MODEL_COLORS[model] ?? "#808080";
         return (
-          <div key={id} className="flex items-center gap-2 text-xs">
+          <div key={role} className="flex items-center gap-2 text-xs">
             <span
-              className="w-24 truncate font-medium flex-shrink-0"
-              style={{ color }}
-              title={label}
+              className="w-36 truncate font-medium flex-shrink-0 text-gray-200"
+              title={role}
             >
-              {label}
+              {role}
+              {count > 1 && <span className="text-gray-500 ml-1">(x{count})</span>}
+            </span>
+            <span className="flex items-center gap-1 w-20 flex-shrink-0">
+              <span
+                className="w-2 h-2 rounded-full inline-block flex-shrink-0"
+                style={{ backgroundColor: color }}
+              />
+              <span className="text-gray-500">{model}</span>
             </span>
             <div className="flex-1 h-3 bg-gray-800 rounded overflow-hidden">
               <div

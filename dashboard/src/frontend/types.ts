@@ -34,7 +34,7 @@ export interface SessionUsage {
   sessionId: string;
   totalTokens: TokenUsage;
   byModel: Record<string, TokenUsage>;
-  byAgent: Record<string, { role: string; tokens: TokenUsage; cost: number }>;
+  byAgent: Record<string, { role: string; model: string; tokens: TokenUsage; cost: number }>;
   estimatedCost: number;
   burnRate: { tokensPerMin: number; costPerHour: number };
   timeline: Array<{ ts: string; tokens: number; cost: number }>;
