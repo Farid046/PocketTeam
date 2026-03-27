@@ -2,13 +2,14 @@
 Entry point for PocketTeam hooks: python -m pocketteam.hooks <hook_type>
 
 Hook types:
-  delegation     — PreToolUse on Agent calls: auto-inject model tier
-  keyword        — UserPromptSubmit: detect autopilot/ralph/quick keywords
-  telegram_save  — UserPromptSubmit: persist Telegram messages to disk
-  agent_start    — SubagentStart: log spawn event
-  agent_stop     — SubagentStop: log completion event
-  session_start  — SessionStart: load unread Telegram messages
-  pre_compact    — PreCompact: preserve context before compression
+  delegation        — PreToolUse on Agent calls: auto-inject model tier
+  keyword           — UserPromptSubmit: detect autopilot/ralph/quick keywords
+  telegram_save     — UserPromptSubmit: persist Telegram messages to disk
+  agent_start       — SubagentStart: log spawn event
+  agent_stop        — SubagentStop: log completion event
+  observer_analyze  — SubagentStop: trigger background observer analysis
+  session_start     — SessionStart: load unread Telegram messages
+  pre_compact       — PreCompact: preserve context before compression
 """
 
 import json
@@ -45,6 +46,11 @@ elif hook_type == "agent_stop":
     from .agent_lifecycle import handle_stop
     handle_stop(hook_input)
     print(json.dumps({}))
+
+elif hook_type == "observer_analyze":
+    from .observer_trigger import handle
+    result = handle(hook_input)
+    print(json.dumps(result))
 
 elif hook_type == "session_start":
     from .session_start import handle

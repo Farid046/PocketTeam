@@ -116,6 +116,13 @@ DSAC_SESSION_FILE = "dsac_session.txt"         # Persistent session ID fallback
 DSAC_TOKEN_STALE_THRESHOLD = 3600              # Expired+unused tokens older than 1h are pruned
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Observer
+# ─────────────────────────────────────────────────────────────────────────────
+
+OBSERVER_COOLDOWN_SECONDS = 120
+OBSERVER_MAX_EVENTS_WINDOW = 200
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Dashboard
 # ─────────────────────────────────────────────────────────────────────────────
 
