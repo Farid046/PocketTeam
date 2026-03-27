@@ -15,12 +15,24 @@ Two modes:
 from __future__ import annotations
 
 import json
+import re
 import time
+from collections import deque
 
 import yaml
 
 from ..constants import EVENTS_FILE, LEARNINGS_DIR
 from .base import AgentContext, AgentResult, BaseAgent
+
+# Completion action pattern: "Finished (N tool calls, Xs)"
+_DURATION_RE = re.compile(r"Finished \(\d+ tool calls,\s*(\d+)s\)")
+
+# Threshold: agents averaging more than this are flagged as slow
+_SLOW_AGENT_THRESHOLD_SECONDS = 120
+
+# Valid event schema: agent names and statuses we accept
+_VALID_AGENT_RE = re.compile(r"^[a-z0-9_-]+$")
+_VALID_STATUSES = {"started", "done", "error", "info", "warning", "denied", "allowed"}
 
 
 class ObserverAgent(BaseAgent):
@@ -54,6 +66,7 @@ class ObserverAgent(BaseAgent):
         # Update learnings files
         if patterns:
             self._update_learnings(patterns)
+            self._emit_finding_event(patterns)
 
         return AgentResult(
             agent_id=self.agent_id,
@@ -63,42 +76,96 @@ class ObserverAgent(BaseAgent):
         )
 
     def _read_recent_events(self, task_id: str | None = None) -> list[dict]:
-        """Read recent events from stream.jsonl."""
+        """Read recent events from stream.jsonl.
+
+        Uses a deque(maxlen=200) to avoid loading the entire file into memory
+        (OOM prevention for large event streams).
+        """
+        from ..constants import OBSERVER_MAX_EVENTS_WINDOW
+
         events_path = self.project_root / EVENTS_FILE
         if not events_path.exists():
             return []
 
-        events = []
+        lines: deque[str] = deque(maxlen=OBSERVER_MAX_EVENTS_WINDOW)
         try:
-            for line in events_path.read_text().splitlines()[-200:]:
-                if line.strip():
-                    event = json.loads(line)
-                    if task_id and event.get("task_id") != task_id:
-                        continue
-                    events.append(event)
-        except Exception:
-            pass
+            with open(events_path, encoding="utf-8") as f:
+                for line in f:
+                    lines.append(line)
+        except OSError:
+            return []
+
+        events = []
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if task_id and event.get("task_id") != task_id:
+                continue
+            events.append(event)
         return events
 
     def _detect_patterns(self, events: list[dict]) -> list[dict]:
-        """Detect recurring patterns from events."""
-        patterns: list[dict] = []
+        """Detect recurring patterns from events.
 
-        # Count errors per agent
+        Validates event schema before processing to reject malformed/injected
+        entries (security fix C).
+
+        Detects:
+        - Error patterns: agents with 3+ errors
+        - Retry patterns: agents with 3+ retries
+        - Duration patterns: agents averaging >120s completion time
+        - Cross-agent patterns: QA consistently finding errors after Engineer
+        """
+        # ── Schema validation ────────────────────────────────────────────────
+        valid_events = [
+            e for e in events
+            if isinstance(e.get("agent"), str)
+            and _VALID_AGENT_RE.match(e["agent"])
+            and e.get("status") in _VALID_STATUSES
+        ]
+
+        patterns: list[dict] = []
+        today = time.strftime("%Y-%m-%d")
+
+        # ── Error / retry counting ────────────────────────────────────────────
         agent_errors: dict[str, int] = {}
         agent_retries: dict[str, int] = {}
 
-        for event in events:
-            agent = event.get("agent", "unknown")
+        # Duration tracking: agent → list of seconds
+        agent_durations: dict[str, list[float]] = {}
+
+        # Cross-agent: track QA-error-after-engineer sequences
+        qa_errors_after_engineer: int = 0
+        last_complete_agent: str = ""
+
+        for event in valid_events:
+            agent = event["agent"]
             status = event.get("status", "")
+            action = event.get("action", "")
 
             if status == "error":
                 agent_errors[agent] = agent_errors.get(agent, 0) + 1
 
-            if "retry" in event.get("action", "").lower():
+            if "retry" in action.lower():
                 agent_retries[agent] = agent_retries.get(agent, 0) + 1
 
-        # Flag agents with 3+ errors
+            # Duration: parse "Finished (N tool calls, Xs)"
+            if status == "done":
+                m = _DURATION_RE.search(action)
+                if m:
+                    seconds = float(m.group(1))
+                    agent_durations.setdefault(agent, []).append(seconds)
+
+            if agent == "qa" and status == "error" and last_complete_agent == "engineer":
+                qa_errors_after_engineer += 1
+
+            last_complete_agent = agent
+
+        # ── Flag agents with 3+ errors ────────────────────────────────────────
         for agent, count in agent_errors.items():
             if count >= 3:
                 patterns.append({
@@ -106,10 +173,10 @@ class ObserverAgent(BaseAgent):
                     "pattern": f"Agent {agent} had {count} errors in this task",
                     "severity": "warning",
                     "count": count,
-                    "timestamp": time.strftime("%Y-%m-%d"),
+                    "timestamp": today,
                 })
 
-        # Flag agents with excessive retries
+        # ── Flag agents with excessive retries ────────────────────────────────
         for agent, count in agent_retries.items():
             if count >= 3:
                 patterns.append({
@@ -117,29 +184,84 @@ class ObserverAgent(BaseAgent):
                     "pattern": f"Agent {agent} needed {count} retries",
                     "severity": "info",
                     "count": count,
-                    "timestamp": time.strftime("%Y-%m-%d"),
+                    "timestamp": today,
                 })
+
+        # ── Flag slow agents (avg duration > threshold) ───────────────────────
+        for agent, durations in agent_durations.items():
+            if durations:
+                avg_s = sum(durations) / len(durations)
+                if avg_s > _SLOW_AGENT_THRESHOLD_SECONDS:
+                    patterns.append({
+                        "agent": agent,
+                        "pattern": (
+                            f"Agent {agent} is slow: avg {avg_s:.0f}s "
+                            f"over {len(durations)} run(s)"
+                        ),
+                        "severity": "info",
+                        "count": len(durations),
+                        "timestamp": today,
+                    })
+
+        # ── Cross-agent: QA consistently fails after Engineer ─────────────────
+        if qa_errors_after_engineer >= 3:
+            patterns.append({
+                "agent": "qa",
+                "pattern": (
+                    f"QA found errors after Engineer {qa_errors_after_engineer} times — "
+                    "Engineer output quality may need review"
+                ),
+                "severity": "warning",
+                "count": qa_errors_after_engineer,
+                "timestamp": today,
+            })
 
         return patterns
 
     def _update_learnings(self, patterns: list[dict]) -> None:
-        """Update .pocketteam/learnings/ with new patterns."""
+        """Update .pocketteam/learnings/ with new patterns.
+
+        Security fix A: sanitises agent names to prevent path traversal.
+        YAML parse error: creates a backup of corrupt files before resetting.
+        """
         learnings_dir = self.project_root / LEARNINGS_DIR
         learnings_dir.mkdir(parents=True, exist_ok=True)
 
         for pattern in patterns:
             agent = pattern["agent"]
-            learnings_file = learnings_dir / f"{agent}.yaml"
 
-            # Load existing
+            # ── Security: sanitise agent name ─────────────────────────────────
+            safe_agent = re.sub(r"[^a-z0-9_-]", "", agent.lower())
+            if not safe_agent:
+                safe_agent = "unknown"
+            learnings_file = learnings_dir / f"{safe_agent}.yaml"
+
+            # Extra path-traversal check
+            if not str(learnings_file.resolve()).startswith(str(learnings_dir.resolve())):
+                continue
+
+            # ── Load existing (with YAML backup on corruption) ─────────────────
             existing: dict = {"patterns": []}
             if learnings_file.exists():
+                raw = ""
                 try:
-                    existing = yaml.safe_load(learnings_file.read_text()) or {"patterns": []}
+                    raw = learnings_file.read_text(encoding="utf-8")
+                    existing = yaml.safe_load(raw) or {"patterns": []}
+                    if not isinstance(existing, dict):
+                        raise ValueError("Not a dict")
+                    if "patterns" not in existing or not isinstance(existing["patterns"], list):
+                        existing["patterns"] = []
                 except Exception:
+                    # Backup corrupt YAML before resetting
+                    if raw:
+                        backup = learnings_file.with_suffix(".yaml.bak")
+                        try:
+                            backup.write_text(raw, encoding="utf-8")
+                        except OSError:
+                            pass
                     existing = {"patterns": []}
 
-            # Check if pattern already exists
+            # ── Update or append pattern ───────────────────────────────────────
             found = False
             for p in existing["patterns"]:
                 if p.get("pattern") == pattern["pattern"]:
@@ -158,8 +280,29 @@ class ObserverAgent(BaseAgent):
                     "added_to_prompt": False,
                 })
 
-            # Save
+            # ── Save ───────────────────────────────────────────────────────────
             try:
-                learnings_file.write_text(yaml.dump(existing, default_flow_style=False))
-            except Exception:
+                learnings_file.write_text(
+                    yaml.dump(existing, default_flow_style=False),
+                    encoding="utf-8",
+                )
+            except OSError:
                 pass
+
+    def _emit_finding_event(self, patterns: list[dict]) -> None:
+        """Write an observer observation event to the event stream."""
+        from ..utils import append_jsonl
+
+        events_path = self.project_root / EVENTS_FILE
+        summary = "; ".join(p.get("pattern", "")[:40] for p in patterns[:5])
+        append_jsonl(
+            events_path,
+            {
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "agent": "observer",
+                "type": "observation",
+                "tool": "",
+                "status": "info",
+                "action": f"Found {len(patterns)} pattern(s): {summary}"[:200],
+            },
+        )

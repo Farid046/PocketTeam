@@ -793,7 +793,11 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                     {
                         "type": "command",
                         "command": f"{hooks_prefix} agent_stop",
-                    }
+                    },
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} observer_analyze",
+                    },
                 ],
             }
         ],
