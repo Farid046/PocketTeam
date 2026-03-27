@@ -113,18 +113,22 @@ class TelegramDaemon:
             logger.warning("Kill switch active, ignoring message from %s", user_id)
             return
 
+        # Always write to inbox first
+        self._write_inbox(text, user_id, chat_id)
+
+        # Check if a Claude session is already running
+        if self._is_claude_running():
+            logger.info("Claude session already running, message saved to inbox only")
+            return
+
         # Cooldown: avoid launching multiple sessions in quick succession
         now = datetime.now(UTC).timestamp()
         if now - self._launch_cooldown < LAUNCH_COOLDOWN_SECONDS:
             logger.info(
-                "Cooldown active (%.0fs remaining), writing to inbox only",
+                "Cooldown active (%.0fs remaining), message saved to inbox only",
                 LAUNCH_COOLDOWN_SECONDS - (now - self._launch_cooldown),
             )
-            self._write_inbox(text, user_id, chat_id)
             return
-
-        # Write message to inbox before launching
-        self._write_inbox(text, user_id, chat_id)
 
         # Launch Claude session
         self._launch_cooldown = now
@@ -202,6 +206,28 @@ class TelegramDaemon:
             if path and os.path.isfile(path):
                 return path
         return None
+
+    def _is_claude_running(self) -> bool:
+        """Check if any Claude Code session is already running for this project."""
+        import subprocess as sp
+
+        try:
+            result = sp.run(
+                ["pgrep", "-f", f"claude.*--dangerously-skip-permissions"],
+                capture_output=True, text=True, timeout=5,
+            )
+            # pgrep returns 0 if matches found
+            if result.returncode == 0:
+                pids = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
+                # Filter out our own daemon PID
+                own_pid = str(os.getpid())
+                other_pids = [p for p in pids if p != own_pid]
+                if other_pids:
+                    logger.debug("Found running Claude sessions: %s", other_pids)
+                    return True
+            return False
+        except Exception:
+            return False  # If we can't check, assume no session running
 
     def _reload_access(self) -> None:
         """Re-read access.json so runtime allowlist changes take effect."""
