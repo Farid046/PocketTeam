@@ -149,6 +149,7 @@ class TestDSACPattern:
         )
         valid, reason = guard.validate_and_consume_token(
             token.token, wrong_hash, "devops",
+            session_id=token.session_id,
         )
         assert not valid
         assert "mismatch" in reason.lower()
@@ -159,6 +160,7 @@ class TestDSACPattern:
 
         valid, reason = guard.validate_and_consume_token(
             token.token, token.operation_hash, "engineer",
+            session_id=token.session_id,
         )
         assert not valid
         assert "devops" in reason.lower()
@@ -170,12 +172,14 @@ class TestDSACPattern:
         # First use: valid
         valid, _ = guard.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert valid
 
         # Second use: invalid (already consumed)
         valid, reason = guard.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert not valid
         assert "already used" in reason.lower()
@@ -187,6 +191,7 @@ class TestDSACPattern:
         time.sleep(0.01)  # Ensure expiry
         valid, reason = guard.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert not valid
         assert "expired" in reason.lower()
@@ -195,6 +200,7 @@ class TestDSACPattern:
         guard = DSACGuard(tmp_project)
         valid, reason = guard.validate_and_consume_token(
             "fake-token", "fake-hash", "devops",
+            session_id="any-session",
         )
         assert not valid
         assert "not found" in reason.lower()
@@ -243,6 +249,7 @@ class TestDSACPattern:
         guard2 = DSACGuard(tmp_project)
         valid, _ = guard2.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert valid
 
@@ -312,6 +319,7 @@ class TestDSACAtomicConsumeToken:
 
         valid, reason = guard.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert valid
         assert "consumed" in reason.lower()
@@ -322,11 +330,13 @@ class TestDSACAtomicConsumeToken:
 
         valid1, _ = guard.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert valid1
 
         valid2, reason = guard.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert not valid2
         assert "already used" in reason.lower()
@@ -460,9 +470,10 @@ class TestDSACCleanupExpired:
         guard = DSACGuard(tmp_project)
         _, token = _issue_token(guard, ttl_seconds=0)
         time.sleep(0.01)
-        # Consume it
+        # Consume it (already expired, will be marked used)
         guard.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         removed = guard.cleanup_expired()
         assert removed == 1

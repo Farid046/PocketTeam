@@ -48,6 +48,12 @@ NEVER_ALLOW_PATTERNS: list[str] = [
 
     # Crypto miner / resource abuse
     r"(xmrig|minerd|cgminer|cpuminer)",                # Known crypto miners
+
+    # D-SAC integrity: block any command that references D-SAC state files
+    # tee, dd, python -c, etc. could manipulate these files to bypass Layer 9
+    r"\.pocketteam[/\\]dsac_tokens",                   # D-SAC token store
+    r"\.pocketteam[/\\]dsac_sequence",                 # D-SAC sequence counters
+    r"\.pocketteam[/\\]dsac_session",                  # D-SAC persistent session ID
 ]
 
 # Compiled for performance

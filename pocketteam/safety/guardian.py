@@ -249,7 +249,7 @@ def _log_denial(
     tool_input: Any,
     layer: int,
     reason: str,
-    project_root: "Path | None" = None,
+    project_root: Path | None = None,
 ) -> None:
     """Write denial to audit log without crashing."""
     try:
@@ -375,7 +375,7 @@ def _check_dsac_token(
     tool_input: Any,
     agent_id: str,
     session_id: str,
-    project_root: "Path | None",
+    project_root: Path | None,
 ) -> dict | None:
     """Check if tool_input contains a valid D-SAC approval token.
 
@@ -486,6 +486,7 @@ def _check_dsac_token(
 
     except Exception:
         # D-SAC check failure -- fail CLOSED
+        logger.warning("D-SAC token check failed", exc_info=True)
         return None
 
 
