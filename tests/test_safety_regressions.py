@@ -12,11 +12,10 @@ import json
 import subprocess
 import sys
 
-import pytest
+from pocketteam.constants import AGENT_MAX_TURNS
 from pocketteam.safety.mcp_rules import check_mcp_safety
 from pocketteam.safety.network_rules import check_network_safety, extract_url_from_tool_input
 from pocketteam.safety.rate_limiter import RateLimiter
-from pocketteam.constants import AGENT_MAX_TURNS
 
 
 class TestMcpRulesNoneQuery:

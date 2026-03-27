@@ -11,12 +11,9 @@ import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
-from pocketteam.channels.setup import SessionManager, TelegramChannel
 from pocketteam.channels.remote import RemoteSession, discover_sessions
+from pocketteam.channels.setup import SessionManager, TelegramChannel
 from pocketteam.config import PocketTeamConfig, TelegramConfig
-
 
 # ── TelegramChannel ─────────────────────────────────────────────────────────
 

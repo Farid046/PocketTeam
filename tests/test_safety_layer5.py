@@ -3,7 +3,6 @@ Tests for Safety Layer 5: Sensitive File Protection
 No agent (except explicitly permitted) may read/write credentials.
 """
 
-import pytest
 from pocketteam.safety.sensitive_paths import check_sensitive_path, extract_path_from_tool_input
 
 

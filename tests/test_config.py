@@ -2,19 +2,14 @@
 Tests for pocketteam/config.py: loading, saving, env resolution, and defaults.
 """
 
-import os
-import tempfile
-from pathlib import Path
 
-import pytest
-import yaml
 
 from pocketteam.config import (
     PocketTeamConfig,
     TelegramConfig,
+    _resolve_env,
     load_config,
     save_config,
-    _resolve_env,
 )
 
 

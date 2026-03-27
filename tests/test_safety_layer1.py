@@ -3,7 +3,6 @@ Tests for Safety Layer 1: NEVER_ALLOW patterns
 These must ALWAYS be blocked — no exceptions, no overrides.
 """
 
-import pytest
 from pocketteam.safety.rules import check_never_allow
 
 

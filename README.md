@@ -630,6 +630,7 @@ pocketteam start new         # Fresh session
 pocketteam start resume      # Session picker
 pocketteam sessions          # List all sessions
 pocketteam status            # Show project status
+pocketteam run-headless      # Run PocketTeam headless for CI/CD pipelines and GitHub Actions — no interactive prompts, streams status to stdout
 ```
 
 ### Safety & Control

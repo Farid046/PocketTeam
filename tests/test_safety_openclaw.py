@@ -34,17 +34,16 @@ PocketTeam countermeasures:
 """
 
 import time
-import pytest
-from pathlib import Path
 
-from pocketteam.safety.rules import check_never_allow, check_destructive
-from pocketteam.safety.mcp_rules import check_mcp_safety
-from pocketteam.safety.network_rules import check_network_safety
-from pocketteam.safety.sensitive_paths import check_sensitive_path
-from pocketteam.safety.allowlist import check_agent_allowlist
+import pytest
+
+from pocketteam.safety.dsac import DSACGuard
 from pocketteam.safety.guardian import pre_tool_hook
 from pocketteam.safety.kill_switch import KillSwitch, KillSwitchError, KillSwitchGuard
-from pocketteam.safety.dsac import DSACGuard
+from pocketteam.safety.mcp_rules import check_mcp_safety
+from pocketteam.safety.network_rules import check_network_safety
+from pocketteam.safety.rules import check_destructive, check_never_allow
+from pocketteam.safety.sensitive_paths import check_sensitive_path
 
 
 @pytest.fixture
@@ -378,8 +377,9 @@ class TestContextCompactionSafety:
         Verify that safety rules are regex patterns (code), not LLM instructions.
         This is the key architectural difference from OpenClaw.
         """
-        from pocketteam.safety.rules import NEVER_ALLOW_PATTERNS, _NEVER_ALLOW_RE
         import re
+
+        from pocketteam.safety.rules import _NEVER_ALLOW_RE, NEVER_ALLOW_PATTERNS
 
         # Safety rules must be compiled regex patterns
         assert len(NEVER_ALLOW_PATTERNS) > 5, "Must have meaningful NEVER_ALLOW patterns"

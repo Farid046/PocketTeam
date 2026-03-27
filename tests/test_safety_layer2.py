@@ -3,7 +3,6 @@ Tests for Safety Layer 2: DESTRUCTIVE_PATTERNS
 These require plan approval but are not absolutely forbidden.
 """
 
-import pytest
 from pocketteam.safety.rules import check_destructive
 
 

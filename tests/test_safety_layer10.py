@@ -3,11 +3,12 @@ Tests for Safety Layer 10: Kill Switch
 Out-of-band stop mechanism — completely independent of agent context.
 """
 
-import time
 import threading
+import time
+
 import pytest
-from pathlib import Path
-from pocketteam.safety.kill_switch import KillSwitch, KillSwitchGuard, KillSwitchError
+
+from pocketteam.safety.kill_switch import KillSwitch, KillSwitchError, KillSwitchGuard
 
 
 @pytest.fixture

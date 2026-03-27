@@ -6,7 +6,6 @@ import json
 import subprocess
 import sys
 
-import pytest
 from pocketteam.hooks.keyword_detector import handle
 
 

@@ -3,7 +3,6 @@ Tests for Safety Layer 4: Network Safety (Domain Allowlist)
 Prevents data exfiltration via unauthorized HTTP requests.
 """
 
-import pytest
 from pocketteam.safety.network_rules import check_network_safety, extract_url_from_tool_input
 
 
