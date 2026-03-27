@@ -40,11 +40,12 @@ export function createServer(config: ServerConfig): PocketTeamServer {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
+          scriptSrc: ["'self'", "blob:"],
           connectSrc: ["'self'", `ws://localhost:${port}`, `wss://localhost:${port}`, `ws://127.0.0.1:${port}`, `wss://127.0.0.1:${port}`],
           styleSrc: ["'self'", "'unsafe-inline'"], // required for Tailwind utility classes
           imgSrc: ["'self'", "data:"],
           fontSrc: ["'self'"],
+          workerSrc: ["'self'", "blob:"],
           objectSrc: ["'none'"],
           frameAncestors: ["'none'"],
         },

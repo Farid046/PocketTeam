@@ -12,6 +12,8 @@ interface Props {
   shirtColor: string;
   skinColor: string;
   hairColor: string;
+  facingMonitor?: boolean;
+  faceRotation?: number;
 }
 
 // Desaturate a hex color by multiplying all channels by a factor (0-1)
@@ -33,8 +35,11 @@ export function Character3D({
   shirtColor,
   skinColor,
   hairColor,
+  facingMonitor = false,
+  faceRotation = 0,
 }: Props): React.ReactElement {
   const groupRef = useRef<THREE.Group>(null!);
+  const upperBodyRef = useRef<THREE.Group>(null!);
   const bodyRef = useRef<THREE.Mesh>(null!);
   const leftArmRef = useRef<THREE.Mesh>(null!);
   const rightArmRef = useRef<THREE.Mesh>(null!);
@@ -89,7 +94,7 @@ export function Character3D({
 
     if (dist > 0.05) {
       isWalking.current = true;
-      // FIX 2: Time-based walking speed (not frame-rate dependent)
+      // Time-based walking speed (not frame-rate dependent)
       const speed = Math.min(delta * 2.0, dist);
       currentPos.current = [
         cx + (dx / dist) * speed,
@@ -106,13 +111,55 @@ export function Character3D({
       isWalking.current = false;
       currentPos.current = [tx, ty, tz];
       groupRef.current.position.set(tx, ty, tz);
+
+      // When at rest, face the monitor direction if at a desk
+      if (facingMonitor) {
+        groupRef.current.rotation.y = faceRotation;
+      } else if (isIdle) {
+        groupRef.current.rotation.y = 0;
+      }
     }
 
     walkPhase.current += delta * (isWalking.current ? 8 : 5);
     const phase = walkPhase.current;
 
-    if (isWalking.current) {
-      // FIX 5: More pronounced walking arm swing (0.9) and leg swing (0.6)
+    // Detect sitting: on couch OR at desk (facingMonitor and at rest)
+    const currentCz = currentPos.current[2];
+    const onCouch = isIdle && (Math.abs(currentCz - 1.5) < 0.3 || Math.abs(currentCz - 3.0) < 0.3);
+    const atDesk = facingMonitor && !isWalking.current;
+    const isSitting = onCouch || atDesk;
+
+    if (isSitting) {
+      // Lower the upper body group for sitting pose
+      if (upperBodyRef.current) upperBodyRef.current.position.y = -0.25;
+      // Legs stretched forward
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.x = -1.2;
+        leftLegRef.current.position.y = 0.55;
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.x = -1.2;
+        rightLegRef.current.position.y = 0.55;
+      }
+      // Reset body lean
+      if (bodyRef.current) bodyRef.current.rotation.x = 0;
+      // Arms: typing if working, relaxed if idle
+      if (isWorking) {
+        const leftType = Math.sin(phase * 3) * 0.12;
+        const rightType = Math.sin(phase * 3 + 1.5) * 0.12;
+        if (leftArmRef.current) leftArmRef.current.rotation.x = -0.5 + leftType;
+        if (rightArmRef.current) rightArmRef.current.rotation.x = -0.5 + rightType;
+      } else {
+        if (leftArmRef.current) leftArmRef.current.rotation.x = -0.3;
+        if (rightArmRef.current) rightArmRef.current.rotation.x = -0.3;
+      }
+    } else if (isWalking.current) {
+      // Reset upper body position when walking
+      if (upperBodyRef.current) upperBodyRef.current.position.y = 0;
+      // Reset leg positions
+      if (leftLegRef.current) leftLegRef.current.position.y = 0.4;
+      if (rightLegRef.current) rightLegRef.current.position.y = 0.4;
+      // More pronounced walking arm swing (0.9) and leg swing (0.6)
       const swing = Math.sin(phase) * 0.9;
       if (leftArmRef.current) leftArmRef.current.rotation.x = swing;
       if (rightArmRef.current) rightArmRef.current.rotation.x = -swing;
@@ -120,18 +167,13 @@ export function Character3D({
       if (rightLegRef.current) rightLegRef.current.rotation.x = Math.sin(phase) * 0.6;
       // Reset body lean when walking
       if (bodyRef.current) bodyRef.current.rotation.x = 0;
-    } else if (isWorking) {
-      // FIX 4: Proper alternating typing animation with forward lean
-      const leftType = Math.sin(phase * 3) * 0.12;
-      const rightType = Math.sin(phase * 3 + 1.5) * 0.12;
-      if (leftArmRef.current) leftArmRef.current.rotation.x = -0.5 + leftType;
-      if (rightArmRef.current) rightArmRef.current.rotation.x = -0.5 + rightType;
-      if (leftLegRef.current) leftLegRef.current.rotation.x = 0;
-      if (rightLegRef.current) rightLegRef.current.rotation.x = 0;
-      // Slight forward lean when working
-      if (bodyRef.current) bodyRef.current.rotation.x = -0.08;
     } else {
-      // FIX 3: Breathing animation for idle agents
+      // Standing idle (not on couch, not at desk)
+      if (upperBodyRef.current) upperBodyRef.current.position.y = 0;
+      // Reset leg positions
+      if (leftLegRef.current) leftLegRef.current.position.y = 0.4;
+      if (rightLegRef.current) rightLegRef.current.position.y = 0.4;
+      // Breathing animation for standing idle agents
       if (isIdle && bodyRef.current) {
         bodyRef.current.position.y = 1.1 + Math.sin(phase * 0.3) * 0.02;
       }
@@ -168,53 +210,56 @@ export function Character3D({
         <meshStandardMaterial transparent opacity={0} />
       </mesh>
 
-      {/* Hair */}
-      <mesh position={[0, 1.82, 0]} castShadow>
-        <boxGeometry args={[0.34, 0.1, 0.34]} />
-        <meshStandardMaterial color={effectiveHairColor} />
-      </mesh>
+      {/* Upper body group — lowered when sitting */}
+      <group ref={upperBodyRef}>
+        {/* Hair */}
+        <mesh position={[0, 1.82, 0]} castShadow>
+          <boxGeometry args={[0.34, 0.1, 0.34]} />
+          <meshStandardMaterial color={effectiveHairColor} />
+        </mesh>
 
-      {/* Head */}
-      <mesh position={[0, 1.6, 0]} castShadow>
-        <boxGeometry args={[0.32, 0.32, 0.32]} />
-        <meshStandardMaterial color={effectiveSkinColor} />
-      </mesh>
+        {/* Head */}
+        <mesh position={[0, 1.6, 0]} castShadow>
+          <boxGeometry args={[0.32, 0.32, 0.32]} />
+          <meshStandardMaterial color={effectiveSkinColor} />
+        </mesh>
 
-      {/* Eyes */}
-      <mesh position={[-0.08, 1.64, 0.161]}>
-        <boxGeometry args={[0.05, 0.04, 0.01]} />
-        <meshStandardMaterial color="#1a1a1a" />
-      </mesh>
-      <mesh position={[0.08, 1.64, 0.161]}>
-        <boxGeometry args={[0.05, 0.04, 0.01]} />
-        <meshStandardMaterial color="#1a1a1a" />
-      </mesh>
+        {/* Eyes */}
+        <mesh position={[-0.08, 1.64, 0.161]}>
+          <boxGeometry args={[0.05, 0.04, 0.01]} />
+          <meshStandardMaterial color="#1a1a1a" />
+        </mesh>
+        <mesh position={[0.08, 1.64, 0.161]}>
+          <boxGeometry args={[0.05, 0.04, 0.01]} />
+          <meshStandardMaterial color="#1a1a1a" />
+        </mesh>
 
-      {/* Body */}
-      <mesh ref={bodyRef} position={[0, 1.1, 0]} castShadow>
-        <boxGeometry args={[0.35, 0.6, 0.22]} />
-        <meshStandardMaterial color={effectiveShirtColor} />
-      </mesh>
+        {/* Body */}
+        <mesh ref={bodyRef} position={[0, 1.1, 0]} castShadow>
+          <boxGeometry args={[0.35, 0.6, 0.22]} />
+          <meshStandardMaterial color={effectiveShirtColor} />
+        </mesh>
 
-      {/* Left arm */}
-      <mesh
-        ref={leftArmRef}
-        position={[-0.28, 1.1, 0]}
-        castShadow
-      >
-        <boxGeometry args={[0.12, 0.5, 0.12]} />
-        <meshStandardMaterial color={effectiveShirtColor} />
-      </mesh>
+        {/* Left arm */}
+        <mesh
+          ref={leftArmRef}
+          position={[-0.28, 1.1, 0]}
+          castShadow
+        >
+          <boxGeometry args={[0.12, 0.5, 0.12]} />
+          <meshStandardMaterial color={effectiveShirtColor} />
+        </mesh>
 
-      {/* Right arm */}
-      <mesh
-        ref={rightArmRef}
-        position={[0.28, 1.1, 0]}
-        castShadow
-      >
-        <boxGeometry args={[0.12, 0.5, 0.12]} />
-        <meshStandardMaterial color={effectiveShirtColor} />
-      </mesh>
+        {/* Right arm */}
+        <mesh
+          ref={rightArmRef}
+          position={[0.28, 1.1, 0]}
+          castShadow
+        >
+          <boxGeometry args={[0.12, 0.5, 0.12]} />
+          <meshStandardMaterial color={effectiveShirtColor} />
+        </mesh>
+      </group>
 
       {/* Left leg */}
       <mesh

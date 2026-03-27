@@ -57,7 +57,7 @@ export class UsageReader {
 
     let totalTokens: TokenUsage = { ...ZERO_TOKENS };
     const byModel: Record<string, TokenUsage> = {};
-    const byAgent: Record<string, { role: string; tokens: TokenUsage; cost: number }> = {};
+    const byAgent: Record<string, { role: string; model: string; tokens: TokenUsage; cost: number }> = {};
     let totalCost = 0;
 
     for (const agent of sessionAgents) {
@@ -70,7 +70,7 @@ export class UsageReader {
 
       // By agent
       const agentCost = calcCost(t, agent.model);
-      byAgent[agent.id] = { role: agent.role, tokens: t, cost: agentCost };
+      byAgent[agent.id] = { role: agent.role, model: getModelFamily(agent.model), tokens: t, cost: agentCost };
       totalCost += agentCost;
     }
 
