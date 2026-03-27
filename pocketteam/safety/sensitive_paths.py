@@ -122,7 +122,7 @@ def check_sensitive_path(
 
     # Check against sensitive patterns
     for pattern in _SENSITIVE_RE:
-        if pattern.match(normalized) or pattern.search(normalized):
+        if pattern.match(normalized):
             # Suggest safe alternative
             alternative = _suggest_alternative(path)
 

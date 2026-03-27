@@ -137,7 +137,7 @@ class AuditLog:
                     except ValueError:
                         ts = 0.0  # Treat corrupted timestamps as very old
                     if ts < cutoff:
-                        break
+                        continue
                     if "DENIED" in entry.get("decision", ""):
                         results.append(entry)
             except (OSError, json.JSONDecodeError):

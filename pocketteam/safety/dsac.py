@@ -150,7 +150,7 @@ class ApprovalToken:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ApprovalToken":
+    def from_dict(cls, data: dict) -> ApprovalToken:
         """Create from dict, ignoring unknown keys (forward compatibility).
 
         Token dicts on disk may contain extra metadata keys like
@@ -251,10 +251,22 @@ class DSACGuard:
                 pass
             raise
 
-    def _next_sequence_number(
-        self, session_id: str, agent_id: str
+    def _next_sequence_and_record(
+        self,
+        session_id: str,
+        agent_id: str,
+        operation_hash: str,
+        operation_description: str,
+        scope_size: int,
     ) -> int:
-        """Get and increment the monotonic sequence counter."""
+        """Atomically increment sequence counter AND record history entry (Fix 3).
+
+        Single load-modify-save prevents race conditions where parallel calls
+        to _next_sequence_number() + _record_request_in_sequence() could
+        produce colliding sequence numbers or lost history entries.
+
+        Returns the new (incremented) sequence number.
+        """
         state = self._load_sequence_state()
         session_state = state.setdefault(session_id, {})
         agent_state = session_state.setdefault(
@@ -263,23 +275,6 @@ class DSACGuard:
         current = agent_state.get("count", 0)
         next_seq = current + 1
         agent_state["count"] = next_seq
-        self._save_sequence_state(state)
-        return next_seq
-
-    def _record_request_in_sequence(
-        self,
-        session_id: str,
-        agent_id: str,
-        operation_hash: str,
-        operation_description: str,
-        scope_size: int,
-    ) -> None:
-        """Record a D-SAC request in the sequence history (N1)."""
-        state = self._load_sequence_state()
-        session_state = state.setdefault(session_id, {})
-        agent_state = session_state.setdefault(
-            agent_id, {"count": 0, "history": []}
-        )
         agent_state["history"].append({
             "operation_hash": operation_hash,
             "timestamp": time.time(),
@@ -287,6 +282,7 @@ class DSACGuard:
             "scope_size": scope_size,
         })
         self._save_sequence_state(state)
+        return next_seq
 
     # -- Session ID management (B3) -------------------------------------------
 
@@ -422,7 +418,7 @@ class DSACGuard:
         task_id: str,
         *,
         tool_name: str,
-        tool_input: "str | dict",
+        tool_input: str | dict,
         session_id: str,
         ttl_seconds: int = DSAC_APPROVAL_TOKEN_TTL,
     ) -> ApprovalToken:
@@ -437,14 +433,24 @@ class DSACGuard:
         This ensures Guardian's hash (computed from the real command)
         matches the stored hash.
         """
+        if not session_id:
+            raise ValueError("issue_approval_token: session_id must not be empty")
+
         token_str = secrets.token_urlsafe(32)
         now = time.time()
 
         # B1: Compute hash from actual tool call, not preview
         op_hash = compute_operation_hash_for_tool_call(tool_name, tool_input)
 
-        # Compute monotonic sequence number
-        seq = self._next_sequence_number(session_id, agent_id)
+        # Fix 3: Atomically increment sequence number AND record history in one
+        # load-modify-save, preventing race conditions from parallel token issuance.
+        seq = self._next_sequence_and_record(
+            session_id=session_id,
+            agent_id=agent_id,
+            operation_hash=op_hash,
+            operation_description=preview.operation,
+            scope_size=preview.item_count,
+        )
 
         token = ApprovalToken(
             token=token_str,
@@ -466,15 +472,6 @@ class DSACGuard:
         tokens[token_str] = token_dict
         self._save_tokens(tokens)
 
-        # N1: Record in sequence history (separate from tokens)
-        self._record_request_in_sequence(
-            session_id=session_id,
-            agent_id=agent_id,
-            operation_hash=op_hash,
-            operation_description=preview.operation,
-            scope_size=preview.item_count,
-        )
-
         return token
 
     def validate_and_consume_token(
@@ -482,7 +479,8 @@ class DSACGuard:
         token_str: str,
         operation_hash: str,
         agent_id: str,
-        session_id: str = "",
+        *,
+        session_id: str,
     ) -> tuple[bool, str]:
         """Atomically validate AND consume a D-SAC token.
 
@@ -534,16 +532,11 @@ class DSACGuard:
                     f" not '{agent_id}'"
                 )
 
-            # Session binding check
-            if (
-                token.session_id
-                and session_id
-                and token.session_id != session_id
-            ):
+            # Session binding check — strict equality, no bypass via empty string
+            if token.session_id != session_id:
                 return False, (
-                    f"Approval token was issued for session"
-                    f" '{token.session_id}', not '{session_id}'"
-                    " (possible re-initiation after compaction)"
+                    f"Session mismatch: token={token.session_id!r},"
+                    f" caller={session_id!r}"
                 )
 
             # ---- ATOMIC CONSUME ----
@@ -610,7 +603,7 @@ def compute_operation_hash(operation: str, scope: list[str]) -> str:
 
 def compute_operation_hash_for_tool_call(
     tool_name: str,
-    tool_input: "str | dict",
+    tool_input: str | dict,
 ) -> str:
     """Compute a deterministic hash for a tool call.
 

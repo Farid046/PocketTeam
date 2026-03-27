@@ -238,6 +238,7 @@ class TestKillSwitchScenario:
         # Token should be invalidated
         valid, reason = guard.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert not valid
         assert "already used" in reason.lower()  # [v3.1 Fix F]
@@ -408,6 +409,7 @@ class TestContextCompactionSafety:
         guard2 = DSACGuard(tmp_project)
         valid, _ = guard2.validate_and_consume_token(
             token.token, token.operation_hash, "devops",
+            session_id=token.session_id,
         )
         assert valid, (
             "Approval token must survive across guard instances"
@@ -479,6 +481,7 @@ class TestCompactionScopeEscalation:
         # Step 2: Token consumed
         guard.validate_and_consume_token(
             t1.token, t1.operation_hash, "devops",
+            session_id=t1.session_id,
         )
 
         # Step 3: Context compacted (agent loses memory)
