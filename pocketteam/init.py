@@ -252,6 +252,10 @@ async def _interview(
             if new_key:
                 cfg.auth.api_key = new_key
 
+        # Warn if key doesn't look like Anthropic format (non-blocking)
+        if cfg.auth.api_key and not cfg.auth.api_key.startswith("sk-ant-"):
+            console.print("[yellow]Warning: Key doesn't look like Anthropic format (sk-ant-*). Continuing anyway.[/]")
+
         # Auth mode is derived: if key exists, hybrid; else subscription-only
         if cfg.auth.api_key or has_env_key:
             cfg.auth.mode = "hybrid"

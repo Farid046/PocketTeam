@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **12 specialized agents** with role-based permission models (COO, Product, Planner, Reviewer, Engineer, QA, Security, DevOps, Investigator, Documentation, Monitor, Observer)
+- **Observer agent** for team learning and continuous improvement
+  - Analyzes completed tasks for error patterns
+  - Updates agent prompts with learnings
+  - Tracks recurring issues and positive patterns
+  - Stores learnings in `.pocketteam/learnings/`
 - **Real-time 3D isometric dashboard** showing live agent activity, cost tracking, and team status
   - Pixel-art Habbo-style office visualization
   - Live event feed with agent actions and audit trail
@@ -19,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - PreToolUse and PostToolUse validation hooks
   - Network allowlist enforcement
   - Secrets detection and redaction
-  - D-SAC pattern for destructive operations
+  - D-SAC v3.1 pattern for destructive operations (tool-call hash binding, re-initiation tracking)
   - Kill switch (< 1 second response time)
 - **4 workflow modes** for different use cases
   - `autopilot:` full autonomous pipeline (plan → implement → test → deploy)
@@ -34,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Security: OWASP audits, CVE scanning, threat modeling
   - DevOps: staging deploys, canary releases, rollbacks
   - Documentation: README updates, architecture docs, stale-doc audits
+  - Observer: retro, propose-improvements, weekly-digest
 - **Configuration system** with `.pocketteam/config.yaml`
   - Auth modes (subscription, API key, hybrid)
   - Telegram integration with persistent sessions and auto-resume
@@ -68,6 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **D-SAC upgraded to v3.1** with improved safety guarantees
+  - Tool-call hash binding (prevents operation scope substitution)
+  - Re-initiation tracking via sequence file
+  - Lock file creation with 0o600 permissions
+  - Persistent session_id fallback mechanism
 - Upgraded dashboard frontend to React 18 with TypeScript
 - Refactored WebSocket message types for stricter typing
 - Improved agent lifecycle tracking with transcript-based tool call counting
