@@ -162,7 +162,7 @@ class TelegramDaemon:
         launch_script.write_text(
             f'#!/bin/bash\n'
             f'cd "{self.project_root}"\n'
-            f'exec {claude_path} --continue --dangerously-skip-permissions --channels plugin:telegram@claude-plugins-official\n'
+            f'exec {claude_path} --dangerously-skip-permissions --effort medium --channels plugin:telegram@claude-plugins-official\n'
         )
         launch_script.chmod(0o755)
 
