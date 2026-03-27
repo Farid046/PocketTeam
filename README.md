@@ -537,14 +537,39 @@ PocketTeam's safety is:
 
 ### The D-SAC Pattern
 
-For all destructive operations (deployments, deletions, force-pushes):
+D-SAC (Dry-run / Staged / Approval / Commit) is a cryptographically secured approval flow for destructive operations. It is Layer 9 of the safety stack and the primary mechanism that prevents agents from silently deleting files, wiping databases, or force-pushing to production.
+
+**What triggers D-SAC:**
+Any command matching a destructive pattern — `rm -rf`, `DELETE FROM`, `DROP TABLE`, `git push --force`, `TRUNCATE`, and others — is intercepted by the Guardian hook before execution.
+
+**The four-step flow:**
 
 ```
-1. DRY-RUN:  Show exactly what will change (with hash)
-2. STAGED:   Create time-limited approval token (5 min TTL)
-3. APPROVAL: CEO approves (or plan pre-approves)
-4. COMMIT:   Execute with rate limiting + audit trail
+1. DRY-RUN:  Guardian blocks the operation and produces a preview.
+             Shows affected files, rows, scope, and a content hash.
+
+2. STAGED:   System creates a cryptographic one-time-use approval token
+             bound to the exact operation hash and the current session ID.
+
+3. APPROVAL: CEO reviews the dry-run preview and either approves or rejects.
+             On approval, the token is issued with a 5-minute TTL.
+
+4. COMMIT:   Agent re-submits the operation with the token.
+             Guardian validates the token (scope, session, TTL, one-time use)
+             and allows exactly this operation, once.
 ```
+
+**Security guarantees:**
+
+| Guarantee | How it works |
+|---|---|
+| **Scope-binding** | The token encodes a hash of the exact operation. A token issued for `rm staging/` will be rejected by Guardian if the agent attempts `rm production/` — the hash does not match. |
+| **Session-binding** | Tokens are tied to the session ID in which they were issued. A token cannot be replayed in a different session. |
+| **One-time use** | Each token is consumed atomically (file-locking). A second attempt with the same token is rejected even within the TTL. |
+| **Re-initiation protection** | After context compaction, the system detects when an agent tries to restart an approval flow with a wider scope than originally approved and warns the CEO before proceeding. |
+| **Layer 1 override impossible** | Operations on the `NEVER_ALLOW` blocklist (`rm -rf /`, `DROP DATABASE`, fork bombs) cannot be unlocked by any token. D-SAC only applies to Layer 2 patterns — Layer 1 is a hard block with no bypass path. |
+
+**Test coverage:** 94 dedicated D-SAC tests verify all attack vectors — scope substitution, token replay, cross-session reuse, TTL expiry, and compaction-triggered re-initiation.
 
 ### Example: Safe Deployment
 
