@@ -113,6 +113,7 @@ DSAC_TOKEN_INPUT_KEY = "__dsac_token"          # Key in tool_input dict for toke
 DSAC_SEQUENCE_FILE = "dsac_sequence.json"      # Relative to .pocketteam/
 DSAC_MAX_REINITIATIONS = 2                     # Hard block after N re-initiations per session+agent
 DSAC_SESSION_FILE = "dsac_session.txt"         # Persistent session ID fallback
+DSAC_TOKEN_STALE_THRESHOLD = 3600              # Expired+unused tokens older than 1h are pruned
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dashboard

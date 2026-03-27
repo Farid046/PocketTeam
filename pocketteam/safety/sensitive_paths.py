@@ -86,7 +86,8 @@ SENSITIVE_PATH_PATTERNS: list[str] = [
     r".*[/\\]\.pocketteam[/\\]browse\.json$",       # browser session state (may contain cookies/tokens)
     r".*[/\\]\.pocketteam[/\\]dsac_tokens\.json$",  # D-SAC approval tokens
     r".*[/\\]\.pocketteam[/\\]dsac_sequence\.json$",  # D-SAC sequence counters
-    r".*[/\\]\.pocketteam[/\\]dsac_tokens\.lock$",    # D-SAC lock file
+    r".*[/\\]\.pocketteam[/\\]dsac_tokens\.lock$",    # D-SAC token lock file
+    r".*[/\\]\.pocketteam[/\\]dsac_sequence\.lock$",  # D-SAC sequence lock file
     r".*[/\\]\.pocketteam[/\\]dsac_session\.txt$",    # D-SAC persistent session ID [v3.1 Fix B]
 ]
 
