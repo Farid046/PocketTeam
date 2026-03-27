@@ -1,33 +1,77 @@
 """
-Session Start Hook — loads unread Telegram messages on new session.
+Session Start Hook — loads unread Telegram messages and notifies CEO.
 
 Reads .pocketteam/telegram-inbox.jsonl, finds messages with status "received",
-and outputs them so the COO sees them immediately.
+sends a Telegram notification that the session is active, and outputs the
+messages so the COO sees them immediately.
 """
 
 import json
+import subprocess
+import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from ._utils import _find_pocketteam_dir
 
 
+def _notify_telegram(pt_dir: Path, message: str) -> None:
+    """Send a notification to the CEO via Telegram Bot API."""
+    try:
+        env_file = Path.home() / ".claude" / "channels" / "telegram" / ".env"
+        access_file = Path.home() / ".claude" / "channels" / "telegram" / "access.json"
+
+        if not env_file.exists() or not access_file.exists():
+            return
+
+        bot_token = ""
+        for line in env_file.read_text().splitlines():
+            if line.startswith("BOT_TOKEN="):
+                bot_token = line.split("=", 1)[1].strip()
+                break
+
+        if not bot_token:
+            return
+
+        access_data = json.loads(access_file.read_text())
+        allowed = access_data.get("allowFrom", [])
+        if not allowed:
+            return
+
+        # Send to first allowed user (CEO)
+        chat_id = allowed[0]
+
+        import urllib.request
+        import urllib.parse
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        data = urllib.parse.urlencode({
+            "chat_id": chat_id,
+            "text": message,
+        }).encode()
+
+        req = urllib.request.Request(url, data=data, method="POST")
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass  # Notification is best-effort, never block session start
+
+
 def handle(hook_input: dict) -> dict:
-    """Check for unread Telegram messages and present them."""
+    """Check for unread Telegram messages, notify CEO, present them."""
     pt_dir = _find_pocketteam_dir()
     if not pt_dir:
         return {}
 
     inbox_path = pt_dir / "telegram-inbox.jsonl"
-    if not inbox_path.exists():
-        return {}
 
     # Read all entries
     lines = []
-    try:
-        with open(inbox_path) as f:
-            lines = f.readlines()
-    except OSError:
-        return {}
+    if inbox_path.exists():
+        try:
+            with open(inbox_path) as f:
+                lines = f.readlines()
+        except OSError:
+            pass
 
     updated_lines = []
     unread = []
@@ -50,16 +94,33 @@ def handle(hook_input: dict) -> dict:
 
         updated_lines.append(json.dumps(entry, default=str))
 
+    # Write back with updated statuses
+    if updated_lines:
+        try:
+            with open(inbox_path, "w") as f:
+                for ul in updated_lines:
+                    f.write(ul + "\n")
+        except OSError:
+            pass
+
+    # Send Telegram notification that session is active
+    if unread:
+        preview = unread[-1].get("text", "")[:80]
+        _notify_telegram(
+            pt_dir,
+            f"PocketTeam Session gestartet.\n"
+            f"{len(unread)} Nachricht(en) empfangen.\n"
+            f"Letzte: \"{preview}\"\n\n"
+            f"Wie kann ich helfen?"
+        )
+    else:
+        _notify_telegram(
+            pt_dir,
+            "PocketTeam Session gestartet. Wie kann ich helfen?"
+        )
+
     if not unread:
         return {}
-
-    # Write back with updated statuses
-    try:
-        with open(inbox_path, "w") as f:
-            for ul in updated_lines:
-                f.write(ul + "\n")
-    except OSError:
-        pass
 
     # Build summary message for the COO
     summary_lines = [f"📨 {len(unread)} unread Telegram message(s) from CEO:"]
@@ -74,7 +135,6 @@ def handle(hook_input: dict) -> dict:
             time_str = "??:??"
 
         text = msg.get("text", "")
-        # Truncate long messages
         if len(text) > 150:
             text = text[:150] + "..."
 
@@ -83,5 +143,4 @@ def handle(hook_input: dict) -> dict:
     summary_lines.append("")
     summary_lines.append("Review and respond to these messages.")
 
-    # Return summary as additionalContext so Claude Code injects it into the session
     return {"additionalContext": "\n".join(summary_lines)}
