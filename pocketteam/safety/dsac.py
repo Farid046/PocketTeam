@@ -44,6 +44,7 @@ from ..constants import (
     DSAC_SEQUENCE_FILE,
     DSAC_SESSION_FILE,
     DSAC_TOKEN_INPUT_KEY,
+    DSAC_TOKEN_STALE_THRESHOLD,
 )
 
 
@@ -176,6 +177,9 @@ class DSACGuard:
             project_root / ".pocketteam" / DSAC_SEQUENCE_FILE
         )
         self._lock_path = project_root / ".pocketteam" / "dsac_tokens.lock"
+        self._sequence_lock_path = (
+            project_root / ".pocketteam" / "dsac_sequence.lock"
+        )
         self._session_path = (
             project_root / ".pocketteam" / DSAC_SESSION_FILE
         )
@@ -267,22 +271,31 @@ class DSACGuard:
 
         Returns the new (incremented) sequence number.
         """
-        state = self._load_sequence_state()
-        session_state = state.setdefault(session_id, {})
-        agent_state = session_state.setdefault(
-            agent_id, {"count": 0, "history": []}
+        self._sequence_lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_fd = os.open(
+            str(self._sequence_lock_path), os.O_CREAT | os.O_RDWR, 0o600
         )
-        current = agent_state.get("count", 0)
-        next_seq = current + 1
-        agent_state["count"] = next_seq
-        agent_state["history"].append({
-            "operation_hash": operation_hash,
-            "timestamp": time.time(),
-            "operation_description": operation_description[:200],
-            "scope_size": scope_size,
-        })
-        self._save_sequence_state(state)
-        return next_seq
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            state = self._load_sequence_state()
+            session_state = state.setdefault(session_id, {})
+            agent_state = session_state.setdefault(
+                agent_id, {"count": 0, "history": []}
+            )
+            current = agent_state.get("count", 0)
+            next_seq = current + 1
+            agent_state["count"] = next_seq
+            agent_state["history"].append({
+                "operation_hash": operation_hash,
+                "timestamp": time.time(),
+                "operation_description": operation_description[:200],
+                "scope_size": scope_size,
+            })
+            self._save_sequence_state(state)
+            return next_seq
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
 
     # -- Session ID management (B3) -------------------------------------------
 
@@ -308,12 +321,24 @@ class DSACGuard:
             except OSError:
                 pass
 
-        # Generate new session ID and persist
+        # Generate new session ID and persist atomically
         new_id = f"dsac-{secrets.token_hex(8)}"
         try:
             self._session_path.parent.mkdir(parents=True, exist_ok=True)
-            self._session_path.write_text(new_id)
-            os.chmod(str(self._session_path), 0o600)
+            fd, tmp = tempfile.mkstemp(
+                dir=str(self._session_path.parent), suffix=".tmp"
+            )
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write(new_id)
+                os.chmod(tmp, 0o600)
+                os.replace(tmp, str(self._session_path))
+            except Exception:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
         except OSError:
             pass  # If write fails, still return the generated ID
         return new_id
@@ -565,21 +590,34 @@ class DSACGuard:
         return count
 
     def cleanup_expired(self) -> int:
-        """Remove tokens that are BOTH expired AND used (N8).
+        """Remove expired tokens in two passes.
 
-        Unexpired tokens stay (even if used -- they are history).
-        Expired-but-unused tokens stay (they may still be validated).
-        Only expired+used tokens are removed (they are fully spent).
+        Pass 1 (N8): expired+used tokens are fully spent -- remove immediately.
+        Pass 2 (stale pruning): expired+unused tokens that are older than
+        DSAC_TOKEN_STALE_THRESHOLD seconds are orphaned (never validated in
+        the normal D-SAC flow window) -- remove to prevent unbounded growth.
 
-        Returns count removed.
+        Unexpired tokens stay regardless of used status.
+
+        Returns total count removed.
         """
         tokens = self._load_tokens()
         now = time.time()
-        to_remove = [
-            k
-            for k, v in tokens.items()
-            if v.get("expires_at", 0) < now and v.get("used")
-        ]
+
+        to_remove: list[str] = []
+
+        for k, v in tokens.items():
+            expires_at = v.get("expires_at", 0)
+            is_expired = expires_at < now
+            if not is_expired:
+                continue
+            if v.get("used"):
+                # Pass 1: expired+used -- always remove
+                to_remove.append(k)
+            elif (now - expires_at) > DSAC_TOKEN_STALE_THRESHOLD:
+                # Pass 2: expired+unused but stale beyond threshold -- remove
+                to_remove.append(k)
+
         for k in to_remove:
             del tokens[k]
         if to_remove:
