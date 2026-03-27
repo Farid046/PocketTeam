@@ -3,7 +3,6 @@ Tests for Safety Layer 3: MCP Tool Safety
 SQL injection prevention, Supabase mutation protection.
 """
 
-import pytest
 from pocketteam.safety.mcp_rules import check_mcp_safety
 
 

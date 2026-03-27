@@ -3,7 +3,6 @@ Tests for Safety Layer 6: Per-Agent Tool Allowlist
 Each agent may only use the tools permitted for their role.
 """
 
-import pytest
 from pocketteam.safety.allowlist import check_agent_allowlist
 
 

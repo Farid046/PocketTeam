@@ -5,23 +5,18 @@ No real HTTP/Telegram calls — all external calls are mocked.
 
 from __future__ import annotations
 
-import asyncio
-import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-import pytest
-
-from pocketteam.monitoring.watcher import Watcher
+from pocketteam.config import MonitoringConfig, PocketTeamConfig
 from pocketteam.monitoring.escalation import EscalationManager, Incident
 from pocketteam.monitoring.healer import (
+    _notify_telegram,
     handle_health_failure,
     handle_log_anomaly,
-    _notify_telegram,
 )
-from pocketteam.config import PocketTeamConfig, MonitoringConfig, TelegramConfig
+from pocketteam.monitoring.watcher import Watcher
 from pocketteam.tools.health_check import HealthResult
-
 
 # ── Escalation Manager ─────────────────────────────────────────────────────
 

@@ -6,16 +6,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from pocketteam.modules.base_module import BaseModule, ModuleConfig
 from pocketteam.modules.autoresearch.module import AutoResearchModule
 from pocketteam.modules.autoresearch.tracker import (
     Experiment,
     ExperimentResult,
     ExperimentTracker,
 )
-
+from pocketteam.modules.base_module import ModuleConfig
 
 # ── BaseModule ──────────────────────────────────────────────────────────────
 

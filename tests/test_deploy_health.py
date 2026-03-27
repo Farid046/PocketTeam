@@ -5,20 +5,14 @@ No real Docker/HTTP calls — all external calls are mocked.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
-from pocketteam.tools.deploy_tools import DeployResult, DeployTools
+from pocketteam.tools.deploy_tools import DeployTools
 from pocketteam.tools.health_check import (
     HealthChecker,
-    HealthResult,
     LogAnalyzer,
-    LogAnalysisResult,
 )
-
 
 # ── DeployTools ─────────────────────────────────────────────────────────────
 
@@ -101,7 +95,7 @@ class TestDeployTools:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             return b"", b""
 
         proc = MagicMock()

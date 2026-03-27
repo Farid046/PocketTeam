@@ -6,17 +6,13 @@ No real subprocesses are spawned — all external calls are mocked.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from pocketteam.agents.qa import QAAgent
 from pocketteam.agents.security import DependencyScanResult, SecurityAgent
-from pocketteam.tools.browser_tools import BrowserResult, BrowserTool
+from pocketteam.tools.browser_tools import BrowserTool
 from pocketteam.tools.test_runner import TestFramework, TestResult, TestRunner
-
 
 # ── TestRunner: framework detection ──────────────────────────────────────────
 
@@ -47,7 +43,7 @@ class TestPytestParsing:
     """_parse_output correctly extracts counts from pytest output."""
 
     def _parse(self, output: str) -> dict:
-        from pocketteam.tools.test_runner import _parse_output, TestFramework
+        from pocketteam.tools.test_runner import TestFramework, _parse_output
         return _parse_output(TestFramework.PYTEST, output)
 
     def test_all_passed(self):
@@ -137,7 +133,7 @@ class TestRunnerExecution:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             # Second call (after kill) drains the process
             return b"", b""
 

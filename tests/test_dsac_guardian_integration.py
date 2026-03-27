@@ -7,6 +7,7 @@ Includes scope-escalation attack test (B1).
 import time
 
 import pytest
+
 from pocketteam.safety.dsac import DSACGuard
 from pocketteam.safety.guardian import pre_tool_hook
 
@@ -220,6 +221,7 @@ class TestDSACTokenRegressions:
     def test_token_key_does_not_match_destructive_patterns(self):
         import json
         import secrets
+
         from pocketteam.safety.rules import (
             check_destructive,
             check_never_allow,

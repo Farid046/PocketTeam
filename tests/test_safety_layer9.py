@@ -9,12 +9,12 @@ v3: All tests use tool_name/tool_input on issue_approval_token (N3).
 import time
 
 import pytest
+
 from pocketteam.constants import DSAC_MAX_REINITIATIONS
 from pocketteam.safety.dsac import (
     ApprovalToken,
-    DSACGuard,
     DryRunPreview,
-    compute_operation_hash,
+    DSACGuard,
     compute_operation_hash_for_tool_call,
 )
 

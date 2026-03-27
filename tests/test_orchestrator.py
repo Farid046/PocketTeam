@@ -8,11 +8,9 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
-from pocketteam.core.orchestrator import run_task, run_retro, _log_event
-
+from pocketteam.core.orchestrator import _log_event, run_retro, run_task
 
 # ── run_task ────────────────────────────────────────────────────────────────
 

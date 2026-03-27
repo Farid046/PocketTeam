@@ -8,14 +8,12 @@ Tests for Phase 6 CLI additions:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
 from click.testing import CliRunner
 
 from pocketteam.cli import _parse_since, main
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # _parse_since unit tests
@@ -24,22 +22,22 @@ from pocketteam.cli import _parse_since, main
 
 class TestParseSince:
     def test_minutes(self):
-        before = datetime.now(tz=timezone.utc)
+        before = datetime.now(tz=UTC)
         result = _parse_since("30m")
-        after = datetime.now(tz=timezone.utc)
+        after = datetime.now(tz=UTC)
         assert result is not None
         expected_approx = before - timedelta(minutes=30)
         assert abs((result - expected_approx).total_seconds()) < 2
 
     def test_hours(self):
-        before = datetime.now(tz=timezone.utc)
+        before = datetime.now(tz=UTC)
         result = _parse_since("2h")
         assert result is not None
         expected_approx = before - timedelta(hours=2)
         assert abs((result - expected_approx).total_seconds()) < 2
 
     def test_days(self):
-        before = datetime.now(tz=timezone.utc)
+        before = datetime.now(tz=UTC)
         result = _parse_since("3d")
         assert result is not None
         expected_approx = before - timedelta(days=3)
@@ -128,7 +126,7 @@ class TestHealthCommand:
         """Health reads last event from stream and displays it."""
         pt_dir = tmp_path / ".pocketteam"
         (pt_dir / "events").mkdir(parents=True)
-        ts = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        ts = datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
         event = {"ts": ts, "agent": "engineer", "action": "Edit on src/main.py"}
         (pt_dir / "events" / "stream.jsonl").write_text(json.dumps(event) + "\n")
         monkeypatch.chdir(tmp_path)
@@ -182,7 +180,7 @@ class TestLogsCommand:
 
     def test_logs_since_filters_old_events(self, tmp_path, monkeypatch):
         """Events older than --since cutoff are not shown."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         old_ts = (now - timedelta(hours=3)).isoformat().replace("+00:00", "Z")
         new_ts = (now - timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
         events = [
@@ -199,7 +197,7 @@ class TestLogsCommand:
 
     def test_logs_since_includes_all_recent(self, tmp_path, monkeypatch):
         """--since 24h includes events from the past day."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         events = [
             {
                 "ts": (now - timedelta(hours=h)).isoformat().replace("+00:00", "Z"),
@@ -231,7 +229,7 @@ class TestLogsCommand:
 
     def test_logs_since_30m(self, tmp_path, monkeypatch):
         """--since 30m shows only events from last 30 minutes."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         events = [
             {
                 "ts": (now - timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
@@ -254,7 +252,7 @@ class TestLogsCommand:
 
     def test_logs_agent_filter_combined_with_since(self, tmp_path, monkeypatch):
         """--agent and --since can be combined."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         recent = (now - timedelta(minutes=5)).isoformat().replace("+00:00", "Z")
         events = [
             {"ts": recent, "agent": "qa", "action": "qa-recent"},

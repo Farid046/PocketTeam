@@ -8,14 +8,13 @@ artifact extraction, error handling, kill switch, and upgrade path.
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pocketteam.agents.base import AgentContext, AgentResult, BaseAgent
 from pocketteam.agents.coo import COOAgent
 from pocketteam.agents.devops import DevOpsAgent
 from pocketteam.agents.documentation import DocumentationAgent
@@ -27,7 +26,6 @@ from pocketteam.agents.product import ProductAgent
 from pocketteam.agents.qa import QAAgent
 from pocketteam.agents.reviewer import ReviewerAgent
 from pocketteam.agents.security import SecurityAgent
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

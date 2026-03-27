@@ -3,9 +3,11 @@ Tests for Safety Layer 8: Audit Log + Incident Playbooks
 """
 
 import json
-import pytest
 from pathlib import Path
-from pocketteam.safety.audit_log import AuditLog, SafetyDecision, get_playbook, INCIDENT_PLAYBOOKS
+
+import pytest
+
+from pocketteam.safety.audit_log import AuditLog, SafetyDecision, get_playbook
 
 
 @pytest.fixture

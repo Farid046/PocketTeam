@@ -3,8 +3,9 @@ Tests for Safety Layer 7: Rate Limiting + Budget + Scope
 """
 
 import pytest
+
+from pocketteam.constants import AGENT_BUDGETS, AGENT_MAX_TURNS
 from pocketteam.safety.rate_limiter import RateLimiter
-from pocketteam.constants import AGENT_MAX_TURNS, AGENT_BUDGETS
 
 
 class TestRateLimiter:
