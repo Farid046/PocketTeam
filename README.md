@@ -111,6 +111,16 @@ Watch your AI team work in a pixel-art Habbo-style office:
 
 Accessed via `pocketteam dashboard start` or embedded in Claude Code.
 
+### Dashboard Views
+
+| Office | Timeline |
+|--------|----------|
+| ![Office View](docs/screenshots/01-office-view.png) | ![Timeline View](docs/screenshots/02-timeline-view.png) |
+
+| Safety | Usage |
+|--------|-------|
+| ![Safety View](docs/screenshots/03-safety-view.png) | ![Usage View](docs/screenshots/04-usage-view.png) |
+
 ### ptbrowse: Own Browser Automation CLI
 
 A lightweight, accessibility-tree-based browser automation tool built on Playwright and Bun. It exposes a persistent daemon so every command reuses the same browser instance — no cold-start overhead per step.
