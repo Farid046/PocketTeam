@@ -160,10 +160,11 @@ class ObserverAgent(BaseAgent):
                     seconds = float(m.group(1))
                     agent_durations.setdefault(agent, []).append(seconds)
 
-            if agent == "qa" and status == "error" and last_complete_agent == "engineer":
-                qa_errors_after_engineer += 1
-
-            last_complete_agent = agent
+            if status in ("done", "error"):
+                # Cross-agent check FIRST
+                if agent == "qa" and status == "error" and last_complete_agent == "engineer":
+                    qa_errors_after_engineer += 1
+                last_complete_agent = agent
 
         # ── Flag agents with 3+ errors ────────────────────────────────────────
         for agent, count in agent_errors.items():

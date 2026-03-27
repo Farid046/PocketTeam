@@ -70,7 +70,6 @@ async def run_retro(days: int = 7, project_root: Path | None = None) -> None:
     """
     Run a retrospective: analyze activity, agent learnings, bottlenecks.
     """
-    import json
 
     from rich.console import Console
     from rich.table import Table

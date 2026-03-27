@@ -8,7 +8,6 @@ Also saves a brief context snapshot to .pocketteam/context-preservation.md.
 
 import json
 import time
-from pathlib import Path
 
 from ._utils import _find_pocketteam_dir
 
