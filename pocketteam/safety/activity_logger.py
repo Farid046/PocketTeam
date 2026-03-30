@@ -31,6 +31,28 @@ def _find_project_root() -> Path | None:
     return None
 
 
+def _resolve_agent_name(agent_id: str, project_root: Path) -> str:
+    """Resolve agent hash ID to human-readable name via registry."""
+    if not agent_id:
+        return "coo"  # Main session = COO
+    # Check if it's already a known name
+    known = {"coo", "product", "planner", "reviewer", "engineer", "qa",
+             "security", "devops", "investigator", "documentation", "monitor", "observer"}
+    if agent_id in known:
+        return agent_id
+    # Try registry
+    registry = project_root / ".pocketteam" / "agent-registry.json"
+    if registry.exists():
+        try:
+            data = json.loads(registry.read_text())
+            resolved = data.get(agent_id)
+            if resolved:
+                return resolved
+        except (json.JSONDecodeError, OSError):
+            pass
+    return agent_id  # Return hash if unresolvable
+
+
 def log_activity(tool_name: str, tool_input: str, agent_id: str = "") -> None:
     """Append a tool-use event to the daily audit log."""
     project_root = _find_project_root()
@@ -43,6 +65,9 @@ def log_activity(tool_name: str, tool_input: str, agent_id: str = "") -> None:
     except OSError:
         return
 
+    # Resolve agent hash → name
+    agent_name = _resolve_agent_name(agent_id, project_root)
+
     # Hash input — never store raw content
     input_str = tool_input if isinstance(tool_input, str) else json.dumps(tool_input, default=str)
     input_hash = hashlib.sha256(input_str.encode()).hexdigest()[:16]
@@ -50,9 +75,12 @@ def log_activity(tool_name: str, tool_input: str, agent_id: str = "") -> None:
     entry = {
         "ts": datetime.now().isoformat(),
         "event": "tool_use",
-        "agent": agent_id or "unknown",
+        "agent": agent_name,
         "tool": tool_name,
         "input_hash": f"sha256:{input_hash}",
+        "decision": "ALLOWED",
+        "layer": None,
+        "reason": "",
     }
 
     date = datetime.now().strftime("%Y-%m-%d")
