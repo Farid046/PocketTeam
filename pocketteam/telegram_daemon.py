@@ -128,7 +128,19 @@ class TelegramDaemon:
                 logger.info("Rejected message from unauthorized user %s", user_id)
                 return
 
-        # Kill switch check
+        # /kill command — activate kill switch IMMEDIATELY, even during active session
+        if text.strip().lower() in ("/kill", "/stop"):
+            logger.warning("KILL SWITCH activated via Telegram by user %s", user_id)
+            self.kill_file.parent.mkdir(parents=True, exist_ok=True)
+            self.kill_file.touch()
+            await self._send_message(
+                chat_id,
+                "🛑 Kill switch activated. All agents stopped.\n"
+                "Run `pocketteam resume` to re-enable.",
+            )
+            return
+
+        # Kill switch check — ignore messages if already killed
         if self.kill_file.exists():
             logger.warning("Kill switch active, ignoring message from %s", user_id)
             return
@@ -157,6 +169,17 @@ class TelegramDaemon:
         # Launch Claude session
         self._launch_cooldown = now
         await self._launch_session(text)
+
+    async def _send_message(self, chat_id: str, text: str) -> None:
+        """Send a message to the user via Telegram Bot API."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.post(
+                    f"{self.api_base}/sendMessage",
+                    json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+                )
+        except Exception:
+            logger.debug("Failed to send Telegram message", exc_info=True)
 
     def _write_inbox(self, text: str, user_id: str, chat_id: str) -> None:
         self.inbox_file.parent.mkdir(parents=True, exist_ok=True)
