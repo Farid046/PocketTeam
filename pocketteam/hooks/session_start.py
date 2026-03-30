@@ -114,7 +114,10 @@ def handle(hook_input: dict) -> dict:
     # Send Telegram notification that session is active
     # Only notify when no unread messages — the COO will reply to unread
     # messages directly, so a separate greeting would be a duplicate.
-    if not unread:
+    # Also skip when session was started with -p flag (automated/headless)
+    # because the COO will respond with its analysis, not a greeting.
+    is_automated = any(arg in sys.argv for arg in ["-p", "--prompt", "--print"])
+    if not unread and not is_automated:
         _notify_telegram(
             pt_dir,
             "PocketTeam Session gestartet. Wie kann ich helfen?"
