@@ -34,7 +34,7 @@
 | **3D Dashboard** | Real-time isometric office — see your agents work, track costs, audit safety |
 | **Telegram Control** | Give tasks, approve deploys, receive alerts — all from your phone |
 | **10-Layer Safety** | Structural hooks (not prompts). Survives context compaction. Cannot be bypassed |
-| **Browser Automation** | `ptbrowse` — 90% cheaper than screenshot-based tools (text accessibility tree) |
+| **Browser Automation** | `ptbrowse` — uses text accessibility tree instead of screenshots (much smaller token footprint) |
 | **4 Workflow Modes** | `autopilot`, `ralph` (persistent), `quick`, `deep-dive` (parallel research) |
 | **Kill Switch** | `pocketteam kill` — stops everything in < 1 second |
 | **Zero Config** | `pocketteam init` guides you through everything. 5 questions, done |
@@ -64,7 +64,7 @@ PocketTeam gives you a full autonomous IT team where:
 
 1. **Specialization wins**: 12 specialized agents, each with a clear role and permission model
 2. **Safety is structural**: 10 runtime hooks that survive context compaction and cannot be bypassed
-3. **You stay in control**: 4 human gates, kill switch (< 1 second), budget limits, audit trail
+3. **You stay in control**: 3 human gates, kill switch (< 1 second), budget limits, audit trail
 4. **Real-time visibility**: 3D isometric office dashboard showing which agents are working, what they're doing, and costs in real-time
 5. **Cost-optimized**: Runs on Claude Code subscription ($20–$200/month flat) with Haiku for cheap tasks and Opus on-demand
 
@@ -76,7 +76,7 @@ PocketTeam gives you a full autonomous IT team where:
 
 | Agent | Role | Model | Key Responsibility |
 |---|---|---|---|
-| **COO** | Orchestrator | Opus | Delegates work, enforces pipeline, controls autopilot/ralph/quick modes |
+| **COO** | Orchestrator | inherit | Delegates ALL work to agents — never writes code itself. Enforces pipeline + workflow modes |
 | **Product** | Demand validator | Sonnet | Market research, competitive analysis, product briefs (asks 6 forcing questions) |
 | **Planner** | Implementation lead | Sonnet | Task breakdown, risk assessment, breaking-change plans |
 | **Reviewer** | Code & design auditor | Sonnet | Architecture review, performance analysis, code style enforcement |
@@ -136,23 +136,13 @@ ptbrowse assert text "Dashboard"
 
 | Capability | ptbrowse | Playwright MCP | gstack /browse |
 |---|---|---|---|
-| **Cost per step** | ~$0.01 | ~$0.10–$0.30 | ~$0.10+ |
 | **Token source** | Accessibility tree text | Full screenshot pixels | Full screenshot pixels |
 | **Persistent daemon** | Yes (one Chromium, reused) | No (new context per call) | No |
 | **Structured refs** | `@e1`…`@eN` (stable across steps) | CSS selectors | Not exposed |
 | **Diff snapshots** | Yes (`snapshot -D`) | No | No |
 | **Headed mode** | `PTBROWSE_HEADED=1` | Configurable | Configurable |
 
-#### Token-Cost Breakdown
-
-A typical 10-step login sequence:
-```
-Playwright MCP:  10 × ~2,000 image tokens = 20,000 tokens ≈ $0.06
-ptbrowse:        10 × ~200 text tokens    = 2,000 tokens  ≈ $0.006
-
-Savings per test run: ~90%
-Savings at 100 runs/day: ~$5.40/day → ~$162/month
-```
+**Why text over screenshots?** Text accessibility trees are typically 10-20x smaller than image tokens for the same page. This means significantly lower token usage per browser interaction — especially in long automation sequences.
 
 #### Command Reference
 
@@ -263,20 +253,13 @@ PocketTeam: "Plan ready. 3 questions:
 
 You: "GitHub, user+email, button"
 
-PocketTeam: "Implementation started..."
+PocketTeam: "Plan approved. Implementation started..."
    [15 minutes later]
 
-PocketTeam: "✅ Tests: 23/23 passed. Code review: approved.
-   PR #42 ready. Deploy to staging?"
-
-You: "Deploy"
-
-PocketTeam: "✅ Staging live. All smoke tests pass.
-   Deploy to production?"
-
-You: "Yes"
-
-PocketTeam: "🚀 Live in production. Monitoring active."
+PocketTeam: "✅ Tests: 23/23 passed.
+   Code review: approved.
+   Security audit: clean.
+   Ready for your review."
 ```
 
 ### Magic Keywords: Workflow Modes
@@ -295,7 +278,7 @@ Example:
 autopilot: Add dark mode toggle
 ```
 
-The COO will plan, implement, test, review, audit, and deploy—all without asking. You get notified at key milestones.
+The COO delegates to the full team — Planner plans, Engineer implements, QA tests, Security audits — all without you having to manage anything. You get notified at key milestones via Telegram.
 
 ---
 
@@ -331,15 +314,14 @@ GitHub Actions (runs every hour)
 ### What You Need
 
 - A **health endpoint** on your app (`GET /health` → 200 OK)
-- Your app **reachable from the internet** (any method works)
-- A `/trigger-session` endpoint that starts Claude Code on your machine
-- GitHub Actions secrets set up (done automatically by `pocketteam init`)
+- Your app **reachable from the internet** (any method — your server, tunnel, etc.)
+- GitHub Actions secrets (set up automatically by `pocketteam init`)
+- Optional: a `/trigger-session` endpoint on your machine to auto-start Claude Code sessions (advanced setup)
 
 ### Key Principles
 
-- **CEO-in-the-loop**: Every fix requires your explicit approval before going live
-- **Staging-first**: Fixes are verified on staging before touching production
-- **3-strike rule**: After 3 failed attempts, the system escalates with full context instead of retrying
+- **CEO-in-the-loop**: Every fix requires your explicit approval via Telegram before going live
+- **No autonomous changes**: PocketTeam analyzes and plans, but only executes with your permission
 - **GitHub-native**: `pocketteam init` creates the repo, sets secrets, pushes the monitoring workflow — zero manual setup
 
 ### GitHub Integration
@@ -447,38 +429,31 @@ Phase 2: IMPLEMENTATION
   ├── Security audits (OWASP, CVEs, threat model)
   └── Documentation updates README, API docs, architecture
 
-Phase 3: STAGING
-  └── DevOps deploys to staging + runs smoke tests
+Phase 3: DEPLOY (requires your infrastructure setup)
+  ├── HUMAN GATE: You approve deployment
+  ├── DevOps agent assists with deploy commands
+  └── Monitor watches health + logs after deploy
 
-Phase 4: PRODUCTION
-  ├── HUMAN GATE: You approve production deploy
-  ├── DevOps deploys with canary strategy
-  └── Monitor watches for 15 minutes
-
-Phase 5: 24/7 MONITORING + SELF-HEALING
-  ├── Health checks every 5 minutes
+Phase 4: 24/7 MONITORING (via GitHub Actions)
+  ├── Hourly health checks on your production URL
   ├── Log analysis for error patterns
-  ├── Auto-detection of production issues
-  ├── Root-cause analysis via Investigator
-  ├── Staging-first auto-fix with CEO approval
-  └── 3-strike rule: escalate after 3 failed auto-fixes
+  ├── On failure: notifies CEO + starts analysis session
+  └── CEO approves any fixes before execution
 ```
 
-### Control Points (4 Human Gates)
+### Human Gates
 
-1. **Product Gate**: Is this worth building? (Product agent asks 6 questions)
-2. **Plan Gate**: Does the plan make sense? (You review + approve)
-3. **Production Gate**: Ready to ship? (You approve deployment)
-4. **Incident Gate**: Should we auto-fix or escalate? (You approve auto-fixes via Telegram)
+1. **Plan Gate**: You review + approve the plan before any code is written
+2. **Deploy Gate**: You approve deployment before anything goes live
+3. **Incident Gate**: Problem detected — you approve the fix plan before execution
 
-### Kill Switch (3 Ways)
+### Kill Switch
 
 Stop everything in < 1 second:
 
 ```bash
-pocketteam kill              # CLI
-/kill                        # Telegram
-touch .pocketteam/KILL       # Signal file
+pocketteam kill              # CLI (recommended)
+touch .pocketteam/KILL       # Signal file (works from any terminal)
 ```
 
 ---
@@ -531,13 +506,11 @@ D-SAC (Dry-run / Staged / Approval / Commit) is a cryptographically secured appr
 ### Session & Workflow
 
 ```bash
-pocketteam init              # Setup wizard
-pocketteam start             # Resume last session
+pocketteam init              # Setup wizard (5 steps, fully guided)
+pocketteam start             # Start or resume last session
 pocketteam start new         # Fresh session
-pocketteam start resume      # Session picker
-pocketteam sessions          # List all sessions
-pocketteam status            # Show project status
-pocketteam run-headless      # Run headless (for CI/CD pipelines)
+pocketteam start resume      # Pick a specific session to resume
+pocketteam status            # Show project status (config, kill switch, events)
 ```
 
 ### Safety & Control
@@ -607,8 +580,8 @@ your-project/
 | Feature | PocketTeam | gstack | Oh-My-ClaudeCode | OpenClaw | CrewAI |
 |---|---|---|---|---|---|
 | **Agents** | 12 | 0 | 32 | 5 | Role-based |
-| **Skills** | 53 | 25 | 28 | 0 | Custom |
-| **Browser Automation** | ptbrowse (10–20x cheaper) | /browse | No | No | No |
+| **Skills** | 55 | 25 | 28 | 0 | Custom |
+| **Browser Automation** | ptbrowse (text-based, lower tokens) | /browse | No | No | No |
 | **Real-time Dashboard** | 3D isometric office | No | No | No | No |
 | **Self-Healing Loop** | Yes (via GitHub Actions + Tunnel) | No | No | No | No |
 | **Safety Layers** | 10 (runtime hooks) | 0 | 0 | 8 (context-only) | None |
@@ -636,7 +609,7 @@ PocketTeam treats safety as an infrastructure concern. Every tool call — regar
 ### Setup
 
 ```bash
-git clone https://github.com/Farid046/pocketteam.git
+git clone https://github.com/Farid046/PocketTeam.git
 cd pocketteam
 
 python -m venv .venv
@@ -664,7 +637,7 @@ ruff format pocketteam/   # Format
 ### Statistics
 
 - **12 agents** with specialized prompts
-- **53 skills** distributed across agents
+- **55 skills** distributed across agents
 - **~13,000 lines of code** across 78 Python files
 - **497+ tests** across 21 test files
 - **95%+ test coverage**
@@ -701,7 +674,5 @@ MIT License. See [LICENSE](LICENSE) for details.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Farid046/pocketteam">Star on GitHub</a> •
-  <a href="https://discord.gg/pocketteam">Join Discord</a> •
-  <a href="https://twitter.com/pocketteamhq">Follow on X</a>
+  <a href="https://github.com/Farid046/PocketTeam">Star on GitHub</a>
 </p>
