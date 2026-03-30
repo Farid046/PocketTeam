@@ -71,11 +71,20 @@ class DashboardConfig:
 
 
 @dataclass
-class GitHubActionsConfig:
+class GitHubConfig:
+    """GitHub integration — repo management + Actions monitoring."""
     enabled: bool = True
+    repo_name: str = ""          # e.g. "my-project" (created via gh CLI)
+    repo_owner: str = ""         # GitHub user or org (auto-detected from gh auth)
+    repo_private: bool = True
+    actions_enabled: bool = True
     api_key: str = ""            # Stored as GitHub Secret ANTHROPIC_API_KEY
     model: str = "claude-haiku-4-5-20251001"
     schedule: str = "0 * * * *"  # Every hour
+
+
+# Backwards compat alias
+GitHubActionsConfig = GitHubConfig
 
 
 @dataclass
@@ -99,7 +108,16 @@ class PocketTeamConfig:
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
     budget: BudgetConfig = field(default_factory=BudgetConfig)
-    github_actions: GitHubActionsConfig = field(default_factory=GitHubActionsConfig)
+    github: GitHubConfig = field(default_factory=GitHubConfig)
+
+    @property
+    def github_actions(self) -> GitHubConfig:
+        """Backwards compat: cfg.github_actions → cfg.github."""
+        return self.github
+
+    @github_actions.setter
+    def github_actions(self, value: GitHubConfig) -> None:
+        self.github = value
     network: NetworkConfig = field(default_factory=NetworkConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
 
@@ -158,9 +176,15 @@ def load_config(project_root: Path | None = None) -> PocketTeamConfig:
             prefer_subscription=bud.get("prefer_subscription", True),
         )
 
-    if ga := raw.get("github_actions"):
-        cfg.github_actions = GitHubActionsConfig(
+    # Load from "github" key first, fall back to legacy "github_actions"
+    ga = raw.get("github") or raw.get("github_actions")
+    if ga:
+        cfg.github = GitHubConfig(
             enabled=ga.get("enabled", True),
+            repo_name=ga.get("repo_name", ""),
+            repo_owner=ga.get("repo_owner", ""),
+            repo_private=ga.get("repo_private", True),
+            actions_enabled=ga.get("actions_enabled", ga.get("enabled", True)),
             api_key=_resolve_env(ga.get("api_key", "")),
             model=ga.get("model", "claude-haiku-4-5-20251001"),
             schedule=ga.get("schedule", "0 * * * *"),
@@ -226,12 +250,16 @@ def save_config(cfg: PocketTeamConfig) -> None:
             "max_per_task": cfg.budget.max_per_task,
             "prefer_subscription": cfg.budget.prefer_subscription,
         },
-        "github_actions": {
-            "enabled": cfg.github_actions.enabled,
+        "github": {
+            "enabled": cfg.github.enabled,
+            "repo_name": cfg.github.repo_name,
+            "repo_owner": cfg.github.repo_owner,
+            "repo_private": cfg.github.repo_private,
+            "actions_enabled": cfg.github.actions_enabled,
             # Stored as GitHub Secret ANTHROPIC_API_KEY — never write the literal value.
             "api_key": "$ANTHROPIC_API_KEY",
-            "model": cfg.github_actions.model,
-            "schedule": cfg.github_actions.schedule,
+            "model": cfg.github.model,
+            "schedule": cfg.github.schedule,
         },
         "network": {
             "approved_domains": [],  # Extra domains beyond defaults
