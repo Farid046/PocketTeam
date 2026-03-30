@@ -17,78 +17,13 @@
 </p>
 
 <p align="center">
-  <a href="#self-healing-architecture">Self-Healing</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#how-it-works">How It Works</a> •
   <a href="#agents">Agents</a> •
+  <a href="#self-healing">Self-Healing</a> •
   <a href="#safety">Safety</a> •
   <a href="#commands">Commands</a>
 </p>
-
----
-
-## Self-Healing Architecture: The USP
-
-PocketTeam's killer feature is a **self-healing loop** that runs 24/7 via GitHub Actions + Cloudflare Tunnel + local Claude Code sessions. When production breaks, you don't page on-call. The system detects the issue, diagnoses it, stages a fix, and asks you for approval.
-
-### How It Works
-
-```
-GitHub Actions (hourly)
-    ↓
-Check /health + /logs endpoints
-    ↓
-Problem detected?
-    ↓ YES
-POST /trigger-session (via Cloudflare Tunnel)
-    ↓
-Local PocketTeam daemon wakes up
-    ↓
-claude --agent pocketteam/coo
-    ↓
-Investigator: Root cause analysis
-Engineer: Minimal fix (on feature branch)
-QA: Verify fix in staging
-    ↓
-Telegram: "Production issue detected.
-          Fix staged and tested.
-          Deploy to production?"
-    ↓
-CEO approves
-    ↓
-DevOps: Deploy to production
-Monitor: Watch for 15 minutes
-    ↓
-✅ Fixed. Back to green.
-```
-
-### Key Features of Self-Healing
-
-1. **CEO stays in control**: Every auto-fix requires explicit approval via Telegram before going live
-2. **Staging-first always**: Fixes are verified on staging before production
-3. **3-strike rule**: After 3 failed auto-fixes, system escalates to CEO with full context
-4. **GitHub-native setup**: Secrets + Monitoring Workflow installed by `pocketteam init`
-5. **Cloudflare Tunnel**: Secure reverse proxy from GitHub Actions to your local machine (no firewall issues)
-6. **No downtime for agent**: One local daemon handles all sessions; auto-restarts on crash
-
-### GitHub Integration in Init
-
-When you run `pocketteam init`, Step 5 sets up GitHub integration automatically:
-
-```bash
-pocketteam init
-# ... Steps 1-4 ...
-# Step 5: GitHub Setup
-# ✅ Created GitHub repo: Farid046/pocketteam
-# ✅ Set secrets:
-#    - ANTHROPIC_API_KEY
-#    - TELEGRAM_BOT_TOKEN
-#    - TELEGRAM_CHAT_ID
-#    - GH_PAT (fine-grained, private repo access)
-# ✅ Pushed monitoring workflow
-```
-
-The monitoring workflow (`pocketteam-monitor.yml`) runs hourly and posts to `/trigger-session` when health checks fail.
 
 ---
 
@@ -329,6 +264,62 @@ autopilot: Add dark mode toggle
 ```
 
 The COO will plan, implement, test, review, audit, and deploy—all without asking. You get notified at key milestones.
+
+---
+
+## Self-Healing: 24/7 Monitoring via GitHub Actions
+
+PocketTeam can monitor your production app around the clock — even when you're asleep. A GitHub Actions workflow checks your health and log endpoints on a schedule. When something breaks, it starts a Claude Code session on your machine that analyzes the problem, creates a fix plan, and sends it to you via Telegram for approval. No autonomous changes — you stay in the loop.
+
+### The Flow
+
+```
+GitHub Actions (runs every hour)
+    │
+    ├─ GET /health  → HTTP 200? ✅ All good, done.
+    ├─ GET /logs    → Errors found?
+    │
+    ↓ Problem detected
+    │
+    ├─ 1. Telegram notification to CEO: "🚨 Problem detected"
+    │
+    ├─ 2. POST /trigger-session on your app
+    │     (your app must be reachable — any public URL works:
+    │      your server, Cloudflare Tunnel, ngrok, Vercel, Railway, etc.)
+    │
+    ├─ 3. Your machine starts:  claude --agent pocketteam/coo
+    │     COO delegates to Investigator → root cause analysis
+    │     COO creates a detailed fix plan
+    │
+    ├─ 4. Telegram to CEO: "📋 Here's the fix plan. Approve?"
+    │
+    └─ 5. You approve → COO executes (staging-first, always)
+```
+
+### What You Need
+
+- A **health endpoint** on your app (`GET /health` → 200 OK)
+- Your app **reachable from the internet** (any method works)
+- A `/trigger-session` endpoint that starts Claude Code on your machine
+- GitHub Actions secrets set up (done automatically by `pocketteam init`)
+
+### Key Principles
+
+- **CEO-in-the-loop**: Every fix requires your explicit approval before going live
+- **Staging-first**: Fixes are verified on staging before touching production
+- **3-strike rule**: After 3 failed attempts, the system escalates with full context instead of retrying
+- **GitHub-native**: `pocketteam init` creates the repo, sets secrets, pushes the monitoring workflow — zero manual setup
+
+### GitHub Integration
+
+`pocketteam init` Step 5 handles everything automatically via the `gh` CLI:
+
+1. Creates a GitHub repo (or uses an existing one)
+2. Sets secrets: `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GH_PAT`
+3. Pushes the monitoring workflow (`pocketteam-monitor.yml`)
+4. Optionally triggers a first test run
+
+The `GH_PAT` secret enables GitHub Actions to install PocketTeam from your private repo. Once PocketTeam is on PyPI, this won't be needed.
 
 ---
 
