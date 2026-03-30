@@ -73,20 +73,28 @@ def start(ctx: click.Context, no_telegram: bool) -> None:
 
     Uses --dangerously-skip-permissions with PocketTeam's 10-layer safety hooks.
 
-    Default (no subcommand): starts a fresh new session.
-    Use 'pocketteam start continue' to resume the last session.
+    Default (no subcommand): continues the last session.
+    Use 'pocketteam start new' to start a fresh session.
     """
     ctx.ensure_object(dict)
     ctx.obj["no_telegram"] = no_telegram
     if ctx.invoked_subcommand is None:
-        # Default: fresh new session (avoids O(n²) context growth from long sessions)
-        _launch_claude(no_telegram=no_telegram, resume="new", session_id=None)
+        # Default: continue last session (avoids orphan sessions)
+        _launch_claude(no_telegram=no_telegram, resume="continue", session_id=None)
+
+
+@start.command("new")
+@click.pass_context
+def start_new(ctx: click.Context) -> None:
+    """Start a fresh new session."""
+    no_telegram = ctx.parent.obj.get("no_telegram", False) if ctx.parent else False
+    _launch_claude(no_telegram=no_telegram, resume="new", session_id=None)
 
 
 @start.command("continue")
 @click.pass_context
 def start_continue(ctx: click.Context) -> None:
-    """Continue the last session."""
+    """Continue the last session (same as default)."""
     no_telegram = ctx.parent.obj.get("no_telegram", False) if ctx.parent else False
     _launch_claude(no_telegram=no_telegram, resume="continue", session_id=None)
 
