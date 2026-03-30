@@ -54,6 +54,7 @@ NEVER_ALLOW_PATTERNS: list[str] = [
     r"\.pocketteam[/\\]dsac_tokens",                   # D-SAC token store
     r"\.pocketteam[/\\]dsac_sequence",                 # D-SAC sequence counters
     r"\.pocketteam[/\\]dsac_session",                  # D-SAC persistent session ID
+    r"\.pocketteam[/\\]agent-registry\.json",          # Agent registry (privilege escalation via role injection)
 ]
 
 # Compiled for performance
