@@ -37,8 +37,14 @@ async def handle_health_failure(
 
     Returns a dict with the outcome.
     """
+    import os
+
     root = project_root or Path.cwd()
     cfg = load_config(root)
+
+    # In CI (GitHub Actions), secrets come via env vars — use as fallback
+    bot_token = cfg.telegram.bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = cfg.telegram.chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")
 
     incident_id = f"health-{uuid.uuid4().hex[:8]}"
     escalation = EscalationManager(root)
@@ -50,8 +56,8 @@ async def handle_health_failure(
 
     # Always notify CEO
     await _notify_telegram(
-        cfg.telegram.bot_token,
-        cfg.telegram.chat_id,
+        bot_token,
+        chat_id,
         f"⚠️ <b>Health check FAILED</b>\n"
         f"URL: {health_url}\n"
         f"Status: HTTP {http_status}\n"
@@ -71,14 +77,14 @@ async def handle_health_failure(
     # Attempt auto-fix if enabled
     if cfg.monitoring.auto_fix:
         fix_result = await _attempt_auto_fix(
-            root, cfg, incident, escalation
+            root, cfg, incident, escalation, bot_token, chat_id
         )
         result.update(fix_result)
     else:
         result["escalated"] = True
         await _notify_telegram(
-            cfg.telegram.bot_token,
-            cfg.telegram.chat_id,
+            bot_token,
+            chat_id,
             f"Auto-fix disabled. Manual intervention needed.\nIncident: {incident_id}",
         )
 
@@ -94,8 +100,13 @@ async def handle_log_anomaly(
     Called when log analysis detects anomalies.
     Similar flow to health_failure but with lower severity.
     """
+    import os
+
     root = project_root or Path.cwd()
     cfg = load_config(root)
+
+    bot_token = cfg.telegram.bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = cfg.telegram.chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")
 
     incident_id = f"log-{uuid.uuid4().hex[:8]}"
     escalation = EscalationManager(root)
@@ -106,8 +117,8 @@ async def handle_log_anomaly(
     )
 
     await _notify_telegram(
-        cfg.telegram.bot_token,
-        cfg.telegram.chat_id,
+        bot_token,
+        chat_id,
         f"⚠️ <b>Log anomaly detected</b>\n"
         f"Errors: {error_count}\n"
         f"Summary: {error_summary[:200]}\n"
@@ -126,6 +137,8 @@ async def _attempt_auto_fix(
     cfg: PocketTeamConfig,
     incident: Incident,
     escalation: EscalationManager,
+    bot_token: str = "",
+    chat_id: str = "",
 ) -> dict:
     """
     Attempt to auto-fix an incident.
@@ -145,8 +158,8 @@ async def _attempt_auto_fix(
         if escalation.should_escalate(incident.incident_id):
             result["escalated"] = True
             await _notify_telegram(
-                cfg.telegram.bot_token,
-                cfg.telegram.chat_id,
+                bot_token,
+                chat_id,
                 f"❌ <b>Auto-fix failed after {attempt} attempts</b>\n"
                 f"Incident: {incident.incident_id}\n"
                 f"Manual intervention required.",
@@ -172,8 +185,8 @@ async def _attempt_auto_fix(
             )
             result["auto_fix_success"] = True
             await _notify_telegram(
-                cfg.telegram.bot_token,
-                cfg.telegram.chat_id,
+                bot_token,
+                chat_id,
                 f"✅ <b>Auto-fix successful</b>\n"
                 f"Incident: {incident.incident_id}\n"
                 f"Attempt: {attempt + 1}",
