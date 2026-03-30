@@ -10,7 +10,7 @@ Parse PocketTeam event stream and Docker logs to spot errors, anomalies, and unu
 ## Event Stream Analysis
 
 ```bash
-BASE=/Users/farid/Documents/entwicklung/PocketTeam/.pocketteam
+BASE=.pocketteam
 
 # Error rate in last N events
 tail -500 $BASE/events/stream.jsonl | python3 -c "

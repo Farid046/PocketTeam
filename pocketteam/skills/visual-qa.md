@@ -11,7 +11,7 @@ Use the PocketTeam browser (ptbrowse) to verify UI changes visually and interact
 
 ```bash
 # Start dashboard if not running
-cd /Users/farid/Documents/entwicklung/PocketTeam/dashboard
+cd dashboard
 bun run dev &
 
 # Open the page

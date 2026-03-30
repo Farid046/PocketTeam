@@ -48,15 +48,15 @@ docker compose logs $SERVICE --tail=10
 Write to event stream:
 
 ```bash
-echo "{\"type\": \"rollback\", \"service\": \"$SERVICE\", \"reason\": \"[reason]\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"status\": \"complete\"}" >> /Users/farid/Documents/entwicklung/PocketTeam/.pocketteam/events/stream.jsonl
+echo "{\"type\": \"rollback\", \"service\": \"$SERVICE\", \"reason\": \"[reason]\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"status\": \"complete\"}" >> .pocketteam/events/stream.jsonl
 ```
 
 ## Step 5: Lock Deploys Until Fixed
 
 ```bash
 # Create a deploy lock
-touch /Users/farid/Documents/entwicklung/PocketTeam/.pocketteam/DEPLOY_LOCK
-echo "Rollback at $(date). Reason: [reason]. Fix required before next deploy." > /Users/farid/Documents/entwicklung/PocketTeam/.pocketteam/DEPLOY_LOCK
+touch .pocketteam/DEPLOY_LOCK
+echo "Rollback at $(date). Reason: [reason]. Fix required before next deploy." > .pocketteam/DEPLOY_LOCK
 ```
 
 ## Post-Rollback

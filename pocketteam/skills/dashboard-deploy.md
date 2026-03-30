@@ -17,7 +17,7 @@ Primary deploy job for the PocketTeam dashboard. Always staging first, then prod
 ## Build
 
 ```bash
-cd /Users/farid/Documents/entwicklung/PocketTeam/dashboard
+cd dashboard
 
 # Build production image
 docker build -t pocketteam-dashboard:$(git rev-parse --short HEAD) -t pocketteam-dashboard:latest .

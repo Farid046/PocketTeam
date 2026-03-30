@@ -10,7 +10,7 @@ Build a unified timeline from multiple sources to identify when and why somethin
 ## Data Sources
 
 ```bash
-BASE=/Users/farid/Documents/entwicklung/PocketTeam
+BASE=$(git rev-parse --show-toplevel)
 
 # 1. Git history (last 20 commits with times)
 git -C $BASE log --oneline --format="%ci %h %s" -20

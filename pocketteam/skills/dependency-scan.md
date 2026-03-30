@@ -10,7 +10,7 @@ Run all dependency scanners and triage findings by severity.
 ## npm (dashboard)
 
 ```bash
-cd /Users/farid/Documents/entwicklung/PocketTeam/dashboard
+cd dashboard
 
 # Vulnerability scan
 npm audit --json 2>/dev/null | python3 -c "
@@ -36,8 +36,6 @@ for k,v in flagged.items(): print(f'  {k}: {v}')
 ## Python (pocketteam)
 
 ```bash
-cd /Users/farid/Documents/entwicklung/PocketTeam
-
 # pip-audit (install if missing: pip install pip-audit)
 pip-audit --format=json 2>/dev/null | python3 -c "
 import sys, json

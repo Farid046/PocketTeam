@@ -10,7 +10,7 @@ Systematically find documentation that no longer matches the codebase.
 ## Step 1: Find All Docs
 
 ```bash
-BASE=/Users/farid/Documents/entwicklung/PocketTeam
+BASE=$(git rev-parse --show-toplevel)
 
 find $BASE -name "*.md" -not -path "*/node_modules/*" -not -path "*/.git/*" | sort
 ```

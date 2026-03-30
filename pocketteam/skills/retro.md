@@ -10,7 +10,7 @@ After a task completes, run a retrospective to capture learning while it's fresh
 ## Data to Collect
 
 ```bash
-BASE=/Users/farid/Documents/entwicklung/PocketTeam
+BASE=$(git rev-parse --show-toplevel)
 
 # Task duration (time between first and last event for this task)
 # Agent spawn count

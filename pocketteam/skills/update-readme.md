@@ -10,7 +10,7 @@ After a feature ships, update README.md so it reflects the current state of the 
 ## What to Check
 
 ```bash
-BASE=/Users/farid/Documents/entwicklung/PocketTeam
+BASE=$(git rev-parse --show-toplevel)
 
 # What changed in this feature? (compare to last README update)
 git log --oneline --since="$(git log --format='%ci' README.md | head -1)" --diff-filter=A -- '*.md' '*.py' '*.ts'

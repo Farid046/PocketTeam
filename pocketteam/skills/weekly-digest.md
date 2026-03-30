@@ -10,13 +10,13 @@ Produce a weekly summary of PocketTeam activity. Run at end of week (or on deman
 ## Data Collection
 
 ```bash
-BASE=/Users/farid/Documents/entwicklung/PocketTeam
+BASE=$(git rev-parse --show-toplevel)
 
 # Events from last 7 days
 python3 - << 'EOF'
-import json, collections, datetime
+import json, collections, datetime, subprocess
 
-base = "/Users/farid/Documents/entwicklung/PocketTeam/.pocketteam/events/stream.jsonl"
+base = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode().strip() + "/.pocketteam/events/stream.jsonl"
 cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=7)
 
 events = []
@@ -47,7 +47,6 @@ EOF
 ## Git Activity
 
 ```bash
-cd /Users/farid/Documents/entwicklung/PocketTeam
 git log --since="7 days ago" --oneline --format="%ci %h %s"
 git log --since="7 days ago" --oneline | wc -l
 ```
