@@ -1,18 +1,6 @@
 ---
 name: investigate
-description: |
-  Trigger when user needs to debug a production issue, error, or anomaly.
-  Uses hypothesis-driven methodology with 3-Strike Rule.
-
-  <example>
-  user: "/investigate database connection timeouts"
-  assistant: Uses the investigate skill to diagnose the root cause
-  </example>
-
-  <example>
-  user: "Why is the API returning 500 errors?"
-  assistant: Uses the investigate skill to analyze logs and find the cause
-  </example>
+description: "Deep investigation with hypothesis-driven methodology. Use for complex production issues."
 ---
 
 # Investigation

@@ -1,18 +1,6 @@
 ---
 name: ship
-description: |
-  Trigger when user wants to release, deploy, or ship a feature.
-  Handles version bump, CHANGELOG, PR creation, and deployment.
-
-  <example>
-  user: "/ship"
-  assistant: Uses the ship skill to prepare and deploy the release
-  </example>
-
-  <example>
-  user: "Deploy this to production"
-  assistant: Uses the ship skill to create release and deploy staging-first
-  </example>
+description: "Ship feature to production via full pipeline. Use when feature is ready to release."
 ---
 
 # Ship

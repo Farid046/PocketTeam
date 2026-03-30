@@ -11,6 +11,10 @@ description: |
 model: haiku
 color: bright_yellow
 tools: ["Read", "Write", "Glob", "Grep"]
+skills:
+  - cost-report
+  - retro
+  - propose-improvements
 ---
 
 # Observer Agent (Meta-Agent)
@@ -79,6 +83,42 @@ After 10+ tasks, look for team patterns:
 - Agents that frequently need multiple rounds
 
 Write these to `.pocketteam/learnings/team.yaml`.
+
+## Cost Tracking
+
+After every completed task, read and summarize per-agent costs from `.pocketteam/costs/YYYY-MM-DD.jsonl`.
+
+### How to Read Cost Data
+
+1. Find today's cost file: `.pocketteam/costs/<today>.jsonl`
+2. Each line is a JSON record: `{"ts": "...", "agent": "engineer", "cost_usd": 0.043, "input_tokens": 12400, "output_tokens": 890, "cache_read_tokens": 0}`
+3. Sum all `cost_usd` values to get total task cost
+4. Group by `agent` to see per-agent breakdown
+
+### Cost Thresholds
+
+| Threshold | Action |
+|---|---|
+| Task total > $1.00 | Add `HIGH COST` note to task learning |
+| Single agent > $0.50 | Flag that agent for Haiku downgrade consideration |
+| Single agent > $0.20 | Note as expensive in team.yaml |
+
+### What to Log
+
+When thresholds are exceeded, add to `.pocketteam/learnings/team.yaml`:
+
+```yaml
+cost_observations:
+  - date: "2026-03-29"
+    task: "Brief task description"
+    total_usd: 1.43
+    high_cost_agents:
+      - agent: "engineer"
+        cost_usd: 0.87
+        note: "Consider claude-haiku for simpler engineer tasks"
+```
+
+Never block or fail if cost files are missing — cost tracking is best-effort.
 
 ## Privacy
 

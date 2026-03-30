@@ -214,7 +214,7 @@ class TestSafetyIntegration:
         from pocketteam.safety.kill_switch import KillSwitchError
 
         with pytest.raises(KillSwitchError):
-            asyncio.get_event_loop().run_until_complete(pipeline.run())
+            asyncio.run(pipeline.run())
 
     def test_guardian_blocks_dangerous_commands(self):
         from pocketteam.safety.guardian import pre_tool_hook
