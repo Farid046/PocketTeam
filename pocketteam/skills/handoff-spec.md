@@ -53,5 +53,5 @@ After investigation is complete, format findings as a precise spec for the Engin
 ## Write Handoff To
 
 ```bash
-echo "[handoff content]" > /Users/farid/Documents/entwicklung/PocketTeam/.pocketteam/artifacts/plans/fix-[issue-slug].md
+echo "[handoff content]" > .pocketteam/artifacts/plans/fix-[issue-slug].md
 ```

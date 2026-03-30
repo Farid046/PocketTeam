@@ -41,7 +41,7 @@ SEVERITY=P1
 MESSAGE="[what is broken and what was tried]"
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-echo "{\"type\": \"escalation\", \"severity\": \"$SEVERITY\", \"message\": \"$MESSAGE\", \"auto_heal_attempted\": true, \"timestamp\": \"$TIMESTAMP\", \"agent\": \"monitor\"}" >> /Users/farid/Documents/entwicklung/PocketTeam/.pocketteam/events/stream.jsonl
+echo "{\"type\": \"escalation\", \"severity\": \"$SEVERITY\", \"message\": \"$MESSAGE\", \"auto_heal_attempted\": true, \"timestamp\": \"$TIMESTAMP\", \"agent\": \"monitor\"}" >> .pocketteam/events/stream.jsonl
 ```
 
 ## Escalation Message Format
@@ -66,5 +66,5 @@ Recommended action: [what COO/CEO should do]
 Monitor continues checking every 2 minutes. If resolved:
 
 ```bash
-echo "{\"type\": \"resolved\", \"severity\": \"$SEVERITY\", \"message\": \"Issue resolved\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"agent\": \"monitor\"}" >> /Users/farid/Documents/entwicklung/PocketTeam/.pocketteam/events/stream.jsonl
+echo "{\"type\": \"resolved\", \"severity\": \"$SEVERITY\", \"message\": \"Issue resolved\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"agent\": \"monitor\"}" >> .pocketteam/events/stream.jsonl
 ```
