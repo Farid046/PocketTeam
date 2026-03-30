@@ -95,6 +95,18 @@ async def run_init(
     # Create GitHub Actions workflow
     _create_github_actions(project_root, cfg)
 
+    # GitHub integration: repo creation, secrets, workflow push
+    if cfg.github.enabled:
+        try:
+            from .github_setup import run_github_setup
+            gh_cfg = run_github_setup(project_root, cfg, accept_defaults)
+            cfg.github = gh_cfg
+            # Re-save config with updated GitHub info (repo_name, repo_owner)
+            save_config(cfg)
+        except Exception as e:
+            console.print(f"  [yellow]⚠ GitHub setup: {e}[/]")
+            console.print("  Run later: [bold]gh auth login[/] then [bold]pocketteam init[/]")
+
     # Create .env.example
     _create_env_example(project_root)
 
@@ -164,6 +176,8 @@ async def run_init(
     features.append("  [green]✓[/] Safety Hooks: [bold]10-Layer Guardian[/]")
     if tg_active:
         features.append("  [green]✓[/] Telegram: [bold]configured[/]")
+    if cfg.github.enabled and cfg.github.repo_name:
+        features.append(f"  [green]✓[/] GitHub: [bold]{cfg.github.repo_owner}/{cfg.github.repo_name}[/]")
     if cfg.dashboard.enabled:
         features.append(f"  [green]✓[/] Dashboard: [bold cyan]http://localhost:{cfg.dashboard.port}[/]")
     features.append("  [dim]Tip: Enable Auto Dream via /memory[/]")
@@ -217,7 +231,7 @@ async def _interview(
     cfg.telegram = existing.telegram
     cfg.monitoring = existing.monitoring
     cfg.budget = existing.budget
-    cfg.github_actions = existing.github_actions
+    cfg.github = existing.github
     cfg.network = existing.network
 
     # ── Step 1: Project Name ────────────────────────────────────────────
@@ -443,21 +457,23 @@ async def _interview(
         cfg.health_url = health_url
         cfg.monitoring.health_url = health_url
 
-    # ── Step 5: GitHub Actions ──────────────────────────────────────────
+    # ── Step 5: GitHub Integration ────────────────────────────────────────
+    gh_status = "configured" if cfg.github.repo_name else "not configured"
     console.print(Panel(
-        "[bold]Step 5/5: GitHub Actions Monitoring[/]\n\n"
-        "Adds a workflow that checks your health URL every hour.\n"
-        "If it fails, PocketTeam wakes up to investigate.\n\n"
-        f"Current: [{'green' if cfg.github_actions.enabled else 'dim'}]{'enabled' if cfg.github_actions.enabled else 'disabled'}[/]",
-        title="[cyan]5[/] GitHub Actions",
+        "[bold]Step 5/5: GitHub Integration[/]\n\n"
+        "Creates a GitHub repo, sets secrets, and adds a monitoring workflow.\n"
+        "PocketTeam wakes up automatically when your health check fails.\n\n"
+        f"Current: [{'green' if cfg.github.enabled else 'dim'}]{gh_status}[/]",
+        title="[cyan]5[/] GitHub",
         border_style="cyan",
     ))
     if not accept_defaults:
-        setup_gha = Confirm.ask(
-            "  Enable GitHub Actions monitoring?",
-            default=cfg.github_actions.enabled or bool(cfg.health_url),
+        setup_gh = Confirm.ask(
+            "  Enable GitHub integration?",
+            default=cfg.github.enabled or bool(cfg.health_url),
         )
-        cfg.github_actions.enabled = setup_gha
+        cfg.github.enabled = setup_gh
+    # Actual repo creation happens in run_init() after config is saved
 
     # ── Summary ─────────────────────────────────────────────────────────
     tg_final = bool(cfg.telegram.bot_token and cfg.telegram.chat_id
@@ -474,7 +490,8 @@ async def _interview(
     table.add_row("API Key", cfg.auth.mode, "[green]ready[/]" if api_final else "[red]needed for agents[/]")
     table.add_row("Telegram", "configured" if tg_final else "not configured", "[green]ready[/]" if tg_final else "[dim]optional[/]")
     table.add_row("Health URL", cfg.health_url or "none", "[dim]optional[/]")
-    table.add_row("GitHub Actions", "enabled" if cfg.github_actions.enabled else "disabled", "")
+    gh_summary = f"{cfg.github.repo_owner}/{cfg.github.repo_name}" if cfg.github.repo_name else "will be created"
+    table.add_row("GitHub", gh_summary if cfg.github.enabled else "disabled", "")
 
     console.print(table)
 
@@ -1076,12 +1093,12 @@ def _create_start_script(project_root: Path, cfg: PocketTeamConfig) -> None:
 
 def _create_github_actions(project_root: Path, cfg: PocketTeamConfig) -> None:
     """Create .github/workflows/pocketteam-monitor.yml."""
-    if not cfg.github_actions.enabled:
+    if not cfg.github.enabled or not cfg.github.actions_enabled:
         return
 
     workflow_path = project_root / ".github/workflows/pocketteam-monitor.yml"
     health_url = cfg.health_url or "https://your-app.com/health"
-    schedule = cfg.github_actions.schedule
+    schedule = cfg.github.schedule
 
     workflow = f"""name: PocketTeam Monitor
 
