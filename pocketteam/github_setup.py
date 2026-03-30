@@ -171,7 +171,7 @@ def push_workflow(project_root: Path) -> bool:
         return False
 
     push_result = subprocess.run(
-        ["git", "push"],
+        ["git", "push", "-u", "origin", "HEAD"],
         capture_output=True, text=True, cwd=project_root, timeout=30,
     )
     return push_result.returncode == 0
