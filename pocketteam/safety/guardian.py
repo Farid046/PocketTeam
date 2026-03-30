@@ -104,6 +104,18 @@ def pre_tool_hook(
     # Compute project root once — reused by Layer 10, Layer 4, Layer 7, and _log_denial
     project_root = _find_project_root()
 
+    # ── Resolve agent_id ────────────────────────────────────────────────────
+    # Main session (no --agent flag) is the COO
+    if not agent_id:
+        agent_id = "coo"
+
+    # Resolve agent_id hash to agent type name (e.g., "a9ed00d9aec628cf" → "engineer")
+    # Hashes are not in AGENT_ALLOWED_TOOLS; known type names are.
+    if agent_id not in AGENT_ALLOWED_TOOLS and agent_id != "coo":
+        resolved = _resolve_agent_type(agent_id)
+        if resolved:
+            agent_id = resolved
+
     # ── Layer 10: Kill Switch (checked first, highest priority) ──────────────
     if project_root:
         ks = KillSwitch(project_root)
