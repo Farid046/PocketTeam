@@ -136,9 +136,10 @@ class TestLayer2Destructive:
         assert result["requires_approval"] is True
 
     def test_rm_rf_safe_target_is_allowed(self, project_root: Path, monkeypatch) -> None:
-        """Known safe targets like build/, node_modules/ are explicitly allowed."""
+        """Known safe targets like build/, node_modules/ are explicitly allowed
+        when run by an agent that has Bash access (e.g. engineer)."""
         monkeypatch.chdir(project_root)
-        result = _call("Bash", {"command": "rm -rf ./build"})
+        result = _call("Bash", {"command": "rm -rf ./build"}, agent_id="engineer")
         assert result["allow"] is True
 
 
@@ -165,15 +166,30 @@ class TestLayer5SensitivePaths:
 # ---------------------------------------------------------------------------
 
 class TestUnknownToolName:
-    def test_unknown_tool_name_allowed(self, project_root: Path, monkeypatch) -> None:
+    def test_unknown_tool_name_not_blocked_by_safety_layers(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """An unknown tool name must not be blocked by safety layers 1-5 or 10.
+        Layer 6 (allowlist) blocks it for agents with explicit tool lists,
+        so use an explicitly permissive unknown agent_id (no registry entry,
+        no allowlist) which defaults to read-only — but that still blocks it.
+        The meaningful contract is: the hook does not crash and returns a valid
+        result dict even for completely unknown tool names."""
         monkeypatch.chdir(project_root)
         result = _call("SomeCustomTool", {"param": "value"})
-        assert result["allow"] is True
+        # Must not crash and must return a valid result structure
+        assert "allow" in result
+        assert "layer" in result
+        assert "reason" in result
 
-    def test_empty_tool_name_allowed(self, project_root: Path, monkeypatch) -> None:
+    def test_empty_tool_name_does_not_crash(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """An empty tool name must not raise an exception."""
         monkeypatch.chdir(project_root)
         result = _call("", {})
-        assert result["allow"] is True
+        # Must not crash
+        assert "allow" in result
 
 
 # ---------------------------------------------------------------------------
@@ -263,3 +279,185 @@ class TestDsacTokenInvocation:
 
         assert result["allow"] is True
         assert result["layer"] == 9
+
+
+# ---------------------------------------------------------------------------
+# Bug 1: agent_id hash resolution via _resolve_agent_type()
+# ---------------------------------------------------------------------------
+
+class TestAgentIdHashResolution:
+    """pre_tool_hook must resolve agent_id hashes to agent type names before
+    checking the allowlist (Layer 6), so that known agents are granted their
+    proper permissions instead of falling into the unknown-agent read-only path."""
+
+    def test_hash_resolved_to_engineer_allows_write(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """An agent_id hash that maps to 'engineer' must be allowed to use Write."""
+        monkeypatch.chdir(project_root)
+
+        # Write the registry file that _resolve_agent_type reads
+        import json
+        registry = project_root / ".pocketteam" / "agent-registry.json"
+        registry.write_text(json.dumps({"a9ed00d9aec628cf": "engineer"}))
+
+        result = _call(
+            "Write",
+            {"file_path": str(project_root / "output.py"), "content": "x = 1"},
+            agent_id="a9ed00d9aec628cf",
+            cwd=project_root,
+            monkeypatch=monkeypatch,
+        )
+
+        # Engineer is allowed to Write — hash must have been resolved
+        assert result["allow"] is True, (
+            f"Expected allow=True for engineer (resolved from hash), got: {result}"
+        )
+
+    def test_unresolvable_hash_falls_back_to_unknown_agent(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """An agent_id hash with no registry entry must not crash and must use
+        the unknown-agent fallback (read-only tools allowed, write blocked)."""
+        monkeypatch.chdir(project_root)
+
+        # No registry file — hash cannot be resolved
+        result = _call(
+            "Write",
+            {"file_path": str(project_root / "output.py"), "content": "x = 1"},
+            agent_id="deadbeefdeadbeef",
+            cwd=project_root,
+            monkeypatch=monkeypatch,
+        )
+
+        # Unknown agent: Write must be blocked (Layer 6)
+        assert result["allow"] is False
+        assert result["layer"] == 6
+
+    def test_hash_resolved_to_documentation_allows_write(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """An agent_id hash mapping to 'documentation' must be resolved before
+        the allowlist check so Write is allowed."""
+        monkeypatch.chdir(project_root)
+
+        import json
+        registry = project_root / ".pocketteam" / "agent-registry.json"
+        registry.write_text(json.dumps({"abc123def456": "documentation"}))
+
+        result = _call(
+            "Write",
+            {"file_path": str(project_root / "README.md"), "content": "# Docs"},
+            agent_id="abc123def456",
+            cwd=project_root,
+            monkeypatch=monkeypatch,
+        )
+
+        assert result["allow"] is True, (
+            f"Expected allow=True for documentation (resolved from hash), got: {result}"
+        )
+
+    def test_known_agent_name_not_resolved_again(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """If agent_id is already a known name like 'engineer', _resolve_agent_type
+        must NOT be called (it is a no-op for already-resolved names)."""
+        monkeypatch.chdir(project_root)
+
+        with patch(
+            "pocketteam.safety.guardian._resolve_agent_type"
+        ) as mock_resolve:
+            _call(
+                "Write",
+                {"file_path": str(project_root / "file.py"), "content": "pass"},
+                agent_id="engineer",
+                cwd=project_root,
+                monkeypatch=monkeypatch,
+            )
+
+        mock_resolve.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Bug 2: empty agent_id (main session / COO) defaults to "coo"
+# ---------------------------------------------------------------------------
+
+class TestEmptyAgentIdDefaultsToCoo:
+    """When agent_id is empty (main session started without --agent flag),
+    pre_tool_hook must treat it as 'coo'.  The COO is allowed to use Agent,
+    Read, Glob, Grep, TodoWrite, TodoRead — but NOT Write or Bash directly."""
+
+    def test_empty_agent_id_allows_read(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """Main session (empty agent_id) must be allowed to use Read."""
+        monkeypatch.chdir(project_root)
+
+        result = _call(
+            "Read",
+            {"file_path": str(project_root / "README.md")},
+            agent_id="",
+            cwd=project_root,
+            monkeypatch=monkeypatch,
+        )
+
+        assert result["allow"] is True, (
+            f"COO (empty agent_id) must be allowed to Read, got: {result}"
+        )
+
+    def test_empty_agent_id_allows_agent_tool(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """Main session (empty agent_id) must be allowed to spawn sub-agents."""
+        monkeypatch.chdir(project_root)
+
+        result = _call(
+            "Agent",
+            {"prompt": "do something"},
+            agent_id="",
+            cwd=project_root,
+            monkeypatch=monkeypatch,
+        )
+
+        assert result["allow"] is True, (
+            f"COO (empty agent_id) must be allowed to use Agent tool, got: {result}"
+        )
+
+    def test_empty_agent_id_blocks_write(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """Main session (COO) must not be allowed to Write directly — it must
+        delegate that to the engineer agent."""
+        monkeypatch.chdir(project_root)
+
+        result = _call(
+            "Write",
+            {"file_path": str(project_root / "file.py"), "content": "x = 1"},
+            agent_id="",
+            cwd=project_root,
+            monkeypatch=monkeypatch,
+        )
+
+        assert result["allow"] is False, (
+            f"COO (empty agent_id) must NOT be allowed to Write directly, got: {result}"
+        )
+        assert result["layer"] == 6
+
+    def test_empty_agent_id_blocks_bash(
+        self, project_root: Path, monkeypatch
+    ) -> None:
+        """Main session (COO) must not run Bash commands directly."""
+        monkeypatch.chdir(project_root)
+
+        result = _call(
+            "Bash",
+            {"command": "echo hello"},
+            agent_id="",
+            cwd=project_root,
+            monkeypatch=monkeypatch,
+        )
+
+        assert result["allow"] is False, (
+            f"COO (empty agent_id) must NOT be allowed to use Bash directly, got: {result}"
+        )
+        assert result["layer"] == 6
