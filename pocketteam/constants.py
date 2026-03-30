@@ -127,7 +127,7 @@ OBSERVER_MAX_EVENTS_WINDOW = 200
 # ─────────────────────────────────────────────────────────────────────────────
 
 DASHBOARD_IMAGE = "pocketteam-dashboard"
-DASHBOARD_VERSION = "0.1.0"
+DASHBOARD_VERSION = "1.0.0"
 DASHBOARD_PORT = 3847
 DASHBOARD_PORT_RANGE_END = 3857
 

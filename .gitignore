@@ -34,6 +34,13 @@ dashboard/dist/
 *.swp
 *.swo
 
+# Secrets / Credentials (belt and suspenders)
+*.pem
+*.key
+*.p12
+credentials.json
+service-account.json
+
 # macOS
 .DS_Store
 

@@ -65,7 +65,7 @@ dashboard:
   enabled: false
   port: 3847
   image: pocketteam-dashboard
-  image_version: 0.1.0
+  image_version: 1.0.0
   domain: ""
   compose_dir: ""
   docker_context: "default"
@@ -208,7 +208,7 @@ network:
 | `enabled` | bool | false | Enable the real-time 3D dashboard. |
 | `port` | int | 3847 | Port to run the dashboard on. |
 | `image` | string | "pocketteam-dashboard" | Docker image name. |
-| `image_version` | string | "0.1.0" | Docker image version tag. |
+| `image_version` | string | "1.0.0" | Docker image version tag. |
 | `domain` | string | "" | Custom domain for the dashboard (optional). |
 | `compose_dir` | string | "" | Path to docker-compose.yml. |
 | `docker_context` | string | "default" | Docker context to use for builds. |
