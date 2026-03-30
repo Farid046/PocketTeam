@@ -49,6 +49,16 @@ def handle(hook_input: dict) -> dict:
         if match:
             text = match.group(1).strip()
 
+    # Check for /kill command — activate kill switch IMMEDIATELY
+    if text.strip().lower() in ("/kill", "kill", "/stop"):
+        kill_file = pt_dir / "KILL"
+        try:
+            kill_file.touch()
+        except OSError:
+            pass
+        # Don't queue — kill switch is activated, session will stop
+        return {}
+
     entry = {
         "ts": datetime.now(UTC).isoformat(),
         "from": hook_input.get("user_id", hook_input.get("sender", "unknown")),
