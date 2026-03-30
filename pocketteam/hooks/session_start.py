@@ -114,9 +114,17 @@ def handle(hook_input: dict) -> dict:
     # Send Telegram notification that session is active
     # Only notify when no unread messages — the COO will reply to unread
     # messages directly, so a separate greeting would be a duplicate.
-    # Also skip when session was started with -p flag (automated/headless)
-    # because the COO will respond with its analysis, not a greeting.
-    is_automated = any(arg in sys.argv for arg in ["-p", "--prompt", "--print"])
+    # Also skip when session was auto-triggered (e.g. by GitHub Actions
+    # via /trigger-session). The marker file is written by the trigger
+    # endpoint and consumed here.
+    auto_trigger_marker = pt_dir / "auto-triggered"
+    is_automated = auto_trigger_marker.exists()
+    if is_automated:
+        try:
+            auto_trigger_marker.unlink()
+        except OSError:
+            pass
+
     if not unread and not is_automated:
         _notify_telegram(
             pt_dir,
