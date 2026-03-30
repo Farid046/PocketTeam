@@ -1133,6 +1133,12 @@ jobs:
           # Customize this for your logging setup
           echo "Log check placeholder - customize for your stack"
 
+      - name: Set up Python
+        if: env.HEALTH_FAILED == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Wake PocketTeam Agent (on failure)
         if: env.HEALTH_FAILED == 'true'
         env:
@@ -1140,7 +1146,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{{{ secrets.TELEGRAM_BOT_TOKEN }}}}
           TELEGRAM_CHAT_ID: ${{{{ secrets.TELEGRAM_CHAT_ID }}}}
         run: |
-          pip install pocketteam --quiet
+          # Install PocketTeam: from requirements.txt, pyproject.toml, or GitHub
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt --quiet 2>/dev/null || true
+          fi
+          if [ -f pyproject.toml ]; then
+            pip install -e . --quiet 2>/dev/null || true
+          fi
+          # Fallback: install from GitHub (works for public repos, private needs PAT)
+          python -c "from pocketteam.monitoring.healer import handle_health_failure" 2>/dev/null || \
+            pip install "pocketteam @ git+https://github.com/Farid046/PocketTeam.git" --quiet
           python -c "
           import asyncio
           from pocketteam.monitoring.healer import handle_health_failure
