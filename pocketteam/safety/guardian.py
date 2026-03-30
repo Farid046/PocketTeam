@@ -25,7 +25,31 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from ..constants import AGENT_ALLOWED_TOOLS
+
 logger = logging.getLogger(__name__)
+
+
+def _resolve_agent_type(agent_id: str) -> str | None:
+    """Resolve an internal agent_id hash to a PocketTeam agent type name.
+
+    Reads .pocketteam/agent-registry.json written by agent_lifecycle.py
+    during SubagentStart. Returns None if not found.
+    """
+    d = Path.cwd()
+    for _ in range(20):
+        registry = d / ".pocketteam" / "agent-registry.json"
+        if registry.exists():
+            try:
+                data = json.loads(registry.read_text())
+                return data.get(agent_id)
+            except (json.JSONDecodeError, OSError):
+                return None
+        parent = d.parent
+        if parent == d:
+            break
+        d = parent
+    return None
 
 
 def pre_tool_hook(
@@ -512,6 +536,11 @@ if __name__ == "__main__":
         tool_input = hook_input.get("tool_input", hook_input.get("input", {}))
         agent_id = hook_input.get("agent_id", "")
         session_id = hook_input.get("session_id", "")
+
+        # Resolve agent_id hash → agent_type name via registry
+        # Written by agent_lifecycle.py SubagentStart hook
+        if agent_id and agent_id not in AGENT_ALLOWED_TOOLS:
+            agent_id = _resolve_agent_type(agent_id) or agent_id
         if not session_id:
             session_id = os.environ.get("CLAUDE_SESSION_ID", "")
 

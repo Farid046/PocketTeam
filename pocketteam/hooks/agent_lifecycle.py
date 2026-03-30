@@ -109,12 +109,43 @@ def _parse_agent_status(last_message: str) -> tuple[str, str]:
     return ("DONE", "")
 
 
+def _register_agent(agent_id: str, agent_type: str) -> None:
+    """Register agent_id → agent_type mapping so the safety allowlist can resolve names.
+
+    Claude Code gives PreToolUse hooks only the internal agent_id (a hash),
+    not the agent_type (e.g. "engineer"). This registry bridges the gap.
+    """
+    if not agent_id or not agent_type:
+        return
+    d = Path.cwd()
+    for _ in range(20):
+        registry = d / ".pocketteam" / "agent-registry.json"
+        if registry.parent.exists():
+            try:
+                data = json.loads(registry.read_text()) if registry.exists() else {}
+            except (json.JSONDecodeError, OSError):
+                data = {}
+            data[agent_id] = agent_type
+            try:
+                registry.write_text(json.dumps(data))
+            except OSError:
+                pass
+            return
+        parent = d.parent
+        if parent == d:
+            break
+        d = parent
+
+
 def handle_start(hook_input: dict) -> None:
-    """Called on SubagentStart — log agent spawn."""
+    """Called on SubagentStart — log agent spawn and register ID → type mapping."""
     agent_type = hook_input.get("agent_type", hook_input.get("subagent_type", ""))
     description = hook_input.get("description", hook_input.get("prompt", ""))
     agent_id = hook_input.get("agent_id", "")
     model = hook_input.get("model", "")
+
+    # Register mapping so PreToolUse can resolve agent_id → agent_type
+    _register_agent(agent_id, agent_type)
 
     _write_event({
         "ts": datetime.now(UTC).isoformat(),
