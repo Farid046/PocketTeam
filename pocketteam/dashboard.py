@@ -231,10 +231,11 @@ def build_image(project_root: Path, context: str) -> None:
     """Build the dashboard Docker image from local source."""
     dashboard_dir = project_root / "dashboard"
     if not dashboard_dir.exists():
-        console.print("[red]dashboard/ directory not found.[/]")
-        console.print("PocketTeam must be installed from source (git clone).")
-        console.print("pip-installed versions don't include the dashboard source.")
-        sys.exit(1)
+        console.print("[yellow]dashboard/ directory not found.[/]")
+        console.print("Dashboard requires PocketTeam source (git clone) or a pre-built image.")
+        console.print("Skip with: [bold]pocketteam init --no-dashboard[/]")
+        console.print("Or pull image: [bold]docker pull pocketteam-dashboard:latest[/]")
+        raise SystemExit(1)
     console.print("  Building dashboard image (first time ~2 min, cached after)...")
     try:
         subprocess.run(
