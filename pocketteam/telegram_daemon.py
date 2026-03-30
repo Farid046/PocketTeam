@@ -61,8 +61,8 @@ class TelegramDaemon:
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(35.0, connect=10.0)) as client:
             while not self._shutdown:
-                # If a Claude session is running, stop calling getUpdates entirely.
-                # The MCP plugin owns the Telegram queue while a session is live.
+                # If a Claude session is running, don't poll getUpdates (MCP plugin owns it).
+                # BUT: still check for /kill commands via a lightweight file-based approach.
                 if self._is_claude_running():
                     self._write_state("session_active")
                     logger.debug("Claude session running, sleeping (no getUpdates)")
