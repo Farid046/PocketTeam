@@ -22,7 +22,7 @@ venv/
 .claude/settings.local.json
 .claude/agents/pocketteam/
 .claude/skills/pocketteam/
-.github/workflows/pocketteam-monitor.yml
+.github/
 
 # Node / Dashboard
 node_modules/

@@ -262,6 +262,13 @@ PocketTeam: "✅ Tests: 23/23 passed.
    Ready for your review."
 ```
 
+**Telegram Setup:** PocketTeam uses the official Claude Code channel plugin (`--channels plugin:telegram@claude-plugins-official`) for push notifications and mobile task submission.
+
+**Important:** `/kill via Telegram does NOT work during active sessions.** Telegram's getUpdates API only allows one consumer, so while a session is active, the daemon cannot receive messages. Use one of these alternatives:
+- **Before starting a session**: Use Telegram to send `/kill` to stop a running daemon
+- **During an active session**: Use Claude Code's remote feature in the Claude app or at claude.ai/code to send `/kill`
+- **From CLI**: Always use `pocketteam kill` (works anytime)
+
 ### Magic Keywords: Workflow Modes
 
 Activate special workflow modes by starting your task with a keyword:
@@ -449,12 +456,21 @@ Phase 4: 24/7 MONITORING (via GitHub Actions)
 
 ### Kill Switch
 
-Stop everything in < 1 second:
+Stop everything in < 1 second via **CLI** (recommended):
 
 ```bash
-pocketteam kill              # CLI (recommended)
-touch .pocketteam/KILL       # Signal file (works from any terminal)
+pocketteam kill              # CLI (works anytime, < 1 second)
 ```
+
+**Alternative methods:**
+
+| Method | When to use | Limitations |
+|---|---|---|
+| **CLI: `pocketteam kill`** | Always available | Most reliable |
+| **Telegram** (when daemon is idle) | Before starting a session or between sessions | Cannot receive during active session (getUpdates conflict) |
+| **Claude Code remote** (`claude.ai/code`) | During an active session | Requires Claude app or web interface |
+
+**Note:** During an active Claude Code session, Telegram cannot receive `/kill` commands because the daemon and Claude Code session would both be competing for Telegram's getUpdates API (only one consumer allowed). In this case, use Claude Code's remote `/kill` command via the Claude app.
 
 ---
 
@@ -507,9 +523,9 @@ D-SAC (Dry-run / Staged / Approval / Commit) is a cryptographically secured appr
 
 ```bash
 pocketteam init              # Setup wizard (5 steps, fully guided)
-pocketteam start             # Start or resume last session
-pocketteam start new         # Fresh session
-pocketteam start resume      # Pick a specific session to resume
+pocketteam start             # Resume last session (default: --continue)
+pocketteam start new         # Start a fresh session
+pocketteam start resume      # Open session picker to resume a specific session
 pocketteam status            # Show project status (config, kill switch, events)
 ```
 
