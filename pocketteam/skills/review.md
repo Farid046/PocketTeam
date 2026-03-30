@@ -1,19 +1,6 @@
 ---
 name: review
-description: |
-  Trigger when user asks for code review, PR review, or quality check.
-  Runs the reviewer agent with a comprehensive checklist covering
-  correctness, security, completeness, and code quality.
-
-  <example>
-  user: "/review"
-  assistant: Uses the review skill to perform a thorough code review
-  </example>
-
-  <example>
-  user: "Review my latest changes"
-  assistant: Uses the review skill to check the diff for issues
-  </example>
+description: "Code review checklist for correctness and security. Use before merging changes."
 ---
 
 # Code Review

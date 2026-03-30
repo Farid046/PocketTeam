@@ -105,6 +105,25 @@ async def run_init(
         # Safety net: ensure plugin is installed even on re-init without reconfigure
         _setup_telegram_plugin(cfg.telegram.bot_token)
 
+    # Telegram auto-session daemon (macOS launchd)
+    if tg_active:
+        try:
+            from .telegram_daemon_plist import install_plist, is_macos
+            if is_macos():
+                daemon_ok = install_plist(project_root)
+                if daemon_ok:
+                    console.print("  [green]✓[/] Telegram auto-session daemon installed")
+                    console.print(
+                        "    [dim]Messages while Claude is offline will auto-start a session[/]"
+                    )
+                else:
+                    console.print("  [yellow]⚠[/] Telegram daemon setup failed (check launchctl logs)")
+        except Exception as e:
+            console.print(f"  [yellow]⚠[/] Telegram daemon skipped: {e}")
+
+    # MCP Starter Pack
+    _setup_mcp_servers(cfg, console)
+
     # Setup dashboard (default ON, skip with --no-dashboard)
     if not no_dashboard:
         try:
@@ -347,6 +366,11 @@ async def _interview(
                 console.print("  3. Choose a name (e.g. \"PocketTeam\")")
                 console.print("  4. Choose a username (e.g. \"myapp_pocketteam_bot\")")
                 console.print("  5. BotFather gives you a token like: [dim]7123456789:AAH...[/]")
+                console.print()
+                console.print("  [bold yellow]Important:[/bold yellow] Create a [bold]project-specific[/bold] bot!")
+                console.print("  Name it after your project, e.g. 'MyApp PocketTeam'")
+                console.print("  Username e.g. 'myapp_pocketteam_bot'")
+                console.print("  [dim]You need a separate bot for each PocketTeam project.[/dim]")
                 console.print()
 
                 bot_token = Prompt.ask(
@@ -634,18 +658,21 @@ Example delegation:
 
 ### For NEW features:
 1. (Optional) Use **product** agent → validate demand
+1.5 (Optional) Use **discuss** skill → clarify gray areas before planning
 2. Use **planner** agent → create detailed plan, ask ALL questions upfront
-3. Use **reviewer** agent → review plan for completeness and risks
+3. Use **reviewer** agent → review plan (up to 3 iterations)
 4. **HUMAN GATE**: Ask CEO to approve the plan before any code is written
 5. Use **engineer** agent → implement on feature branch
-6. Use **reviewer** agent → code review
+5.5 Use **/simplify** → review changed code for complexity and quality (autopilot only)
+   - Note: /simplify is provided by the installed code-simplifier plugin, not a PocketTeam skill
+6. Use **reviewer** agent → code review (two-stage: spec compliance + code quality)
 7. Use **qa** agent → run all tests
 8. Use **security** agent → OWASP audit + dependency scan
 9. Use **documentation** agent → update docs
 10. **HUMAN GATE**: Ask CEO to approve production deploy
 11. Use **devops** agent → deploy staging first, then production
 12. Use **monitor** agent → watch for 15 min post-deploy
-13. Use **observer** agent → analyze task and update learnings
+13. Use **observer** agent → analyze task, cost report, update learnings
 
 ### For BUGS / urgent fixes:
 1. Use **investigator** agent → root cause analysis
@@ -713,7 +740,7 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
     pocketteam_hooks = {
         "PreToolUse": [
             {
-                "matcher": "Bash|Write|Edit|mcp__.*",
+                "matcher": "Bash|Write|Edit|Read|Glob|Grep|mcp__.*",
                 "hooks": [
                     {
                         "type": "command",
@@ -740,7 +767,16 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                         "command": f"{hook_prefix} post",
                     }
                 ],
-            }
+            },
+            {
+                "matcher": "Agent|Task",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} context_warning",
+                    }
+                ],
+            },
         ],
         "UserPromptSubmit": [
             {
@@ -805,6 +841,17 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                 ],
             }
         ],
+        "Stop": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"{hooks_prefix} session_stop",
+                    }
+                ],
+            }
+        ],
     }
 
     if not settings_path.exists() or is_new:
@@ -840,6 +887,39 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
     settings_path.write_text(json.dumps(existing, indent=2))
 
 
+def _copy_skills(skills_source: Path, skills_target: Path, console: Console) -> None:
+    """Copy package skills to project, respecting MANIFEST.json.
+
+    Only skills listed in MANIFEST.json are written (or overwritten).
+    User-created skills not in the manifest are left untouched.
+    If MANIFEST.json is missing or corrupt, no skills are overwritten.
+    """
+    manifest_path = skills_source / "MANIFEST.json"
+    try:
+        manifest = json.loads(manifest_path.read_text())
+        package_skills = set(manifest.get("package_skills", []))
+    except FileNotFoundError:
+        console.print("  [yellow]Warning: skills/MANIFEST.json not found — skipping skills install[/]")
+        return
+    except json.JSONDecodeError as e:
+        console.print(f"  [yellow]Warning: skills/MANIFEST.json is corrupt: {e} — skipping skills install[/]")
+        return
+
+    if not package_skills:
+        return
+
+    skills_target.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for md_file in skills_source.glob("*.md"):
+        skill_name = md_file.stem
+        if skill_name in package_skills:
+            shutil.copy2(md_file, skills_target / md_file.name)
+            copied += 1
+
+    if copied:
+        console.print(f"  [green]✅ {copied} skills installed[/]")
+
+
 def _setup_agent_definitions(project_root: Path) -> None:
     """Copy agent .md definitions and skills to .claude/ directories."""
     # Agent prompts → .claude/agents/pocketteam/
@@ -858,10 +938,7 @@ def _setup_agent_definitions(project_root: Path) -> None:
     skills_target = project_root / SKILLS_DIR
 
     if skills_dir.exists():
-        skills_target.mkdir(parents=True, exist_ok=True)
-        for md_file in skills_dir.glob("*.md"):
-            target = skills_target / md_file.name
-            shutil.copy2(md_file, target)
+        _copy_skills(skills_dir, skills_target, console)
 
 
 def _setup_telegram_plugin(bot_token: str) -> bool:
@@ -889,6 +966,101 @@ def _setup_telegram_plugin(bot_token: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def _setup_mcp_servers(config: PocketTeamConfig, console: Console) -> None:  # noqa: ARG001
+    """Install recommended MCP servers (Tier 1 automatic, Tier 2 optional)."""
+    try:
+        console.print("\n[bold]MCP Server Setup[/bold]")
+
+        # ── Tier 1: Context7 (no API key required) ──────────────────────────
+        console.print("  Installing Context7 (library docs)...")
+        try:
+            result = subprocess.run(
+                [
+                    "claude", "mcp", "add", "--scope", "project",
+                    "context7", "--", "npx", "-y", "@upstash/context7-mcp",
+                ],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode == 0:
+                console.print("  [green]Context7 installed[/]")
+            else:
+                console.print(
+                    "  [yellow]Context7 installation failed "
+                    "(install manually: claude mcp add context7 -- npx -y @upstash/context7-mcp)[/]"
+                )
+        except Exception as e:
+            console.print(f"  [yellow]Context7 skipped: {e}[/]")
+
+        # ── Tier 2: Tavily (needs API key) ──────────────────────────────────
+        console.print("\n  [bold]Optional: Tavily Web Search[/bold]")
+        console.print("  Free tier: 1000 searches/month at https://tavily.com")
+        try:
+            tavily_key = Prompt.ask("  Tavily API Key (Enter to skip)", default="")
+        except (EOFError, KeyboardInterrupt):
+            tavily_key = ""
+        if tavily_key:
+            try:
+                result = subprocess.run(
+                    [
+                        "claude", "mcp", "add", "--scope", "local",
+                        "-e", f"TAVILY_API_KEY={tavily_key}",
+                        "tavily-mcp", "--", "npx", "-y", "tavily-mcp",
+                    ],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if result.returncode == 0:
+                    console.print("  [green]Tavily installed[/]")
+                else:
+                    console.print("  [yellow]Tavily installation failed[/]")
+            except Exception as e:
+                console.print(f"  [yellow]Tavily skipped: {e}[/]")
+        else:
+            console.print(
+                "  [dim]Skipped. Add later: claude mcp add tavily-mcp -- npx -y tavily-mcp[/]"
+            )
+
+        # ── Tier 2: Supabase (needs access token + project ref) ─────────────
+        console.print("\n  [bold]Optional: Supabase Database[/bold]")
+        console.print("  Free tier at https://supabase.com")
+        try:
+            supabase_token = Prompt.ask("  Supabase Access Token (Enter to skip)", default="")
+        except (EOFError, KeyboardInterrupt):
+            supabase_token = ""
+        if supabase_token:
+            try:
+                supabase_ref = Prompt.ask("  Supabase Project Ref")
+            except (EOFError, KeyboardInterrupt):
+                supabase_ref = ""
+            if supabase_ref:
+                try:
+                    result = subprocess.run(
+                        [
+                            "claude", "mcp", "add", "--scope", "local",
+                            "-e", f"SUPABASE_ACCESS_TOKEN={supabase_token}",
+                            "supabase", "--", "npx", "-y",
+                            "@supabase/mcp-server-supabase@latest",
+                            f"--project-ref={supabase_ref}",
+                        ],
+                        capture_output=True, text=True, timeout=60,
+                    )
+                    if result.returncode == 0:
+                        console.print("  [green]Supabase installed[/]")
+                    else:
+                        console.print("  [yellow]Supabase installation failed[/]")
+                except Exception as e:
+                    console.print(f"  [yellow]Supabase skipped: {e}[/]")
+            else:
+                console.print("  [dim]Supabase ref not provided — skipped.[/]")
+        else:
+            console.print(
+                "  [dim]Skipped. Add later: "
+                "claude mcp add supabase -- npx -y @supabase/mcp-server-supabase@latest[/]"
+            )
+    except Exception as e:
+        # MCP setup must never abort the init process
+        console.print(f"  [yellow]MCP setup skipped unexpectedly: {e}[/]")
 
 
 def _create_start_script(project_root: Path, cfg: PocketTeamConfig) -> None:
@@ -1081,5 +1253,13 @@ async def run_uninstall(keep_artifacts: bool) -> None:
             if confirmed:
                 shutil.rmtree(pt_dir)
                 console.print("  ✅ Removed .pocketteam/")
+
+    # Remove Telegram auto-session daemon if installed
+    try:
+        from .telegram_daemon_plist import uninstall_plist
+        if uninstall_plist():
+            console.print("  Removed Telegram auto-session daemon")
+    except Exception:
+        pass
 
     console.print("\n✅ [green]PocketTeam uninstalled.[/] Your project files are untouched.")

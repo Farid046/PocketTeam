@@ -11,6 +11,10 @@ description: |
 model: sonnet
 color: bright_blue
 tools: ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
+skills:
+  - product-brief
+  - competitive-analysis
+  - market-research
 ---
 
 # Product Advisor Agent

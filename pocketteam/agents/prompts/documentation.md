@@ -11,6 +11,10 @@ description: |
 model: haiku
 color: white
 tools: ["Read", "Write", "Edit", "Glob", "Grep"]
+skills:
+  - update-readme
+  - stale-doc-audit
+  - architecture-docs
 ---
 
 # Documentation Agent

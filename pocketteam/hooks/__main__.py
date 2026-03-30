@@ -9,7 +9,9 @@ Hook types:
   agent_stop        — SubagentStop: log completion event
   observer_analyze  — SubagentStop: trigger background observer analysis
   session_start     — SessionStart: load unread Telegram messages
+  session_stop      — Stop: delete session.lock on Claude exit
   pre_compact       — PreCompact: preserve context before compression
+  context_warning   — PostToolUse on Agent|Task: warn when context is high
 """
 
 import json
@@ -59,6 +61,16 @@ elif hook_type == "session_start":
 
 elif hook_type == "pre_compact":
     from .pre_compact import handle
+    result = handle(hook_input)
+    print(json.dumps(result))
+
+elif hook_type == "session_stop":
+    from .session_stop import handle
+    result = handle(hook_input)
+    print(json.dumps(result))
+
+elif hook_type == "context_warning":
+    from .context_warning import handle
     result = handle(hook_input)
     print(json.dumps(result))
 
