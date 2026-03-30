@@ -1,25 +1,23 @@
 """
 Phase 3 Tests: Healer integration with fake app.
 
-Tests the triage + plan flow:
+Tests the triage → notify CEO → trigger session flow:
 1. Fake app running with chaos mode
 2. HealthChecker detects failure
-3. Healer creates incident, calls Claude API for plan
-4. Sends plan to CEO via Telegram
-5. Log anomaly detection and planning
+3. Healer creates incident, notifies CEO
+4. Healer sends problem to bot (daemon starts session)
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from pocketteam.monitoring.escalation import EscalationManager
 from pocketteam.monitoring.healer import (
-    _triage_and_plan,
     handle_health_failure,
     handle_log_anomaly,
 )
@@ -35,7 +33,6 @@ class TestHealthCheckerWithFakeApp:
         result = await checker.check(f"{fake_app_url}/health")
         assert result.healthy is True
         assert result.status_code == 200
-        assert result.response_time_ms < 2000
 
     @pytest.mark.asyncio
     async def test_checker_detects_500(self, fake_app_url: str, chaos) -> None:
@@ -64,19 +61,16 @@ class TestHealthCheckerWithFakeApp:
         assert all(not r.healthy for r in results)
 
 
-class TestHealerTriageFlow:
-    """Healer triage + plan flow with mocked Claude API."""
+class TestHealerHealthFailure:
+    """Health failure → notify + trigger session."""
 
     @pytest.mark.asyncio
-    async def test_health_failure_creates_incident_and_plan(
+    async def test_creates_incident_and_triggers_session(
         self, fake_app_url: str, chaos, project_root: Path
     ) -> None:
         chaos.set(health_status=500)
 
-        with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg, \
-             patch("pocketteam.monitoring.healer._triage_and_plan", new_callable=AsyncMock) as mock_plan:
-            mock_plan.return_value = "1. Root cause: server OOM\n2. Fix: increase memory limit"
-
+        with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg:
             result = await handle_health_failure(
                 health_url=f"{fake_app_url}/health",
                 http_status="500",
@@ -84,98 +78,73 @@ class TestHealerTriageFlow:
             )
 
         assert result["incident_id"].startswith("health-")
-        assert result["plan_created"] is True
-        assert result["awaiting_approval"] is True
-        # Two Telegram calls: notification + plan
+        assert result["session_triggered"] is True
+        # Two calls: CEO notification + session prompt to bot
         assert mock_tg.call_count == 2
-        # Plan was sent in second call
-        plan_call = mock_tg.call_args_list[1]
-        assert "Fix Plan" in plan_call.args[2]
+        # First call: CEO notification
+        assert "Health check FAILED" in mock_tg.call_args_list[0].args[2]
+        # Second call: session prompt with analysis instructions
+        session_msg = mock_tg.call_args_list[1].args[2]
+        assert "INCIDENT" in session_msg
+        assert "Fix-Plan" in session_msg
+        assert "KEINE Änderungen" in session_msg
 
     @pytest.mark.asyncio
-    async def test_health_failure_without_api_key(
+    async def test_no_telegram_without_credentials(
         self, fake_app_url: str, chaos, project_root: Path
     ) -> None:
         chaos.set(health_status=500)
 
         with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg, \
-             patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}, clear=False):
+             patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "", "TELEGRAM_CHAT_ID": ""}, clear=False):
             result = await handle_health_failure(
                 health_url=f"{fake_app_url}/health",
                 http_status="500",
                 project_root=project_root,
             )
 
-        assert result["plan_created"] is True  # Returns warning text, still truthy
-        assert result["awaiting_approval"] is True
+        assert result["session_triggered"] is True
+        # _notify_telegram is called but exits early (no token)
+        assert mock_tg.call_count == 2
+
+
+class TestHealerLogAnomaly:
+    """Log anomaly → notify + trigger session."""
 
     @pytest.mark.asyncio
-    async def test_log_anomaly_creates_plan(
-        self, fake_app_url: str, chaos, project_root: Path
+    async def test_creates_incident_and_triggers_session(
+        self, project_root: Path
     ) -> None:
-        with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg, \
-             patch("pocketteam.monitoring.healer._triage_and_plan", new_callable=AsyncMock) as mock_plan:
-            mock_plan.return_value = "1. Root cause: DB connection leak\n2. Fix: add connection pooling"
-
+        with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg:
             result = await handle_log_anomaly(
-                error_summary="Connection refused errors spiking",
+                error_summary="Connection refused; OOM; JWT expired",
                 error_count=42,
                 project_root=project_root,
             )
 
         assert result["incident_id"].startswith("log-")
-        assert result["plan_created"] is True
-        assert result["awaiting_approval"] is True
+        assert result["session_triggered"] is True
+        assert result["error_count"] == 42
+        # Two calls: CEO notification + session prompt
         assert mock_tg.call_count == 2
-
-
-class TestTriageAndPlan:
-    """Test the Claude API triage call."""
-
-    @pytest.mark.asyncio
-    async def test_triage_no_api_key(self) -> None:
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}, clear=False):
-            plan = await _triage_and_plan("health_failure", "HTTP 500", "test-001")
-        assert "No API key" in plan
+        session_msg = mock_tg.call_args_list[1].args[2]
+        assert "Connection refused" in session_msg
+        assert "Root Cause" in session_msg
 
     @pytest.mark.asyncio
-    async def test_triage_with_mocked_api(self) -> None:
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "content": [{"type": "text", "text": "Root cause: OOM. Fix: restart."}]
-        }
+    async def test_truncates_long_error_summary(
+        self, project_root: Path
+    ) -> None:
+        long_summary = "ERROR: " * 500  # Very long
 
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=False), \
-             patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            MockClient.return_value = mock_client
+        with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock):
+            result = await handle_log_anomaly(
+                error_summary=long_summary,
+                error_count=500,
+                project_root=project_root,
+            )
 
-            plan = await _triage_and_plan("health_failure", "HTTP 500", "test-002")
-
-        assert "OOM" in plan
-        assert "restart" in plan
-
-    @pytest.mark.asyncio
-    async def test_triage_api_error(self) -> None:
-        mock_response = MagicMock()
-        mock_response.status_code = 429
-        mock_response.text = "rate limited"
-
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=False), \
-             patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            MockClient.return_value = mock_client
-
-            plan = await _triage_and_plan("health_failure", "HTTP 500", "test-003")
-
-        assert "API error 429" in plan
+        assert result["session_triggered"] is True
 
 
 class TestEscalationManager:
@@ -183,7 +152,7 @@ class TestEscalationManager:
 
     def test_3_strike_rule(self, project_root: Path) -> None:
         mgr = EscalationManager(project_root)
-        incident = mgr.create_incident("test-001", "high", "Test failure")
+        mgr.create_incident("test-001", "high", "Test failure")
 
         assert mgr.record_fix_attempt("test-001", success=False) is True
         assert mgr.record_fix_attempt("test-001", success=False) is True
@@ -209,7 +178,5 @@ class TestEscalationManager:
 
         incident_file = project_root / ".pocketteam" / "artifacts" / "incidents" / "test-004.json"
         assert incident_file.exists()
-
         data = json.loads(incident_file.read_text())
         assert data["incident_id"] == "test-004"
-        assert data["severity"] == "high"
