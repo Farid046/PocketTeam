@@ -7,6 +7,7 @@ instant updates instead of relying on 5s polling.
 """
 
 import json
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -127,7 +128,11 @@ def _register_agent(agent_id: str, agent_type: str) -> None:
                 data = {}
             data[agent_id] = agent_type
             try:
-                registry.write_text(json.dumps(data))
+                tmp = registry.parent / f".agent-registry.{os.getpid()}.tmp"
+                tmp.write_text(json.dumps(data))
+                tmp.chmod(0o600)
+                os.replace(tmp, registry)
+                registry.chmod(0o600)
             except OSError:
                 pass
             return

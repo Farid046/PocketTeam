@@ -90,7 +90,7 @@ PocketTeam gives you a full autonomous IT team where:
 | **Monitor** | 24/7 health watcher | Haiku | Health checks every 5 min, log analysis, auto-escalation |
 | **Observer** | Team learner | Haiku | Retrospectives, weekly digests, agent improvement proposals |
 
-### 53 Skills Across the Team
+### 55 Skills Across the Team
 
 PocketTeam agents have 55 specialized skills distributed across product, planning, engineering, QA, security, DevOps, investigation, monitoring, and documentation domains. Skills include everything from market research and task breakdown to browser automation, OWASP audits, database diagnostics, and threat modeling. The skill system is extensible—add custom skills via `.claude/skills/`.
 
@@ -717,6 +717,18 @@ By default, `pocketteam start` now continues the last session (equivalent to `--
 ```bash
 pocketteam start new
 ```
+
+### Telegram messages arrive late or get lost
+
+**Symptom:** Messages sent via Telegram take several seconds to appear, or occasionally don't arrive at all while PocketTeam is busy processing.
+
+**Cause:** This is a limitation of Claude Code's official Telegram channel plugin, not PocketTeam. The plugin delivers messages between tool calls — if Claude is mid-reasoning (thinking, not calling tools), messages queue up and are delivered at the next idle moment. In rare cases during heavy processing, messages can be dropped entirely.
+
+**How to deal with it:**
+- **Wait a moment** and resend if your message wasn't acknowledged within ~30 seconds
+- **Use the CLI** for time-critical commands: `pocketteam kill` always works instantly
+- **Don't send rapid-fire messages** while PocketTeam is working — batch your thoughts into one message
+- This is **not a PocketTeam bug** — it's inherent to how Claude Code's channel system delivers external messages during active sessions
 
 ### Agent shows as 'unknown' in dashboard
 

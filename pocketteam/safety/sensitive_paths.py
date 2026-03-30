@@ -91,6 +91,7 @@ SENSITIVE_PATH_PATTERNS: list[str] = [
     r".*[/\\]\.pocketteam[/\\]dsac_session\.txt$",    # D-SAC persistent session ID [v3.1 Fix B]
     r".*[/\\]\.pocketteam[/\\]\.observer-last-run$",   # Observer run state
     r".*[/\\]\.pocketteam[/\\]rate_limit_state\.json$", # Rate-limit state (may contain quota/token info)
+    r".*[/\\]\.pocketteam[/\\]agent-registry\.json$",   # Agent registry (privilege escalation risk)
 ]
 
 _SENSITIVE_RE = [re.compile(p, re.IGNORECASE) for p in SENSITIVE_PATH_PATTERNS]

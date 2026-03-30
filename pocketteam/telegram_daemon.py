@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import shlex
 import signal
 import sys
 import time
@@ -224,10 +225,11 @@ class TelegramDaemon:
         launch_script.chmod(0o700)
 
         # Use osascript to open a new Terminal window running the script
+        quoted_script = shlex.quote(str(launch_script))
         osascript = (
             'tell application "Terminal"\n'
             '    activate\n'
-            f'    do script "{launch_script}"\n'
+            f'    do script {quoted_script}\n'
             'end tell'
         )
 
