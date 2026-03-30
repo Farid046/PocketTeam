@@ -471,7 +471,7 @@ docker ps
 lsof -i :3847
 
 # Check logs
-docker logs $(docker ps -q -f "ancestor=pocketteam-dashboard:0.1.0")
+docker logs $(docker ps -q -f "ancestor=pocketteam-dashboard:1.0.0")
 
 # Restart
 docker compose -f .pocketteam/docker-compose.yml restart
@@ -510,12 +510,12 @@ npm run dev
 
 ```bash
 # Build image
-docker build -t pocketteam-dashboard:0.1.0 dashboard/
+docker build -t pocketteam-dashboard:1.0.0 dashboard/
 
 # Run container
 docker run -p 3847:3847 \
   -e AUTH_TOKEN=your-token \
-  pocketteam-dashboard:0.1.0
+  pocketteam-dashboard:1.0.0
 
 # Or via docker-compose
 pocketteam skill run dashboard-deploy
@@ -548,7 +548,7 @@ spec:
     spec:
       containers:
       - name: dashboard
-        image: pocketteam-dashboard:0.1.0
+        image: pocketteam-dashboard:1.0.0
         ports:
         - containerPort: 3847
         env:

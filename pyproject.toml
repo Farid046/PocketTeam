@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pocketteam"
-version = "0.1.0"
-description = "Your autonomous AI IT team. 11 agents. 10 safety layers. Zero API costs."
+version = "1.0.0"
+description = "Your autonomous AI IT team. 12 agents. 53 skills. 10 safety layers. Self-healing via GitHub Actions."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
-keywords = ["ai-agent", "agent-framework", "autonomous-agents", "multi-agent", "claude-code", "agentic-ai", "self-healing", "developer-tools"]
+keywords = ["ai-agent", "agent-framework", "autonomous-agents", "multi-agent", "claude-code", "agentic-ai", "self-healing", "developer-tools", "devops", "monitoring"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
@@ -46,9 +46,9 @@ dev = [
 pocketteam = "pocketteam.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Farid046/pocketteamtest"
-Repository = "https://github.com/Farid046/pocketteamtest"
-Issues = "https://github.com/Farid046/pocketteamtest/issues"
+Homepage = "https://github.com/Farid046/PocketTeam"
+Repository = "https://github.com/Farid046/PocketTeam"
+Issues = "https://github.com/Farid046/PocketTeam/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pocketteam"]

@@ -326,7 +326,7 @@ with open(inbox, 'w') as f:
    docker compose -f .pocketteam/docker-compose.yml down
 
    # Remove image and retry
-   docker rmi pocketteam-dashboard:0.1.0
+   docker rmi pocketteam-dashboard:1.0.0
    pocketteam skill run dashboard-deploy
    ```
 
@@ -376,7 +376,7 @@ with open(inbox, 'w') as f:
 2. **If no WebSocket**:
    ```bash
    # Check dashboard logs
-   docker logs $(docker ps -q -f "ancestor=pocketteam-dashboard:0.1.0")
+   docker logs $(docker ps -q -f "ancestor=pocketteam-dashboard:1.0.0")
 
    # Restart dashboard
    docker compose -f .pocketteam/docker-compose.yml restart

@@ -1,5 +1,6 @@
 {
   "package_skills": [
+    "add-mcp-server",
     "architecture-docs",
     "architecture-review",
     "atomic-commits",
@@ -8,6 +9,7 @@
     "browse",
     "competitive-analysis",
     "cost-report",
+    "create-skill",
     "dashboard-deploy",
     "db-diagnostics",
     "debug",

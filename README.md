@@ -1,28 +1,48 @@
 # PocketTeam
 
 <p align="center">
-  <a href="https://github.com/farid046/pocketteam">
-    <img alt="PocketTeam" src="https://img.shields.io/badge/PocketTeam-Autonomous%20AI%20Team-blue?style=for-the-badge" />
-  </a>
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge" />
   <img alt="Agents" src="https://img.shields.io/badge/agents-12-blue?style=for-the-badge" />
-  <img alt="Skills" src="https://img.shields.io/badge/skills-53-purple?style=for-the-badge" />
-  <img alt="Safety Layers" src="https://img.shields.io/badge/safety_layers-10-red?style=for-the-badge" />
+  <img alt="Skills" src="https://img.shields.io/badge/skills-55-purple?style=for-the-badge" />
+  <img alt="Safety Layers" src="https://img.shields.io/badge/safety-10_layers-red?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-497_passing-brightgreen?style=for-the-badge" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />
 </p>
 
 <p align="center">
-  <strong>A complete autonomous AI IT team that plans, codes, reviews, tests, deploys, and self-heals—all inside Claude Code.</strong>
-  <br />
-  <sub>12 specialized agents • 53 skills • Self-healing via GitHub Actions • Real-time 3D dashboard • 10-layer safety system</sub>
+  <strong>Your autonomous AI IT team. Plans, codes, reviews, tests, deploys, and self-heals — all inside Claude Code.</strong>
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
   <a href="#how-it-works">How It Works</a> •
   <a href="#agents">Agents</a> •
-  <a href="#self-healing">Self-Healing</a> •
-  <a href="#safety">Safety</a> •
+  <a href="#self-healing-24-7-monitoring-via-github-actions">Self-Healing</a> •
+  <a href="#safety-deep-dive">Safety</a> •
   <a href="#commands">Commands</a>
+</p>
+
+---
+
+### What You Get
+
+| | Feature | Description |
+|---|---|---|
+| **12 Agents** | COO, Product, Planner, Reviewer, Engineer, QA, Security, DevOps, Investigator, Documentation, Monitor, Observer |
+| **55 Skills** | From market research to OWASP audits, browser automation to deployment rollbacks |
+| **Self-Healing** | GitHub Actions monitors your app 24/7. On failure: auto-starts a Claude session to diagnose and plan a fix |
+| **3D Dashboard** | Real-time isometric office — see your agents work, track costs, audit safety |
+| **Telegram Control** | Give tasks, approve deploys, receive alerts — all from your phone |
+| **10-Layer Safety** | Structural hooks (not prompts). Survives context compaction. Cannot be bypassed |
+| **Browser Automation** | `ptbrowse` — 90% cheaper than screenshot-based tools (text accessibility tree) |
+| **4 Workflow Modes** | `autopilot`, `ralph` (persistent), `quick`, `deep-dive` (parallel research) |
+| **Kill Switch** | `pocketteam kill` — stops everything in < 1 second |
+| **Zero Config** | `pocketteam init` guides you through everything. 5 questions, done |
+
+<p align="center">
+  <img src="docs/assets/dashboard-office.png" alt="PocketTeam 3D Dashboard" width="800" />
+  <br />
+  <sub>Real-time 3D isometric office — watch your AI team work</sub>
 </p>
 
 ---
@@ -71,7 +91,7 @@ PocketTeam gives you a full autonomous IT team where:
 
 ### 53 Skills Across the Team
 
-PocketTeam agents have 53 specialized skills distributed across product, planning, engineering, QA, security, DevOps, investigation, monitoring, and documentation domains. Skills include everything from market research and task breakdown to browser automation, OWASP audits, database diagnostics, and threat modeling. The skill system is extensible—add custom skills via `.claude/skills/`.
+PocketTeam agents have 55 specialized skills distributed across product, planning, engineering, QA, security, DevOps, investigation, monitoring, and documentation domains. Skills include everything from market research and task breakdown to browser automation, OWASP audits, database diagnostics, and threat modeling. The skill system is extensible—add custom skills via `.claude/skills/`.
 
 ### Real-Time 3D Isometric Office Dashboard
 
@@ -85,6 +105,18 @@ Watch your AI team work in a pixel-art Habbo-style office:
 - Built with React Three Fiber + WebSocket real-time updates
 
 Accessed via `pocketteam dashboard start` or embedded in Claude Code.
+
+**4 Dashboard Views:**
+- **Office** — 3D isometric office with live agent avatars
+- **Timeline** — chronological event stream of all actions
+- **Safety** — audit log of every tool call: allowed, denied, reason (NEVER_ALLOW, DENIED_ALLOWLIST, D-SAC)
+- **Usage** — token costs per agent, subscription vs API breakdown
+
+<p align="center">
+  <img src="docs/assets/dashboard-safety.png" alt="PocketTeam Safety Audit Log" width="800" />
+  <br />
+  <sub>Safety tab — every tool call audited. Red = blocked by safety layers.</sub>
+</p>
 
 ### ptbrowse: Own Browser Automation CLI
 
@@ -333,39 +365,36 @@ The `GH_PAT` secret enables GitHub Actions to install PocketTeam from your priva
 - **Docker** — optional, required for `pocketteam dashboard`
 - **Telegram Bot Token** — optional, required for mobile control
 
-### Installation
+### Install + Init (2 commands)
 
 ```bash
-pip install git+https://github.com/Farid046/pocketteam.git
-```
-
-Or install locally for development:
-
-```bash
-git clone https://github.com/Farid046/pocketteam.git
-cd pocketteam
-pip install -e ".[dev]"
-```
-
-### Set Up in Your Project
-
-```bash
-cd your-project
+pip install git+https://github.com/Farid046/PocketTeam.git
 pocketteam init
 ```
 
-The setup wizard will:
-1. Ask for project name and description
-2. Detect tech stack (frontend/backend/full-stack)
-3. Set up GitHub integration (create repo, set secrets, push monitoring workflow)
-4. Optionally configure Telegram for mobile notifications
-5. Configure staging and production deployment targets
+That's it. The init wizard guides you through 5 steps:
 
-After init, you'll have:
-- `.claude/agents/pocketteam/` — 12 agent prompts
-- `.claude/settings.json` — Safety hooks
-- `.pocketteam/config.yaml` — Project configuration
+```
+Step 1/5: Project Name ................ "my-app"
+Step 2/5: API Key ..................... paste or skip (subscription works)
+Step 3/5: Telegram .................... paste bot token (optional)
+Step 4/5: Health URL .................. https://myapp.com/health (optional)
+Step 5/5: GitHub Integration .......... auto-creates repo, sets secrets, pushes workflow
+```
+
+After init, your project has:
+- `.claude/agents/pocketteam/` — 12 agent prompts, ready to delegate
+- `.claude/skills/pocketteam/` — 55 skills for every task type
+- `.claude/settings.json` — 10-layer safety hooks (structural, not prompts)
+- `.pocketteam/config.yaml` — your project configuration
 - `.github/workflows/pocketteam-monitor.yml` — 24/7 health monitoring
+
+For development on PocketTeam itself:
+
+```bash
+git clone https://github.com/Farid046/PocketTeam.git
+cd PocketTeam && pip install -e ".[dev]"
+```
 
 ### Run Your First Task
 

@@ -5,6 +5,51 @@ All notable changes to PocketTeam are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-03-30
+
+### Added
+
+- **Self-Healing via GitHub Actions** — 24/7 monitoring of health and log endpoints
+  - GitHub Actions workflow checks `/health` and `/logs` every hour
+  - On failure: triggers Claude Code COO session on your machine via `/trigger-session`
+  - COO analyzes, creates fix plan, notifies CEO via Telegram
+  - CEO approves before any changes — no autonomous fixes
+- **GitHub Integration in Init** — Step 5 automates full GitHub setup
+  - Creates repo via `gh` CLI (or uses existing)
+  - Sets secrets: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GH_PAT
+  - Pushes monitoring workflow automatically
+  - Fine-grained PAT for private repo access in GitHub Actions
+- **Agent Registry for Safety Allowlist** — resolves Claude Code internal agent hash IDs to PocketTeam agent names
+  - SubagentStart writes `agent_id → agent_type` mapping to `.pocketteam/agent-registry.json`
+  - Guardian reads registry before checking the allowlist
+  - Fixes critical bug where all subagent tool calls were denied as "Unknown agent"
+- **55 skills** (was 37) — added `create-skill`, `add-mcp-server`, and 16 others
+- **Agent SDK Integration Tests** — 47 tests covering healer, health checker, escalation, GitHub setup
+  - Fake HTTP server with chaos modes for testing
+  - CI workflow: `pocketteam-sdk-test.yml` (mock + live matrix)
+- **Wave-Based Parallel Execution** — COO can run multiple agents simultaneously
+- **Pre-Compact Context Snapshots** — task/plan/agent context preserved across context compaction
+- **Auto-Triggered Session Detection** — marker file suppresses greeting for automated sessions
+
+### Changed
+
+- Version bumped from 0.1.0 to 1.0.0
+- Healer rewritten: CEO-in-the-loop instead of autonomous auto-fix
+- `GitHubActionsConfig` → `GitHubConfig` with repo_name, repo_owner, repo_private fields
+- Backwards compat: `cfg.github_actions` still works as alias for `cfg.github`
+- Repository URLs updated from pocketteamtest to PocketTeam
+- Telegram daemon: sessions started with `-p` flag skip greeting message
+
+### Fixed
+
+- Agent allowlist: hash IDs now resolved to names via registry (was 100% denied)
+- Workflow push: uses `git add -f` to override .gitignore
+- Workflow push: uses `git push -u origin HEAD` for fresh branches
+- Healer: reads Telegram credentials from env vars in CI (not just config)
+- Dashboard: better error message when `dashboard/` directory not found
+
+---
+
 ## [0.1.0] - 2026-03-26
 
 ### Added
