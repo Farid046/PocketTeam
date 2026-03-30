@@ -54,10 +54,10 @@ class TestLiveSDKHealthCheck:
             )
 
         assert result["incident_id"].startswith("health-")
-        assert result["auto_fix_attempted"] is True
-        # With real SDK, the fix might succeed or fail depending on
-        # the project state — we just verify the pipeline ran
-        assert "auto_fix_success" in result
+        assert result["session_triggered"] is True
+        # Verify the required keys returned by handle_health_failure() are present
+        assert "health_url" in result
+        assert "http_status" in result
 
     @pytest.mark.asyncio
     async def test_live_investigator_diagnosis(

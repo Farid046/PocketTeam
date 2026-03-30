@@ -228,7 +228,15 @@ class BaseAgent(ABC):
 
         output_parts: list[str] = []
 
-        async for event in query(prompt=task, options=options):
+        async def _prompt_stream(task_str: str):
+            yield {
+                "type": "user",
+                "message": {"role": "user", "content": task_str},
+                "parent_tool_use_id": None,
+                "session_id": None,
+            }
+
+        async for event in query(prompt=_prompt_stream(task), options=options):
             if isinstance(event, AssistantMessage):
                 for block in event.content:
                     if isinstance(block, TextBlock):
