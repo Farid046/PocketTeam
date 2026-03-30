@@ -1,27 +1,25 @@
 """
 Self-Healing Module — woken by GitHub Actions on health/log failures.
-Staging-first, 3-Strike Rule, always notifies CEO.
 
-Flow:
+Flow (CEO-in-the-loop):
 1. Detect problem (health check, log anomaly)
-2. Investigator agent diagnoses root cause
-3. Engineer agent creates fix (on separate branch)
-4. QA agent tests fix
-5. Deploy to staging first
-6. If staging OK → deploy to production
-7. Always notify CEO
-8. After 3 failed attempts → escalate to CEO
+2. Notify CEO via Telegram immediately
+3. Claude API analyzes the problem and creates a fix plan
+4. Send plan to CEO via Telegram for approval
+5. CEO approves → starts a session to execute the plan
+
+No autonomous fixing — CEO always approves before any changes.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from pathlib import Path
 
-from ..config import PocketTeamConfig, load_config
-from ..constants import MAX_AUTO_FIX_ATTEMPTS
-from .escalation import EscalationManager, Incident
+from ..config import load_config
+from .escalation import EscalationManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,62 +31,54 @@ async def handle_health_failure(
 ) -> dict:
     """
     Called by GitHub Actions when health check fails.
-    Runs Investigator → Engineer fix → QA → Staging deploy → CEO notification.
-
-    Returns a dict with the outcome.
+    Triages the issue, creates a plan, sends to CEO for approval.
     """
-    import os
-
     root = project_root or Path.cwd()
     cfg = load_config(root)
 
-    # In CI (GitHub Actions), secrets come via env vars — use as fallback
     bot_token = cfg.telegram.bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat_id = cfg.telegram.chat_id or os.environ.get("TELEGRAM_CHAT_ID", "")
 
     incident_id = f"health-{uuid.uuid4().hex[:8]}"
     escalation = EscalationManager(root)
-    incident = escalation.create_incident(
+    escalation.create_incident(
         incident_id=incident_id,
         severity="high",
         description=f"Health check failed: {health_url} → HTTP {http_status}",
     )
 
-    # Always notify CEO
+    # Step 1: Notify CEO immediately
     await _notify_telegram(
-        bot_token,
-        chat_id,
-        f"⚠️ <b>Health check FAILED</b>\n"
+        bot_token, chat_id,
+        f"🚨 <b>Health check FAILED</b>\n"
         f"URL: {health_url}\n"
         f"Status: HTTP {http_status}\n"
         f"Incident: {incident_id}\n\n"
-        "Investigator waking up to diagnose...",
+        f"Analyzing and creating fix plan...",
     )
 
-    result = {
+    # Step 2: Triage + Plan via Claude API
+    plan = await _triage_and_plan(
+        problem_type="health_failure",
+        details=f"Health endpoint {health_url} returned HTTP {http_status}.",
+        incident_id=incident_id,
+    )
+
+    # Step 3: Send plan to CEO for approval
+    await _notify_telegram(
+        bot_token, chat_id,
+        f"📋 <b>Fix Plan — {incident_id}</b>\n\n"
+        f"{plan}\n\n"
+        f"Reply <b>approve {incident_id}</b> to start a session that executes this plan.",
+    )
+
+    return {
         "incident_id": incident_id,
         "health_url": health_url,
         "http_status": http_status,
-        "auto_fix_attempted": False,
-        "auto_fix_success": False,
-        "escalated": False,
+        "plan_created": bool(plan),
+        "awaiting_approval": True,
     }
-
-    # Attempt auto-fix if enabled
-    if cfg.monitoring.auto_fix:
-        fix_result = await _attempt_auto_fix(
-            root, cfg, incident, escalation, bot_token, chat_id
-        )
-        result.update(fix_result)
-    else:
-        result["escalated"] = True
-        await _notify_telegram(
-            bot_token,
-            chat_id,
-            f"Auto-fix disabled. Manual intervention needed.\nIncident: {incident_id}",
-        )
-
-    return result
 
 
 async def handle_log_anomaly(
@@ -98,10 +88,8 @@ async def handle_log_anomaly(
 ) -> dict:
     """
     Called when log analysis detects anomalies.
-    Similar flow to health_failure but with lower severity.
+    Triages, creates plan, sends to CEO for approval.
     """
-    import os
-
     root = project_root or Path.cwd()
     cfg = load_config(root)
 
@@ -116,130 +104,103 @@ async def handle_log_anomaly(
         description=f"Log anomaly: {error_count} errors detected. {error_summary}",
     )
 
+    # Step 1: Notify CEO immediately
     await _notify_telegram(
-        bot_token,
-        chat_id,
+        bot_token, chat_id,
         f"⚠️ <b>Log anomaly detected</b>\n"
         f"Errors: {error_count}\n"
-        f"Summary: {error_summary[:200]}\n"
-        f"Incident: {incident_id}",
+        f"Summary: {error_summary[:300]}\n"
+        f"Incident: {incident_id}\n\n"
+        f"Analyzing and creating fix plan...",
+    )
+
+    # Step 2: Triage + Plan via Claude API
+    plan = await _triage_and_plan(
+        problem_type="log_anomaly",
+        details=(
+            f"{error_count} errors detected in application logs.\n"
+            f"Error summary:\n{error_summary[:1000]}"
+        ),
+        incident_id=incident_id,
+    )
+
+    # Step 3: Send plan to CEO for approval
+    await _notify_telegram(
+        bot_token, chat_id,
+        f"📋 <b>Fix Plan — {incident_id}</b>\n\n"
+        f"{plan}\n\n"
+        f"Reply <b>approve {incident_id}</b> to start a session that executes this plan.",
     )
 
     return {
         "incident_id": incident_id,
         "severity": "medium",
         "error_count": error_count,
+        "plan_created": bool(plan),
+        "awaiting_approval": True,
     }
 
 
-async def _attempt_auto_fix(
-    project_root: Path,
-    cfg: PocketTeamConfig,
-    incident: Incident,
-    escalation: EscalationManager,
-    bot_token: str = "",
-    chat_id: str = "",
-) -> dict:
+async def _triage_and_plan(
+    problem_type: str,
+    details: str,
+    incident_id: str,
+) -> str:
     """
-    Attempt to auto-fix an incident.
-    Staging-first, 3-Strike Rule.
+    Use Claude API to analyze the problem and create a fix plan.
+    Returns a concise plan as text (no code execution, just analysis).
     """
-    result = {
-        "auto_fix_attempted": True,
-        "auto_fix_success": False,
-        "escalated": False,
-        "fix_attempts": 0,
-    }
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return "⚠️ No API key — cannot generate plan. Manual investigation needed."
 
-    for attempt in range(MAX_AUTO_FIX_ATTEMPTS):
-        result["fix_attempts"] = attempt + 1
+    prompt = (
+        f"You are PocketTeam's incident triage agent. A production issue was detected.\n\n"
+        f"Problem type: {problem_type}\n"
+        f"Incident: {incident_id}\n"
+        f"Details:\n{details}\n\n"
+        f"Create a concise fix plan. Include:\n"
+        f"1. Root cause analysis (what likely went wrong)\n"
+        f"2. Severity assessment (critical/high/medium/low)\n"
+        f"3. Step-by-step fix plan (max 5 steps)\n"
+        f"4. Risk assessment (what could go wrong with the fix)\n"
+        f"5. Estimated effort (quick fix / medium / large refactor)\n\n"
+        f"Keep it under 500 words. Be specific and actionable.\n"
+        f"Format for Telegram (plain text, no markdown headers)."
+    )
 
-        # Check if we should escalate
-        if escalation.should_escalate(incident.incident_id):
-            result["escalated"] = True
-            await _notify_telegram(
-                bot_token,
-                chat_id,
-                f"❌ <b>Auto-fix failed after {attempt} attempts</b>\n"
-                f"Incident: {incident.incident_id}\n"
-                f"Manual intervention required.",
-            )
-            break
-
-        # Record attempt (success=False for now, will update if fix works)
-        can_continue = escalation.record_fix_attempt(
-            incident.incident_id, success=False
-        )
-
-        if not can_continue:
-            result["escalated"] = True
-            break
-
-        # Run the agent pipeline via SDK (headless — this is the correct use case)
-        fix_success = await _run_fix_pipeline(project_root, incident, attempt + 1)
-
-        if fix_success:
-            escalation.resolve_incident(
-                incident.incident_id,
-                f"Auto-fixed on attempt {attempt + 1}",
-            )
-            result["auto_fix_success"] = True
-            await _notify_telegram(
-                bot_token,
-                chat_id,
-                f"✅ <b>Auto-fix successful</b>\n"
-                f"Incident: {incident.incident_id}\n"
-                f"Attempt: {attempt + 1}",
-            )
-            break
-
-    return result
-
-
-async def _run_fix_pipeline(
-    project_root: Path,
-    incident: Incident,
-    attempt: int,
-) -> bool:
-    """
-    Run the actual fix pipeline via Agent SDK (headless).
-
-    This is the CORRECT use of _run_with_sdk() — headless CI self-healing.
-    Steps: Investigator → Engineer → QA → verify.
-    """
     try:
-        from ..agents.engineer import EngineerAgent
-        from ..agents.investigator import InvestigatorAgent
-        from ..agents.qa import QAAgent
+        import httpx
 
-        # Step 1: Investigator diagnoses
-        investigator = InvestigatorAgent(project_root)
-        diag = await investigator.execute(
-            f"Diagnose production incident: {incident.description}"
-        )
-        if not diag.success:
-            return False
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 1024,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
 
-        # Step 2: Engineer creates fix
-        engineer = EngineerAgent(project_root)
-        fix = await engineer.execute(
-            f"Create minimal fix for: {diag.output}\n"
-            f"Incident: {incident.description}\n"
-            f"This is attempt {attempt}. Keep the fix minimal and scoped."
-        )
-        if not fix.success:
-            return False
+            if resp.status_code != 200:
+                logger.error("Claude API error: %s %s", resp.status_code, resp.text[:200])
+                return f"⚠️ Could not generate plan (API error {resp.status_code}). Manual investigation needed."
 
-        # Step 3: QA tests the fix
-        qa = QAAgent(project_root)
-        test_result = await qa.run_tests_now()
-        if not test_result.success:
-            return False
+            data = resp.json()
+            content = data.get("content", [])
+            if content and content[0].get("type") == "text":
+                return content[0]["text"]
 
-        return True
+            return "⚠️ Empty response from Claude API. Manual investigation needed."
 
-    except Exception:
-        return False
+    except Exception as e:
+        logger.error("Triage failed: %s", e, exc_info=True)
+        return f"⚠️ Triage failed: {e}. Manual investigation needed."
 
 
 async def _notify_telegram(bot_token: str, chat_id: str, message: str) -> None:

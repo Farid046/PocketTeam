@@ -1,12 +1,12 @@
 """
-Phase 3 Tests: Healer integration with fake app (mocked SDK).
+Phase 3 Tests: Healer integration with fake app.
 
-Tests the full flow:
+Tests the triage + plan flow:
 1. Fake app running with chaos mode
 2. HealthChecker detects failure
-3. Healer creates incident, attempts auto-fix pipeline
-4. Escalation after 3 strikes
-5. Telegram notification sent
+3. Healer creates incident, calls Claude API for plan
+4. Sends plan to CEO via Telegram
+5. Log anomaly detection and planning
 """
 
 from __future__ import annotations
@@ -19,8 +19,7 @@ import pytest
 
 from pocketteam.monitoring.escalation import EscalationManager
 from pocketteam.monitoring.healer import (
-    _attempt_auto_fix,
-    _run_fix_pipeline,
+    _triage_and_plan,
     handle_health_failure,
     handle_log_anomaly,
 )
@@ -65,18 +64,18 @@ class TestHealthCheckerWithFakeApp:
         assert all(not r.healthy for r in results)
 
 
-class TestHealerWithFakeApp:
-    """Healer integration — mocked SDK agents, real fake app."""
+class TestHealerTriageFlow:
+    """Healer triage + plan flow with mocked Claude API."""
 
     @pytest.mark.asyncio
-    async def test_handle_health_failure_creates_incident(
+    async def test_health_failure_creates_incident_and_plan(
         self, fake_app_url: str, chaos, project_root: Path
     ) -> None:
         chaos.set(health_status=500)
 
         with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg, \
-             patch("pocketteam.monitoring.healer._run_fix_pipeline", new_callable=AsyncMock) as mock_fix:
-            mock_fix.return_value = False
+             patch("pocketteam.monitoring.healer._triage_and_plan", new_callable=AsyncMock) as mock_plan:
+            mock_plan.return_value = "1. Root cause: server OOM\n2. Fix: increase memory limit"
 
             result = await handle_health_failure(
                 health_url=f"{fake_app_url}/health",
@@ -85,61 +84,39 @@ class TestHealerWithFakeApp:
             )
 
         assert result["incident_id"].startswith("health-")
-        assert result["http_status"] == "500"
-        # Telegram was called at least once (initial notification)
-        assert mock_tg.call_count >= 1
+        assert result["plan_created"] is True
+        assert result["awaiting_approval"] is True
+        # Two Telegram calls: notification + plan
+        assert mock_tg.call_count == 2
+        # Plan was sent in second call
+        plan_call = mock_tg.call_args_list[1]
+        assert "Fix Plan" in plan_call.args[2]
 
     @pytest.mark.asyncio
-    async def test_handle_health_failure_auto_fix_success(
-        self, fake_app_url: str, chaos, project_root: Path
-    ) -> None:
-        chaos.set(health_status=500)
-
-        with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock), \
-             patch("pocketteam.monitoring.healer._run_fix_pipeline", new_callable=AsyncMock) as mock_fix:
-            mock_fix.return_value = True
-
-            result = await handle_health_failure(
-                health_url=f"{fake_app_url}/health",
-                http_status="500",
-                project_root=project_root,
-            )
-
-        assert result["auto_fix_attempted"] is True
-        assert result["auto_fix_success"] is True
-        assert result["escalated"] is False
-
-    @pytest.mark.asyncio
-    async def test_handle_health_failure_escalates_after_3_strikes(
+    async def test_health_failure_without_api_key(
         self, fake_app_url: str, chaos, project_root: Path
     ) -> None:
         chaos.set(health_status=500)
 
         with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg, \
-             patch("pocketteam.monitoring.healer._run_fix_pipeline", new_callable=AsyncMock) as mock_fix:
-            mock_fix.return_value = False  # All fix attempts fail
-
+             patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}, clear=False):
             result = await handle_health_failure(
                 health_url=f"{fake_app_url}/health",
                 http_status="500",
                 project_root=project_root,
             )
 
-        assert result["auto_fix_attempted"] is True
-        assert result["auto_fix_success"] is False
-        assert result["escalated"] is True
-        # Check that escalation notification was sent
-        escalation_calls = [
-            c for c in mock_tg.call_args_list
-            if "failed" in str(c).lower() or "manual" in str(c).lower()
-        ]
-        assert len(escalation_calls) >= 1
+        assert result["plan_created"] is True  # Returns warning text, still truthy
+        assert result["awaiting_approval"] is True
 
     @pytest.mark.asyncio
-    async def test_handle_log_anomaly(
+    async def test_log_anomaly_creates_plan(
         self, fake_app_url: str, chaos, project_root: Path
     ) -> None:
-        with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg:
+        with patch("pocketteam.monitoring.healer._notify_telegram", new_callable=AsyncMock) as mock_tg, \
+             patch("pocketteam.monitoring.healer._triage_and_plan", new_callable=AsyncMock) as mock_plan:
+            mock_plan.return_value = "1. Root cause: DB connection leak\n2. Fix: add connection pooling"
+
             result = await handle_log_anomaly(
                 error_summary="Connection refused errors spiking",
                 error_count=42,
@@ -147,9 +124,58 @@ class TestHealerWithFakeApp:
             )
 
         assert result["incident_id"].startswith("log-")
-        assert result["severity"] == "medium"
-        assert result["error_count"] == 42
-        mock_tg.assert_called_once()
+        assert result["plan_created"] is True
+        assert result["awaiting_approval"] is True
+        assert mock_tg.call_count == 2
+
+
+class TestTriageAndPlan:
+    """Test the Claude API triage call."""
+
+    @pytest.mark.asyncio
+    async def test_triage_no_api_key(self) -> None:
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""}, clear=False):
+            plan = await _triage_and_plan("health_failure", "HTTP 500", "test-001")
+        assert "No API key" in plan
+
+    @pytest.mark.asyncio
+    async def test_triage_with_mocked_api(self) -> None:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "content": [{"type": "text", "text": "Root cause: OOM. Fix: restart."}]
+        }
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=False), \
+             patch("httpx.AsyncClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_response
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            MockClient.return_value = mock_client
+
+            plan = await _triage_and_plan("health_failure", "HTTP 500", "test-002")
+
+        assert "OOM" in plan
+        assert "restart" in plan
+
+    @pytest.mark.asyncio
+    async def test_triage_api_error(self) -> None:
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.text = "rate limited"
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=False), \
+             patch("httpx.AsyncClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_response
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            MockClient.return_value = mock_client
+
+            plan = await _triage_and_plan("health_failure", "HTTP 500", "test-003")
+
+        assert "API error 429" in plan
 
 
 class TestEscalationManager:
@@ -159,11 +185,8 @@ class TestEscalationManager:
         mgr = EscalationManager(project_root)
         incident = mgr.create_incident("test-001", "high", "Test failure")
 
-        # First two attempts: can continue
         assert mgr.record_fix_attempt("test-001", success=False) is True
         assert mgr.record_fix_attempt("test-001", success=False) is True
-
-        # Third attempt: escalation
         assert mgr.record_fix_attempt("test-001", success=False) is False
         assert mgr.should_escalate("test-001") is True
 
@@ -173,7 +196,6 @@ class TestEscalationManager:
 
         mgr.record_fix_attempt("test-002", success=False)
         mgr.record_fix_attempt("test-002", success=True)
-
         assert mgr.should_escalate("test-002") is False
 
     def test_critical_always_escalates(self, project_root: Path) -> None:
@@ -191,85 +213,3 @@ class TestEscalationManager:
         data = json.loads(incident_file.read_text())
         assert data["incident_id"] == "test-004"
         assert data["severity"] == "high"
-
-
-class TestFixPipelineMocked:
-    """_run_fix_pipeline with mocked agent SDK calls."""
-
-    @pytest.mark.asyncio
-    async def test_pipeline_success(self, project_root: Path) -> None:
-        from pocketteam.monitoring.escalation import Incident
-
-        incident = Incident(
-            incident_id="pipe-001",
-            severity="high",
-            description="Health check failed: HTTP 500",
-        )
-
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.output = "Root cause: OOM in worker process"
-
-        mock_test_result = MagicMock()
-        mock_test_result.success = True
-
-        with patch("pocketteam.agents.investigator.InvestigatorAgent") as MockInv, \
-             patch("pocketteam.agents.engineer.EngineerAgent") as MockEng, \
-             patch("pocketteam.agents.qa.QAAgent") as MockQA:
-
-            MockInv.return_value.execute = AsyncMock(return_value=mock_result)
-            MockEng.return_value.execute = AsyncMock(return_value=mock_result)
-            MockQA.return_value.run_tests_now = AsyncMock(return_value=mock_test_result)
-
-            success = await _run_fix_pipeline(project_root, incident, attempt=1)
-
-        assert success is True
-
-    @pytest.mark.asyncio
-    async def test_pipeline_fails_on_investigator_error(self, project_root: Path) -> None:
-        from pocketteam.monitoring.escalation import Incident
-
-        incident = Incident(
-            incident_id="pipe-002",
-            severity="high",
-            description="Health check failed",
-        )
-
-        mock_result = MagicMock()
-        mock_result.success = False
-
-        with patch("pocketteam.agents.investigator.InvestigatorAgent") as MockInv:
-            MockInv.return_value.execute = AsyncMock(return_value=mock_result)
-
-            success = await _run_fix_pipeline(project_root, incident, attempt=1)
-
-        assert success is False
-
-    @pytest.mark.asyncio
-    async def test_pipeline_fails_on_qa_error(self, project_root: Path) -> None:
-        from pocketteam.monitoring.escalation import Incident
-
-        incident = Incident(
-            incident_id="pipe-003",
-            severity="high",
-            description="Health check failed",
-        )
-
-        ok_result = MagicMock()
-        ok_result.success = True
-        ok_result.output = "diagnosis"
-
-        fail_result = MagicMock()
-        fail_result.success = False
-
-        with patch("pocketteam.agents.investigator.InvestigatorAgent") as MockInv, \
-             patch("pocketteam.agents.engineer.EngineerAgent") as MockEng, \
-             patch("pocketteam.agents.qa.QAAgent") as MockQA:
-
-            MockInv.return_value.execute = AsyncMock(return_value=ok_result)
-            MockEng.return_value.execute = AsyncMock(return_value=ok_result)
-            MockQA.return_value.run_tests_now = AsyncMock(return_value=fail_result)
-
-            success = await _run_fix_pipeline(project_root, incident, attempt=1)
-
-        assert success is False
