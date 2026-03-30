@@ -115,7 +115,8 @@ class TestLogActivityBasic:
 
 
 class TestLogActivityAgentId:
-    def test_empty_agent_id_stored_as_unknown(self, project_root: Path) -> None:
+    def test_empty_agent_id_defaults_to_coo(self, project_root: Path) -> None:
+        """Main session (empty agent_id) is the COO."""
         with patch(
             "pocketteam.safety.activity_logger._find_project_root",
             return_value=project_root,
@@ -123,7 +124,7 @@ class TestLogActivityAgentId:
             log_activity("Read", "file.py", "")
 
         entry = _read_entries(_log_file(project_root))[0]
-        assert entry["agent"] == "unknown"
+        assert entry["agent"] == "coo"
 
     def test_agent_id_is_preserved(self, project_root: Path) -> None:
         with patch(

@@ -178,7 +178,10 @@ SKILLS_DIR = ".claude/skills/pocketteam"
 # ─────────────────────────────────────────────────────────────────────────────
 
 AGENT_ALLOWED_TOOLS: dict[str, list[str]] = {
-    "coo": [],  # Delegates only, no direct tool use
+    # COO's actual allowed tools (Agent, Read, Glob, Grep, TodoWrite, TodoRead) are
+    # handled via a special branch in allowlist.py — the empty list here means
+    # "no tools permitted via the generic per-agent allowlist path".
+    "coo": [],
     "product": ["Read", "Glob", "Grep", "WebSearch", "WebFetch"],
     "planner": ["Read", "Glob", "Grep"],
     "reviewer": ["Read", "Glob", "Grep"],

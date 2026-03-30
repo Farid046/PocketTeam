@@ -5,7 +5,7 @@
   <img alt="Agents" src="https://img.shields.io/badge/agents-12-blue?style=for-the-badge" />
   <img alt="Skills" src="https://img.shields.io/badge/skills-55-purple?style=for-the-badge" />
   <img alt="Safety Layers" src="https://img.shields.io/badge/safety-10_layers-red?style=for-the-badge" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-497_passing-brightgreen?style=for-the-badge" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-passing-brightgreen?style=for-the-badge" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />
 </p>
 
@@ -30,14 +30,15 @@
 |---|---|---|
 | **12 Agents** | COO, Product, Planner, Reviewer, Engineer, QA, Security, DevOps, Investigator, Documentation, Monitor, Observer |
 | **55 Skills** | From market research to OWASP audits, browser automation to deployment rollbacks |
-| **Self-Healing** | GitHub Actions monitors your app 24/7. On failure: auto-starts a Claude session to diagnose and plan a fix |
+| **Health Monitoring** | GitHub Actions monitors your app 24/7. On failure: sends Telegram alert and (on macOS) auto-starts a Claude session to diagnose and plan a fix |
 | **3D Dashboard** | Real-time isometric office — see your agents work, track costs, audit safety |
 | **Telegram Control** | Give tasks, approve deploys, receive alerts — all from your phone |
 | **10-Layer Safety** | Structural hooks (not prompts). Survives context compaction. Cannot be bypassed |
 | **Browser Automation** | `ptbrowse` — uses text accessibility tree instead of screenshots (much smaller token footprint) |
 | **4 Workflow Modes** | `autopilot`, `ralph` (persistent), `quick`, `deep-dive` (parallel research) |
-| **Kill Switch** | `pocketteam kill` — stops everything in < 1 second |
+| **Kill Switch** | `pocketteam kill` — emergency stop, checked on every tool invocation |
 | **Zero Config** | `pocketteam init` guides you through everything. 5 questions, done |
+| **Platform Notes** | Auto-session daemon (health monitoring) is macOS-only. Linux users can still receive Telegram alerts and start sessions manually |
 
 <p align="center">
   <img src="docs/assets/dashboard-office.png" alt="PocketTeam 3D Dashboard" width="800" />
@@ -122,7 +123,7 @@ Accessed via `pocketteam dashboard start` or embedded in Claude Code.
 
 A lightweight, accessibility-tree-based browser automation tool built on Playwright and Bun. It exposes a persistent daemon so every command reuses the same browser instance — no cold-start overhead per step.
 
-After `pocketteam init`, the `ptbrowse` alias is available directly in your shell:
+`pocketteam init` installs a `ptbrowse` wrapper script in `~/.local/bin`. After adding this to your PATH, it's available in your shell:
 
 ```bash
 ptbrowse goto https://app.example.com
@@ -289,9 +290,9 @@ The COO delegates to the full team — Planner plans, Engineer implements, QA te
 
 ---
 
-## Self-Healing: 24/7 Monitoring via GitHub Actions
+## Health Monitoring: 24/7 via GitHub Actions
 
-PocketTeam can monitor your production app around the clock — even when you're asleep. A GitHub Actions workflow checks your health and log endpoints on a schedule. When something breaks, it starts a Claude Code session on your machine that analyzes the problem, creates a fix plan, and sends it to you via Telegram for approval. No autonomous changes — you stay in the loop.
+PocketTeam can monitor your production app around the clock — even when you're asleep. A GitHub Actions workflow checks your health and log endpoints on a schedule. When something breaks, it notifies you via Telegram. On macOS, the Telegram daemon can optionally auto-start a Claude Code session to analyze the problem and create a fix plan. No autonomous changes — you stay in the loop.
 
 ### The Flow
 
@@ -305,30 +306,31 @@ GitHub Actions (runs every hour)
     │
     ├─ 1. Telegram notification to CEO: "🚨 Problem detected"
     │
-    ├─ 2. POST /trigger-session on your app
-    │     (your app must be reachable — any public URL works:
-    │      your server, Cloudflare Tunnel, ngrok, Vercel, Railway, etc.)
+    ├─ 2. [macOS only] If Telegram daemon active (no other session running):
+    │     └─ Daemon auto-starts: claude --agent pocketteam/coo
+    │        COO delegates to Investigator → root cause analysis
+    │        COO creates a detailed fix plan
     │
-    ├─ 3. Your machine starts:  claude --agent pocketteam/coo
-    │     COO delegates to Investigator → root cause analysis
-    │     COO creates a detailed fix plan
+    │     [Linux/other] or [if daemon inactive]:
+    │     └─ CEO manually starts session or uses `pocketteam start`
     │
-    ├─ 4. Telegram to CEO: "📋 Here's the fix plan. Approve?"
+    ├─ 3. Telegram to CEO: "📋 Here's the fix plan. Approve?"
     │
-    └─ 5. You approve → COO executes (staging-first, always)
+    └─ 4. You approve → COO executes (staging-first, always)
 ```
 
 ### What You Need
 
 - A **health endpoint** on your app (`GET /health` → 200 OK)
-- Your app **reachable from the internet** (any method — your server, tunnel, etc.)
 - GitHub Actions secrets (set up automatically by `pocketteam init`)
-- Optional: a `/trigger-session` endpoint on your machine to auto-start Claude Code sessions (advanced setup)
+- **macOS (optional)**: Telegram daemon auto-starts sessions on detected failures
+- **Linux/other platforms**: Telegram alerts work; manual session start required
 
 ### Key Principles
 
 - **CEO-in-the-loop**: Every fix requires your explicit approval via Telegram before going live
 - **No autonomous changes**: PocketTeam analyzes and plans, but only executes with your permission
+- **Telegram-driven**: Alerts and session start are event-driven via the Telegram daemon (macOS) or manual CLI
 - **GitHub-native**: `pocketteam init` creates the repo, sets secrets, pushes the monitoring workflow — zero manual setup
 
 ### GitHub Integration
@@ -456,11 +458,14 @@ Phase 4: 24/7 MONITORING (via GitHub Actions)
 
 ### Kill Switch
 
-Stop everything in < 1 second via **CLI** (recommended):
+Stop everything via **CLI** (recommended):
 
 ```bash
-pocketteam kill              # CLI (works anytime, < 1 second)
+pocketteam kill              # CLI (works anytime, most reliable)
+pocketteam resume            # Remove kill switch and resume
 ```
+
+**How it works:** The kill switch is checked on every tool invocation. If Claude is mid-reasoning (thinking, not calling tools), the interruption happens at the next tool call. This ensures the system cannot be forced to take destructive action.
 
 **Alternative methods:**
 
@@ -487,7 +492,7 @@ PocketTeam's safety is:
 
 ### The D-SAC Pattern
 
-D-SAC (Dry-run / Staged / Approval / Commit) is a cryptographically secured approval flow for destructive operations. It prevents agents from silently deleting files, wiping databases, or force-pushing to production.
+D-SAC (Dry-run / Staged / Approval / Commit) uses single-use time-limited tokens to secure approval flows for destructive operations. It prevents agents from silently deleting files, wiping databases, or force-pushing to production.
 
 **The four-step flow:**
 
@@ -612,6 +617,8 @@ your-project/
 
 **OpenClaw footnote:** OpenClaw's 8 safety "layers" were implemented as system-prompt instructions. When Claude's context window compacted during a long session, those instructions were summarized or dropped. An agent proceeded to delete 200+ emails with no safety check triggering. This is a known failure mode of prompt-based safety — it cannot survive context compaction.
 
+**Comparison disclaimer:** Numbers in the table above are approximate and based on publicly available documentation as of March 2026. Feature availability may vary with updates.
+
 ### Production Safety: The Critical Difference
 
 Most agent frameworks treat safety as a conversation concern: they inject rules into the system prompt and hope the model follows them. This works until it doesn't.
@@ -655,10 +662,69 @@ ruff format pocketteam/   # Format
 - **12 agents** with specialized prompts
 - **55 skills** distributed across agents
 - **~13,000 lines of code** across 78 Python files
-- **497+ tests** across 21 test files
-- **95%+ test coverage**
+- **Tests** across 21 test files
 - **10 safety layers** blocking 32+ security patterns
 - **2 primary integrations** (Telegram, GitHub Actions)
+
+---
+
+## Troubleshooting
+
+### Telegram not receiving messages
+
+**Symptom:** PocketTeam runs but you get no Telegram notifications.
+
+**Solution:**
+```bash
+claude plugin install telegram@claude-plugins-official
+```
+
+Verify the plugin is installed and your `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are correct in `.pocketteam/config.yaml`.
+
+### Kill switch stuck
+
+**Symptom:** `pocketteam kill` was called and the system won't resume.
+
+**Solution:**
+```bash
+pocketteam resume
+# Or manually:
+rm .pocketteam/KILL
+```
+
+### `ptbrowse` command not found
+
+**Symptom:** `ptbrowse` command fails after `pocketteam init`.
+
+**Solution:**
+1. Check that `~/.local/bin` is in your `$PATH`:
+   ```bash
+   echo $PATH | grep -q ~/.local/bin && echo "OK" || echo "NOT IN PATH"
+   ```
+2. If missing, add it to your shell profile (`.bashrc`, `.zshrc`, etc.):
+   ```bash
+   export PATH="$HOME/.local/bin:$PATH"
+   ```
+3. Reload your shell and run `pocketteam init` again.
+
+### Session keeps creating new windows
+
+**Symptom:** Running `pocketteam start` opens a new Claude Code window each time.
+
+**Solution:**
+
+By default, `pocketteam start` now continues the last session (equivalent to `--continue`). If you want a fresh session, use:
+```bash
+pocketteam start new
+```
+
+### Agent shows as 'unknown' in dashboard
+
+**Symptom:** Dashboard displays agents but some show no name or ID.
+
+**Solution:**
+
+Restart your session. Agent names are populated when subagents first appear in the event stream. New agents registered mid-session may not yet be in the dashboard cache.
 
 ---
 
