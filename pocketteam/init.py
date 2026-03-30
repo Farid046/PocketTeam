@@ -1145,17 +1145,16 @@ jobs:
           ANTHROPIC_API_KEY: ${{{{ secrets.ANTHROPIC_API_KEY }}}}
           TELEGRAM_BOT_TOKEN: ${{{{ secrets.TELEGRAM_BOT_TOKEN }}}}
           TELEGRAM_CHAT_ID: ${{{{ secrets.TELEGRAM_CHAT_ID }}}}
+          GH_PAT: ${{{{ secrets.GH_PAT }}}}
         run: |
-          # Install PocketTeam: from requirements.txt, pyproject.toml, or GitHub
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt --quiet 2>/dev/null || true
+          # Install PocketTeam (private repo needs GH_PAT for access)
+          if [ -n "$GH_PAT" ]; then
+            pip install "pocketteam @ git+https://${{GH_PAT}}@github.com/Farid046/PocketTeam.git" --quiet
+          elif [ -f requirements.txt ]; then
+            pip install -r requirements.txt --quiet
+          else
+            pip install pocketteam --quiet
           fi
-          if [ -f pyproject.toml ]; then
-            pip install -e . --quiet 2>/dev/null || true
-          fi
-          # Fallback: install from GitHub (works for public repos, private needs PAT)
-          python -c "from pocketteam.monitoring.healer import handle_health_failure" 2>/dev/null || \
-            pip install "pocketteam @ git+https://github.com/Farid046/PocketTeam.git" --quiet
           python -c "
           import asyncio
           from pocketteam.monitoring.healer import handle_health_failure

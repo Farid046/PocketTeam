@@ -146,7 +146,22 @@ def set_repo_secrets(repo: str, cfg: PocketTeamConfig) -> dict[str, bool]:
             repo, "TELEGRAM_CHAT_ID", cfg.telegram.chat_id
         )
 
+    # GH_PAT for private repo access in GitHub Actions
+    # Uses the current gh CLI token (fine-grained PAT recommended)
+    gh_pat = _get_gh_token()
+    if gh_pat:
+        secrets["GH_PAT"] = set_repo_secret(repo, "GH_PAT", gh_pat)
+
     return secrets
+
+
+def _get_gh_token() -> str:
+    """Get the current gh CLI auth token for use as GH_PAT."""
+    result = subprocess.run(
+        ["gh", "auth", "token"],
+        capture_output=True, text=True, timeout=5,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
 
 
 def push_workflow(project_root: Path) -> bool:
