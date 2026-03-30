@@ -14,6 +14,7 @@ import logging
 import os
 import signal
 import sys
+import time
 from datetime import datetime, UTC
 from pathlib import Path
 
@@ -21,7 +22,7 @@ import httpx
 
 logger = logging.getLogger("pocketteam.telegram_daemon")
 
-LAUNCH_COOLDOWN_SECONDS = 30.0
+LAUNCH_COOLDOWN_SECONDS = 300.0
 
 
 class TelegramDaemon:
@@ -34,18 +35,40 @@ class TelegramDaemon:
         self._shutdown = False
         self._launch_cooldown = 0.0  # timestamp of last launch
         self.state_file = project_root / ".pocketteam" / "telegram-daemon.json"
+        self.launching_lock = project_root / ".pocketteam" / "launching.lock"
         self.inbox_file = project_root / ".pocketteam" / "telegram-inbox.jsonl"
         self.kill_file = project_root / ".pocketteam" / "KILL"
         self.sessions_launched = 0
+
+        # Restore persisted cooldown so daemon restarts don't reset the guard
+        try:
+            saved = json.loads(self.state_file.read_text())
+            self._launch_cooldown = float(saved.get("launch_cooldown", 0.0))
+        except Exception:
+            pass  # state file missing or unreadable — start with zero cooldown
 
     async def run(self) -> None:
         """Main polling loop."""
         self._write_state("polling")
         logger.info("Telegram daemon started for %s", self.project_root)
 
+        # Harden .pocketteam directory — no world or group access
+        pt_dir = self.project_root / ".pocketteam"
+        try:
+            pt_dir.chmod(0o700)
+        except Exception:
+            pass
+
         async with httpx.AsyncClient(timeout=httpx.Timeout(35.0, connect=10.0)) as client:
-            backoff = 2.0
             while not self._shutdown:
+                # If a Claude session is running, stop calling getUpdates entirely.
+                # The MCP plugin owns the Telegram queue while a session is live.
+                if self._is_claude_running():
+                    self._write_state("session_active")
+                    logger.debug("Claude session running, sleeping (no getUpdates)")
+                    await asyncio.sleep(10.0)
+                    continue
+
                 try:
                     resp = await client.get(
                         f"{self.api_base}/getUpdates",
@@ -58,15 +81,13 @@ class TelegramDaemon:
 
                     if resp.status_code == 409:
                         # MCP plugin is polling — session is active
-                        logger.debug("409 Conflict — session active, backing off %.0fs", backoff)
+                        logger.debug("409 Conflict — session active, pausing polling")
                         self._write_state("session_active")
-                        await asyncio.sleep(backoff)
-                        backoff = min(backoff * 1.5, 60.0)
+                        await asyncio.sleep(10.0)
                         continue
 
                     resp.raise_for_status()
                     data = resp.json()
-                    backoff = 2.0  # reset on success
 
                     for update in data.get("result", []):
                         self.offset = update["update_id"] + 1
@@ -77,8 +98,7 @@ class TelegramDaemon:
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 409:
                         self._write_state("session_active")
-                        await asyncio.sleep(backoff)
-                        backoff = min(backoff * 1.5, 60.0)
+                        await asyncio.sleep(10.0)
                     else:
                         logger.error("HTTP error: %s", e)
                         await asyncio.sleep(5)
@@ -116,9 +136,13 @@ class TelegramDaemon:
         # Always write to inbox first
         self._write_inbox(text, user_id, chat_id)
 
-        # Check if a Claude session is already running
+        # Check if a Claude session is already running.
+        # With the pgrep guard at the top of run(), this should never trigger,
+        # but it remains as a safety net for unforeseen timing gaps.
         if self._is_claude_running():
-            logger.info("Claude session already running, message saved to inbox only")
+            logger.warning(
+                "Race: got message while session running — saved to inbox only (this should be rare)"
+            )
             return
 
         # Cooldown: avoid launching multiple sessions in quick succession
@@ -146,29 +170,34 @@ class TelegramDaemon:
         }
         with open(self.inbox_file, "a") as f:
             f.write(json.dumps(entry) + "\n")
+        try:
+            self.inbox_file.chmod(0o600)
+        except Exception:
+            pass
         logger.info("Wrote message to inbox: %.60s", text)
 
-    async def _launch_session(self, message_text: str):
+    async def _launch_session(self, message_text: str):  # noqa: ARG002 — kept for API compatibility; inbox prompt is now in COO initialPrompt
         claude_path = self._find_claude()
         if not claude_path:
             logger.error("claude CLI not found in PATH")
             return
 
         logger.info("Launching Claude session in new Terminal window")
+        self.launching_lock.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.launching_lock.parent / f".launching.lock.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps({"ts": time.time(), "pid": os.getpid()}))
+        os.replace(tmp, self.launching_lock)
         self.sessions_launched += 1
         self._write_state("launching")
-
-        # Write a temporary launch script to avoid shell/AppleScript quoting issues
-        import tempfile
 
         launch_script = self.project_root / ".pocketteam" / "launch-session.sh"
         launch_script.parent.mkdir(parents=True, exist_ok=True)
         launch_script.write_text(
             f'#!/bin/bash\n'
             f'cd "{self.project_root}"\n'
-            f'exec {claude_path} --dangerously-skip-permissions --effort medium\n'
+            f"exec {claude_path} --agent=pocketteam/coo --dangerously-skip-permissions --effort medium\n"
         )
-        launch_script.chmod(0o755)
+        launch_script.chmod(0o700)
 
         # Use osascript to open a new Terminal window running the script
         osascript = (
@@ -187,10 +216,31 @@ class TelegramDaemon:
             _, stderr = await process.communicate()
             if process.returncode != 0:
                 logger.error("osascript failed: %s", stderr.decode())
+                self.launching_lock.unlink(missing_ok=True)
             else:
                 logger.info("Terminal window opened with Claude session")
+                # Write a temporary session.lock so _is_claude_running() works immediately
+                temp_lock = self.project_root / ".pocketteam" / "session.lock"
+                temp_lock.write_text(json.dumps({"ts": time.time(), "pid": "pending", "source": "daemon"}))
+                logger.info("Waiting for session.lock to appear (max 120s)...")
+                boot_deadline = asyncio.get_running_loop().time() + 120.0
+                while asyncio.get_running_loop().time() < boot_deadline:
+                    await asyncio.sleep(5.0)
+                    if (self.project_root / ".pocketteam" / "session.lock").exists():
+                        logger.info("session.lock detected — Claude session is live")
+                        self.launching_lock.unlink(missing_ok=True)
+                        break
+                else:
+                    logger.warning("session.lock never appeared after 120s — refreshing cooldown and removing launching.lock")
+                    # Refresh cooldown before removing the lock so the next incoming
+                    # message doesn't trigger an immediate re-launch (the cooldown
+                    # and the boot timeout are otherwise equal, creating a race).
+                    self._launch_cooldown = datetime.now(UTC).timestamp()
+                    self._write_state("polling")
+                    self.launching_lock.unlink(missing_ok=True)
         except Exception:
             logger.exception("Failed to launch Terminal window")
+            self.launching_lock.unlink(missing_ok=True)
 
     def _find_claude(self) -> str | None:
         """Find the claude CLI binary in PATH and known install locations."""
@@ -208,26 +258,56 @@ class TelegramDaemon:
         return None
 
     def _is_claude_running(self) -> bool:
-        """Check if any Claude Code session is already running for this project."""
+        """Check if any Claude Code session is already running."""
         import subprocess as sp
 
+        # Method 1: Check for Claude CLI processes
         try:
             result = sp.run(
-                ["pgrep", "-f", f"claude.*--dangerously-skip-permissions"],
+                ["pgrep", "-f", "claude.*--dangerously-skip-permissions"],
                 capture_output=True, text=True, timeout=5,
             )
-            # pgrep returns 0 if matches found
             if result.returncode == 0:
                 pids = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
-                # Filter out our own daemon PID
                 own_pid = str(os.getpid())
                 other_pids = [p for p in pids if p != own_pid]
                 if other_pids:
-                    logger.debug("Found running Claude sessions: %s", other_pids)
+                    logger.debug("Found running Claude sessions via pgrep: %s", other_pids)
                     return True
-            return False
         except Exception:
-            return False  # If we can't check, assume no session running
+            pass
+
+        # Method 1b: launching.lock written immediately at launch time
+        if self.launching_lock.exists():
+            try:
+                data = json.loads(self.launching_lock.read_text())
+                age = time.time() - data.get("ts", 0)
+                if age < 120:
+                    logger.debug("Launch in progress (launching.lock is %.0fs old)", age)
+                    return True
+                else:
+                    logger.debug("launching.lock stale (%.0fs old), removing", age)
+                    self.launching_lock.unlink(missing_ok=True)
+            except Exception:
+                logger.warning("launching.lock unreadable — removing stale lock")
+                self.launching_lock.unlink(missing_ok=True)
+
+        # Method 2: Check for the lock file written by Claude Code sessions
+        # The session_start hook creates this lock when a session becomes active
+        lock_file = self.project_root / ".pocketteam" / "session.lock"
+        if lock_file.exists():
+            try:
+                age = time.time() - lock_file.stat().st_mtime
+                if age < 120:
+                    logger.debug("Found active session lock (%.0fs old)", age)
+                    return True
+                else:
+                    logger.debug("Session lock stale (%.0fs old), ignoring", age)
+                    lock_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        return False
 
     def _reload_access(self) -> None:
         """Re-read access.json so runtime allowlist changes take effect."""
@@ -246,9 +326,11 @@ class TelegramDaemon:
             "last_update": datetime.now(UTC).isoformat(),
             "sessions_launched": self.sessions_launched,
             "project_root": str(self.project_root),
+            "launch_cooldown": self._launch_cooldown,
         }
         try:
             self.state_file.write_text(json.dumps(info, indent=2))
+            self.state_file.chmod(0o600)
         except Exception:
             pass  # non-fatal
 
@@ -296,6 +378,8 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         stream=sys.stderr,
     )
+    # Suppress httpx INFO logs — they include full URLs with the bot token
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     project_root = args.project_root.resolve()
     if not (project_root / ".pocketteam").exists():
