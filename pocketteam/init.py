@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from rich.console import Console
@@ -959,28 +960,73 @@ def _setup_agent_definitions(project_root: Path) -> None:
 
 
 def _setup_telegram_plugin(bot_token: str) -> bool:
-    """Install Telegram plugin and write bot token config. Returns True on success."""
+    """Install PocketTeam's MCP Telegram Proxy (replaces official plugin).
+
+    The proxy intercepts /kill commands at the protocol level before Claude
+    sees them, enabling remote kill switch via Telegram.
+    """
     try:
         if not shutil.which("claude"):
             return False
 
-        # Install plugin (idempotent — succeeds or reports already installed)
-        result = subprocess.run(
-            ["claude", "plugin", "install", "telegram@claude-plugins-official"],
-            capture_output=True, text=True, timeout=60,
-        )
-        combined = (result.stdout + result.stderr).lower()
-        if result.returncode != 0 and "already installed" not in combined:
-            return False
-
-        # Write bot token to plugin's config location
+        # Write bot token to channel config location
         channel_dir = Path.home() / ".claude" / "channels" / "telegram"
         channel_dir.mkdir(parents=True, exist_ok=True)
         env_path = channel_dir / ".env"
         env_path.write_text(f"TELEGRAM_BOT_TOKEN={bot_token}\n")
         os.chmod(env_path, 0o600)
 
-        return True
+        # Find the MCP proxy script
+        mcp_script = Path(__file__).parent / "mcp_telegram.py"
+        if not mcp_script.exists():
+            # Fallback: try installed package location
+            import pocketteam
+            mcp_script = Path(pocketteam.__file__).parent / "mcp_telegram.py"
+
+        if not mcp_script.exists():
+            console.print("  [yellow]⚠ MCP Telegram Proxy script not found[/]")
+            return False
+
+        python_path = sys.executable
+
+        # Remove old official plugin if installed (ignore errors)
+        subprocess.run(
+            ["claude", "plugin", "uninstall", "telegram@claude-plugins-official"],
+            capture_output=True, timeout=15,
+        )
+
+        # Remove old MCP entry if exists (idempotent)
+        subprocess.run(
+            ["claude", "mcp", "remove", "telegram-proxy", "--scope", "user"],
+            capture_output=True, timeout=15,
+        )
+
+        # Register PocketTeam's MCP Telegram Proxy
+        result = subprocess.run(
+            [
+                "claude", "mcp", "add", "telegram-proxy",
+                "--scope", "user",
+                "--", python_path, str(mcp_script),
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+
+        if result.returncode == 0:
+            console.print("  [green]✓[/] Telegram MCP Proxy installed (with /kill support)")
+            return True
+        else:
+            # Fallback: try the old plugin
+            console.print(f"  [yellow]⚠ MCP Proxy failed, trying official plugin...[/]")
+            result2 = subprocess.run(
+                ["claude", "plugin", "install", "telegram@claude-plugins-official"],
+                capture_output=True, text=True, timeout=60,
+            )
+            combined = (result2.stdout + result2.stderr).lower()
+            if result2.returncode == 0 or "already installed" in combined:
+                console.print("  [green]✓[/] Telegram plugin installed (without /kill)")
+                return True
+            return False
+
     except Exception:
         return False
 
