@@ -216,25 +216,41 @@ class TestSafetyIntegration:
         with pytest.raises(KillSwitchError):
             asyncio.run(pipeline.run())
 
-    def test_guardian_blocks_dangerous_commands(self):
+    def test_guardian_blocks_dangerous_commands(self, tmp_path):
         from pocketteam.safety.guardian import pre_tool_hook
 
-        result = pre_tool_hook("Bash", {"command": "rm -rf /"}, "engineer")
-        assert result["allow"] is False
+        # Use isolated project root to avoid rate limits from live session
+        (tmp_path / ".pocketteam").mkdir()
+        import os
+        old_cwd = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            result = pre_tool_hook("Bash", {"command": "rm -rf /"}, "engineer")
+            assert result["allow"] is False
 
-        result = pre_tool_hook("Bash", {"command": "ls -la"}, "engineer")
-        assert result["allow"] is True
+            result = pre_tool_hook("Bash", {"command": "ls -la"}, "engineer")
+            assert result["allow"] is True
+        finally:
+            os.chdir(old_cwd)
 
-    def test_guardian_enforces_agent_allowlist(self):
+    def test_guardian_enforces_agent_allowlist(self, tmp_path):
         from pocketteam.safety.guardian import pre_tool_hook
 
-        # Planner should NOT be able to use Write
-        result = pre_tool_hook("Write", {"file_path": "test.py"}, "planner")
-        assert result["allow"] is False
+        # Use isolated project root to avoid rate limits from live session
+        (tmp_path / ".pocketteam").mkdir()
+        import os
+        old_cwd = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            # Planner should NOT be able to use Write
+            result = pre_tool_hook("Write", {"file_path": "test.py"}, "planner")
+            assert result["allow"] is False
 
-        # Engineer CAN use Write
-        result = pre_tool_hook("Write", {"file_path": "test.py"}, "engineer")
-        assert result["allow"] is True
+            # Engineer CAN use Write
+            result = pre_tool_hook("Write", {"file_path": "test.py"}, "engineer")
+            assert result["allow"] is True
+        finally:
+            os.chdir(old_cwd)
 
 
 # ── Agent Module Imports ────────────────────────────────────────────────────

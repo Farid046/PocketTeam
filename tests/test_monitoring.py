@@ -227,7 +227,7 @@ class TestHealer:
                 project_root=tmp_path,
             )
 
-        assert result["escalated"] is True
+        assert result["session_triggered"] is True
 
     async def test_handle_log_anomaly(self, tmp_path: Path):
         (tmp_path / ".pocketteam").mkdir(parents=True)

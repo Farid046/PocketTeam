@@ -543,6 +543,7 @@ def _setup_claude_dir(project_root: Path, cfg: PocketTeamConfig, is_new: bool) -
     _setup_settings_json(project_root, is_new)
     _setup_agent_definitions(project_root)
     _setup_statusline(project_root)
+    _setup_ptbrowse()
     _setup_optimal_defaults(project_root)
 
 
@@ -576,6 +577,42 @@ def _setup_statusline(project_root: Path) -> None:
         console.print("  [green]PocketTeam HUD configured[/]")
     else:
         console.print("  [dim]PocketTeam HUD already configured[/]")
+
+
+def _setup_ptbrowse() -> None:
+    """Create a ptbrowse shell wrapper at ~/.local/bin/ptbrowse (or ~/.bun/bin/ptbrowse).
+
+    The wrapper invokes pocketteam/browse/index.ts via bun so agents can call
+    `ptbrowse <command>` from any working directory.
+    """
+    # Resolve the absolute path to browse/index.ts inside the installed package
+    browse_index = Path(__file__).parent / "browse" / "index.ts"
+    if not browse_index.exists():
+        console.print("  [yellow]⚠[/] ptbrowse: browse/index.ts not found, skipping wrapper")
+        return
+
+    # Prefer ~/.bun/bin (already in PATH after bun install), fall back to ~/.local/bin
+    bun_bin = Path.home() / ".bun" / "bin"
+    local_bin = Path.home() / ".local" / "bin"
+
+    if bun_bin.exists():
+        wrapper_dir = bun_bin
+    else:
+        wrapper_dir = local_bin
+        wrapper_dir.mkdir(parents=True, exist_ok=True)
+
+    wrapper_path = wrapper_dir / "ptbrowse"
+
+    wrapper_content = f"""#!/bin/bash
+exec bun run "{browse_index.resolve()}" "$@"
+"""
+
+    try:
+        wrapper_path.write_text(wrapper_content)
+        wrapper_path.chmod(0o755)
+        console.print(f"  [green]✓[/] ptbrowse installed at [dim]{wrapper_path}[/]")
+    except OSError as e:
+        console.print(f"  [yellow]⚠[/] ptbrowse wrapper: {e}")
 
 
 def _setup_optimal_defaults(project_root: Path) -> None:
@@ -1108,7 +1145,14 @@ def _create_github_actions(project_root: Path, cfg: PocketTeamConfig) -> None:
         return
 
     workflow_path = project_root / ".github/workflows/pocketteam-monitor.yml"
-    health_url = cfg.health_url or "https://your-app.com/health"
+    if cfg.health_url:
+        health_url = cfg.health_url
+    else:
+        health_url = "https://your-app.com/health"
+        console.print(
+            "  [yellow]⚠[/] GitHub Actions: no health_url configured — "
+            "edit pocketteam-monitor.yml and replace the placeholder URL."
+        )
     schedule = cfg.github.schedule
 
     workflow = f"""name: PocketTeam Monitor

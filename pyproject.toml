@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pocketteam"
 version = "1.0.0"
-description = "Your autonomous AI IT team. 12 agents. 53 skills. 10 safety layers. Self-healing via GitHub Actions."
+description = "Your autonomous AI IT team. 12 agents. 55 skills. 10 safety layers. Self-healing via GitHub Actions."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"

@@ -71,7 +71,7 @@ async def handle_health_failure(
         f"WICHTIG: Führe KEINE Änderungen durch. Nur analysieren und planen."
     )
 
-    await _send_to_bot(bot_token, chat_id, session_prompt)
+    await _notify_telegram(bot_token, chat_id, session_prompt)
 
     return {
         "incident_id": incident_id,
@@ -127,7 +127,7 @@ async def handle_log_anomaly(
         f"WICHTIG: Führe KEINE Änderungen durch. Nur analysieren und planen."
     )
 
-    await _send_to_bot(bot_token, chat_id, session_prompt)
+    await _notify_telegram(bot_token, chat_id, session_prompt)
 
     return {
         "incident_id": incident_id,
@@ -135,17 +135,6 @@ async def handle_log_anomaly(
         "error_count": error_count,
         "session_triggered": True,
     }
-
-
-async def _send_to_bot(bot_token: str, chat_id: str, message: str) -> None:
-    """
-    Send a message to the Telegram bot that the daemon will pick up
-    and use to start a Claude Code session.
-
-    This is the same as a user sending a message to the bot.
-    The daemon's auto-session feature will start a session with this context.
-    """
-    await _notify_telegram(bot_token, chat_id, message)
 
 
 async def _notify_telegram(bot_token: str, chat_id: str, message: str) -> None:
