@@ -1,18 +1,6 @@
 ---
 name: security-audit
-description: |
-  Trigger when user asks for security review, vulnerability scan, or OWASP audit.
-  Checks OWASP Top 10, scans dependencies for CVEs, reviews code for security issues.
-
-  <example>
-  user: "/security-audit"
-  assistant: Uses the security-audit skill to perform a comprehensive security review
-  </example>
-
-  <example>
-  user: "Check this code for security vulnerabilities"
-  assistant: Uses the security-audit skill to audit the code
-  </example>
+description: "Full security review with STRIDE and CVE scan. Use before production releases."
 ---
 
 # Security Audit

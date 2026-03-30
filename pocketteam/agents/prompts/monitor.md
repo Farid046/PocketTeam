@@ -11,6 +11,9 @@ description: |
 model: haiku
 color: bright_green
 tools: ["Read", "Bash"]
+skills:
+  - health-check
+  - log-analysis
 ---
 
 # Monitor Agent

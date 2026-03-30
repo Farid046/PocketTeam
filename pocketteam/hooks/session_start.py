@@ -7,6 +7,7 @@ messages so the COO sees them immediately.
 """
 
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -62,6 +63,13 @@ def handle(hook_input: dict) -> dict:
     if not pt_dir:
         return {}
 
+    # Write session lock so the daemon knows a session is active
+    lock_file = pt_dir / "session.lock"
+    try:
+        lock_file.write_text(str(os.getpid()))
+    except OSError:
+        pass
+
     inbox_path = pt_dir / "telegram-inbox.jsonl"
 
     # Read all entries
@@ -104,16 +112,9 @@ def handle(hook_input: dict) -> dict:
             pass
 
     # Send Telegram notification that session is active
-    if unread:
-        preview = unread[-1].get("text", "")[:80]
-        _notify_telegram(
-            pt_dir,
-            f"PocketTeam Session gestartet.\n"
-            f"{len(unread)} Nachricht(en) empfangen.\n"
-            f"Letzte: \"{preview}\"\n\n"
-            f"Wie kann ich helfen?"
-        )
-    else:
+    # Only notify when no unread messages — the COO will reply to unread
+    # messages directly, so a separate greeting would be a duplicate.
+    if not unread:
         _notify_telegram(
             pt_dir,
             "PocketTeam Session gestartet. Wie kann ich helfen?"
