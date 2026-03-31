@@ -68,6 +68,7 @@ class DashboardConfig:
     project_root: str = ""
     claude_project_hash: str = ""
     compose_command: str = "docker compose"  # "docker compose" (v2) or "docker-compose" (v1)
+    container_name: str = "pocketteam-dashboard"  # Derived from project_name at init
 
 
 @dataclass
@@ -229,6 +230,7 @@ def load_config(project_root: Path | None = None) -> PocketTeamConfig:
             project_root=dash.get("project_root", ""),
             claude_project_hash=dash.get("claude_project_hash", ""),
             compose_command=dash.get("compose_command", "docker compose"),
+            container_name=dash.get("container_name", "pocketteam-dashboard"),
         )
 
     if cu := raw.get("computer_use"):
@@ -312,6 +314,7 @@ def save_config(cfg: PocketTeamConfig) -> None:
             "project_root": cfg.dashboard.project_root,
             "claude_project_hash": cfg.dashboard.claude_project_hash,
             "compose_command": cfg.dashboard.compose_command,
+            "container_name": cfg.dashboard.container_name,
         },
         "computer_use": {
             "enabled": cfg.computer_use.enabled,

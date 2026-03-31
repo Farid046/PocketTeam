@@ -33,6 +33,34 @@ from .constants import (
     DASHBOARD_VERSION,
 )
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Container name sanitization
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def sanitize_container_name(project_name: str) -> str:
+    """
+    Convert a project name into a valid Docker container name.
+
+    Rules:
+    - Lowercase
+    - Spaces replaced with hyphens
+    - Only alphanumeric characters and hyphens allowed (all others stripped)
+    - Leading/trailing hyphens removed
+    - Falls back to "pocketteam-dashboard" if result is empty
+
+    Example: "My Cool Project" → "my-cool-project-dashboard"
+    """
+    import re
+    name = project_name.strip().lower()
+    name = name.replace(" ", "-")
+    name = re.sub(r"[^a-z0-9\-]", "", name)
+    name = name.strip("-")
+    if not name:
+        return "pocketteam-dashboard"
+    return f"{name}-dashboard"
+
 console = Console()
 
 
@@ -325,6 +353,7 @@ def generate_compose(
     claude_project_dir: Path,
     pocketteam_dir: Path,
     env_file_path: Path,
+    container_name: str | None = None,
 ) -> str:
     """
     Generate a hardened docker-compose.yml with literal paths.
@@ -333,14 +362,18 @@ def generate_compose(
     cap_drop ALL, no-new-privileges, restart on-failure:3 (Errata E4 — not
     deploy.restart_policy which is Swarm-only).
     Auth token sourced from env_file, not from config.
+
+    container_name: Docker container name. Defaults to dash.container_name,
+    falling back to "pocketteam-dashboard" for backwards compatibility.
     """
     image_ref = f"{dash.image}:{dash.image_version}"
+    cname = container_name or dash.container_name or "pocketteam-dashboard"
 
     return f"""version: "3.8"
 services:
   dashboard:
     image: {image_ref}
-    container_name: pocketteam-dashboard
+    container_name: {cname}
     ports:
       - "127.0.0.1:{dash.port}:{dash.port}"
     volumes:
@@ -516,6 +549,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
     ensure_pocketteam_gitignore(project_root)
 
     # Step 7d: Populate dashboard config
+    container_name = sanitize_container_name(cfg.project_name or project_root.name)
     cfg.dashboard = DashboardConfig(
         enabled=True,
         port=port,
@@ -529,6 +563,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
         project_root=str(project_root),
         claude_project_hash=claude_project_hash,
         compose_command=compose_command,
+        container_name=container_name,
     )
     save_config(cfg)
 
@@ -678,6 +713,7 @@ def dashboard_status_cmd(project_root: Path | None = None) -> None:
 
     # Container state via docker inspect
     ctx = cfg.dashboard.docker_context
+    cname = cfg.dashboard.container_name or "pocketteam-dashboard"
     inspect_result = subprocess.run(
         [
             "docker",
@@ -686,7 +722,7 @@ def dashboard_status_cmd(project_root: Path | None = None) -> None:
             "inspect",
             "--format",
             "{{.State.Status}} (up {{.State.StartedAt}})",
-            "pocketteam-dashboard",
+            cname,
         ],
         capture_output=True,
         text=True,
