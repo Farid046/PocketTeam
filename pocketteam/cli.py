@@ -153,7 +153,7 @@ def _launch_claude(
                     os.environ[key.strip()] = val.strip()
 
     # Build command: skip-permissions + medium effort for COO (Planner gets Opus for deep thinking)
-    cmd = ["claude", "--dangerously-skip-permissions", "--effort", "medium"]
+    cmd = ["claude", "--dangerously-skip-permissions", "--effort", "medium", "--agent", "pocketteam/coo"]
 
     # Session handling
     if resume == "continue":
