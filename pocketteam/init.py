@@ -187,7 +187,7 @@ async def run_init(
 
     # Active features summary
     features = []
-    features.append("  [green]✓[/] Effort: [bold]high[/] (maximum reasoning quality)")
+    features.append("  [green]✓[/] Effort: [bold]medium[/] (balanced reasoning quality)")
     features.append("  [green]✓[/] Remote Control: [bold]active[/] (claude.ai/code + Mobile)")
     features.append("  [green]✓[/] Auto Memory: [bold]active[/]")
     features.append("  [green]✓[/] PocketTeam HUD: [bold]configured[/]")
@@ -223,7 +223,7 @@ async def run_init(
         next_steps.append("[dim]Manage: pocketteam dashboard start|stop|status|logs[/]")
     elif no_dashboard:
         next_steps.append("[dim]Dashboard skipped. Install later: pocketteam dashboard install[/]")
-    next_steps.append("[dim]Commands: pocketteam start | start new | start resume | status | kill[/]")
+    next_steps.append("[dim]Commands: pocketteam start | start new | start resume | status[/]")
 
     console.print(Panel(
         "✅ [bold green]PocketTeam initialized![/]\n\n"
@@ -674,7 +674,7 @@ def _setup_statusline(project_root: Path) -> None:
     if "statusLine" not in existing:
         existing["statusLine"] = {
             "type": "command",
-            "command": f"node {statusline_script.resolve()}",
+            "command": "node pocketteam/statusline/index.js",
         }
         settings_path.write_text(json.dumps(existing, indent=2))
         console.print("  [green]PocketTeam HUD configured[/]")
@@ -864,7 +864,6 @@ If CEO says no → ask what to change. Never proceed without approval.
 ## Safety Rules (ABSOLUTE — enforced by hooks, not prompts)
 - Safety hooks in `.claude/settings.json` run on EVERY tool call automatically
 - You cannot bypass them — they are runtime hooks, not conversation instructions
-- Kill switch: `.pocketteam/KILL` file stops everything immediately
 - Never write to .env, .ssh, .aws, *.pem, *.key files
 - Never run: rm -rf /, DROP DATABASE, TRUNCATE, fork bombs
 - Always staging-first for production fixes
@@ -889,11 +888,9 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
     """Merge PocketTeam safety hooks into .claude/settings.json."""
     settings_path = project_root / CLAUDE_DIR / "settings.json"
 
-    # Absolute path ensures hooks work regardless of cwd
-    abs_root = str(project_root.resolve())
-    hook_prefix = f"cd {abs_root} && PYTHONPATH=. python -m pocketteam.safety"
-
-    hooks_prefix = f"cd {abs_root} && PYTHONPATH=. python -m pocketteam.hooks"
+    # Use relative paths — Claude Code always runs hooks from project root
+    hook_prefix = "PYTHONPATH=. python -m pocketteam.safety"
+    hooks_prefix = "PYTHONPATH=. python -m pocketteam.hooks"
 
     pocketteam_hooks = {
         "PreToolUse": [
@@ -1014,7 +1011,10 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
 
     if not settings_path.exists() or is_new:
         settings_path.parent.mkdir(parents=True, exist_ok=True)
-        settings_path.write_text(json.dumps({"hooks": pocketteam_hooks}, indent=2))
+        settings_path.write_text(json.dumps({
+            "agent": "pocketteam/coo",
+            "hooks": pocketteam_hooks,
+        }, indent=2))
         return
 
     # Merge: add our hooks without removing existing ones
@@ -1041,6 +1041,7 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
                 if hook.get("matcher") not in existing_matchers:
                     existing_hooks[event_type].append(hook)
 
+    existing["agent"] = "pocketteam/coo"
     existing["hooks"] = existing_hooks
     settings_path.write_text(json.dumps(existing, indent=2))
 
@@ -1137,43 +1138,20 @@ def _setup_telegram_plugin(bot_token: str) -> bool:
 
 
 def _setup_computer_use_mcp(project_root: Path) -> bool:  # noqa: ARG001
-    """Install the Computer Use MCP server via Claude CLI.
+    """Enable the built-in Computer Use MCP server.
 
-    Registers the browser-based Computer Use MCP server at project scope
-    so all agents can interact with it via the MCP tool.
+    Computer Use is a built-in Claude Code feature (not an npm package).
+    It must be enabled via /mcp in an interactive session.
 
-    Returns True on success or if the server already exists, False otherwise.
+    Returns True after printing activation instructions.
     """
-    if not shutil.which("claude"):
-        console.print("  [yellow]⚠[/] Computer Use MCP: claude CLI not found, skipping")
-        return False
-
-    try:
-        result = subprocess.run(
-            [
-                "claude", "mcp", "add", "--scope", "project",
-                "computer-use", "--",
-                "npx", "-y", "@anthropic-ai/claude-code-computer-use",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=90,
-        )
-        combined = (result.stdout + result.stderr).lower()
-        if result.returncode == 0 or "already exists" in combined:
-            console.print("  [green]✓[/] Computer Use MCP installed")
-            return True
-        console.print(
-            f"  [yellow]⚠[/] Computer Use MCP installation failed "
-            f"(exit {result.returncode}): {result.stderr.strip()[:120]}"
-        )
-        return False
-    except subprocess.TimeoutExpired:
-        console.print("  [yellow]⚠[/] Computer Use MCP: installation timed out (90s)")
-        return False
-    except Exception as e:
-        console.print(f"  [yellow]⚠[/] Computer Use MCP skipped: {e}")
-        return False
+    console.print("  [green]✓[/] Computer Use: built-in MCP (no install needed)")
+    console.print(
+        "  [yellow]Empfohlen:[/] Aktiviere Computer Use in deiner nächsten Claude Code Session:\n"
+        "    /mcp → computer-use → Enable\n"
+        "  [dim]Dies ist ein built-in Feature und kann nicht automatisch aktiviert werden.[/]"
+    )
+    return True
 
 
 def _setup_mcp_servers(config: PocketTeamConfig, console: Console) -> None:  # noqa: ARG001
@@ -1379,10 +1357,9 @@ venv/
 .env.*
 !.env.example
 
-# PocketTeam - sensitive artifacts (keep plans/reviews in git)
-.pocketteam/sessions/
-.pocketteam/events/
-.pocketteam/KILL
+# PocketTeam - exclude entire directory (sessions, events, credentials)
+.pocketteam/
+!.pocketteam/.env.example
 
 # macOS
 .DS_Store

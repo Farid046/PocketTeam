@@ -180,7 +180,7 @@ class TestCLICommands:
         from pocketteam.cli import main
         runner = CliRunner()
 
-        for cmd in ["init", "status", "kill", "resume", "retro", "logs", "run-headless", "sessions", "uninstall"]:
+        for cmd in ["init", "start", "status", "retro", "health", "logs", "run-headless", "sessions", "uninstall", "dashboard", "insights"]:
             result = runner.invoke(main, [cmd, "--help"])
             assert result.exit_code == 0, f"Command '{cmd}' failed: {result.output}"
 
@@ -196,26 +196,6 @@ class TestCLICommands:
 # ── Safety Integration ──────────────────────────────────────────────────────
 
 class TestSafetyIntegration:
-    def test_kill_switch_blocks_pipeline(self, tmp_path: Path):
-        from pocketteam.safety.kill_switch import KillSwitch
-
-        ks = KillSwitch(tmp_path)
-        ks.activate()
-
-        ctx = SharedContext.create_new(
-            task_description="Should be blocked",
-            project_root=tmp_path,
-        )
-        pipeline = Pipeline(context=ctx)
-
-        # Pipeline should check kill switch and raise
-        import asyncio
-
-        from pocketteam.safety.kill_switch import KillSwitchError
-
-        with pytest.raises(KillSwitchError):
-            asyncio.run(pipeline.run())
-
     def test_guardian_blocks_dangerous_commands(self, tmp_path):
         from pocketteam.safety.guardian import pre_tool_hook
 

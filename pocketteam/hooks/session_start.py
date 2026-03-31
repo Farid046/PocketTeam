@@ -125,11 +125,19 @@ def handle(hook_input: dict) -> dict:
         except OSError:
             pass
 
-    if not unread and not is_automated:
+    # Dedup: Only greet once per session (PreCompact triggers SessionStart again)
+    greeted_file = pt_dir / "session-greeted.lock"
+    already_greeted = greeted_file.exists()
+
+    if not unread and not is_automated and not already_greeted:
         _notify_telegram(
             pt_dir,
             "PocketTeam Session gestartet. Wie kann ich helfen?"
         )
+        try:
+            greeted_file.write_text(str(os.getpid()))
+        except OSError:
+            pass
 
     if not unread:
         return {}
