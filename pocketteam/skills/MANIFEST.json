@@ -16,6 +16,7 @@
     "dependency-scan",
     "design-review",
     "discuss",
+    "e2e-test",
     "escalation",
     "handoff-spec",
     "health-check",
