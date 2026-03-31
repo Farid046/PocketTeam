@@ -38,7 +38,6 @@ class TelegramDaemon:
         self.state_file = project_root / ".pocketteam" / "telegram-daemon.json"
         self.launching_lock = project_root / ".pocketteam" / "launching.lock"
         self.inbox_file = project_root / ".pocketteam" / "telegram-inbox.jsonl"
-        self.kill_file = project_root / ".pocketteam" / "KILL"
         self.sessions_launched = 0
 
         # Restore persisted cooldown so daemon restarts don't reset the guard
@@ -128,23 +127,6 @@ class TelegramDaemon:
             if user_id not in self.allowed_users:
                 logger.info("Rejected message from unauthorized user %s", user_id)
                 return
-
-        # /kill command — activate kill switch IMMEDIATELY, even during active session
-        if text.strip().lower() in ("/kill", "/stop"):
-            logger.warning("KILL SWITCH activated via Telegram by user %s", user_id)
-            self.kill_file.parent.mkdir(parents=True, exist_ok=True)
-            self.kill_file.touch()
-            await self._send_message(
-                chat_id,
-                "🛑 Kill switch activated. All agents stopped.\n"
-                "Run `pocketteam resume` to re-enable.",
-            )
-            return
-
-        # Kill switch check — ignore messages if already killed
-        if self.kill_file.exists():
-            logger.warning("Kill switch active, ignoring message from %s", user_id)
-            return
 
         # Always write to inbox first
         self._write_inbox(text, user_id, chat_id)

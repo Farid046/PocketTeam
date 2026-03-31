@@ -507,57 +507,6 @@ with open(inbox, 'w') as f:
    # Review the agent's reasoning
    ```
 
-## Safety & Kill Switch
-
-### "Kill switch doesn't respond"
-
-**Problem**: Kill switch file exists but agents keep running.
-
-**Solution**:
-
-1. **Check the file exists**:
-   ```bash
-   ls -la .pocketteam/KILL
-   # Should be present
-   ```
-
-2. **Force stop the current session**:
-   ```bash
-   # In Claude Code, press Ctrl+C to interrupt the agent
-   ```
-
-3. **Delete the kill switch file**:
-   ```bash
-   rm .pocketteam/KILL
-   ```
-
-4. **Verify agents have stopped**:
-   ```bash
-   pocketteam agent status
-   # Should show all agents as IDLE
-   ```
-
-### "Can't recover after kill switch"
-
-**Problem**: After activating kill switch, agents won't start again.
-
-**Solution**:
-
-1. **Delete the kill switch file**:
-   ```bash
-   rm .pocketteam/KILL
-   ```
-
-2. **Reset session state** (if needed):
-   ```bash
-   rm .pocketteam/sessions/*.jsonl
-   ```
-
-3. **Restart PocketTeam**:
-   - In Claude Code, end the current session
-   - Start a new session
-   - Run `pocketteam init` or your task again
-
 ## Monitoring Issues
 
 ### "Monitor agent not running"

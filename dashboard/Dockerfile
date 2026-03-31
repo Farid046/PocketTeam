@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm audit --audit-level=high
+RUN npm audit fix && npm audit --audit-level=high
 RUN npm run build
 
 FROM node:20-alpine

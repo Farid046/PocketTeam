@@ -202,13 +202,6 @@ class TelegramChannel:
             return
 
         # Handle special commands
-        if text == "/kill":
-            from ..safety.kill_switch import KillSwitch
-            ks = KillSwitch(self.project_root)
-            ks.activate()
-            await self.send_message("Kill switch activated. All agents stopping.")
-            return
-
         if text == "/status":
             await self._send_status()
             return
@@ -237,11 +230,6 @@ class TelegramChannel:
 
     async def _send_status(self) -> None:
         """Send current project status via Telegram."""
-        from ..safety.kill_switch import KillSwitch
-
-        ks = KillSwitch(self.project_root)
-        kill_active = ks.is_active
-
         # Read last event
         events_path = self.project_root / EVENTS_FILE
         last_event = ""
@@ -256,7 +244,6 @@ class TelegramChannel:
 
         status_text = (
             f"<b>{self.config.project_name}</b>\n\n"
-            f"Kill Switch: {'ACTIVE' if kill_active else 'inactive'}\n"
             f"Last Activity: {last_event or 'none'}\n"
         )
         await self.send_message(status_text)

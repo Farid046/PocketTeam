@@ -101,27 +101,6 @@ class TestHealthCommand:
         assert result.exit_code == 0
         assert "config.yaml valid" in result.output
 
-    def test_health_kill_switch_active(self, tmp_path, monkeypatch):
-        """Health shows ACTIVE when kill switch file exists."""
-        pt_dir = tmp_path / ".pocketteam"
-        pt_dir.mkdir()
-        (pt_dir / "KILL").touch()
-        monkeypatch.chdir(tmp_path)
-        runner = CliRunner()
-        result = runner.invoke(main, ["health"])
-        assert result.exit_code == 0
-        assert "ACTIVE" in result.output
-
-    def test_health_kill_switch_inactive(self, tmp_path, monkeypatch):
-        """Health shows inactive (OK) when no kill switch file."""
-        pt_dir = tmp_path / ".pocketteam"
-        pt_dir.mkdir()
-        monkeypatch.chdir(tmp_path)
-        runner = CliRunner()
-        result = runner.invoke(main, ["health"])
-        assert result.exit_code == 0
-        assert "inactive" in result.output
-
     def test_health_last_event_shown(self, tmp_path, monkeypatch):
         """Health reads last event from stream and displays it."""
         pt_dir = tmp_path / ".pocketteam"

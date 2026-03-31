@@ -249,19 +249,6 @@ Get token and cost usage for a session.
 }
 ```
 
-### GET /api/v1/killswitch
-
-Get kill switch status.
-
-**Response**:
-```json
-{
-  "active": false
-}
-```
-
-If `active` is true, all agents are stopped.
-
 ### POST /api/v1/ws-ticket
 
 Create a short-lived WebSocket upgrade ticket.
@@ -375,7 +362,6 @@ Session status changed (paused, resumed, etc.).
 Currently, the WebSocket is **one-way** (server → client). The client connects and listens for updates. To control the system, use REST endpoints.
 
 Future versions may add:
-- `killswitch:toggle` — Activate/deactivate kill switch
 - `agent:pause` — Pause a running agent
 - `session:resume` — Resume a paused session
 

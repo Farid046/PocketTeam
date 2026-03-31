@@ -3,17 +3,14 @@ Tests for Computer Use feature:
 - ComputerUseConfig dataclass defaults
 - load_config / save_config roundtrip
 - load_config without computer_use key (graceful default)
-- _setup_computer_use_mcp success (mocked subprocess)
-- _setup_computer_use_mcp when claude CLI is missing
-- _setup_computer_use_mcp timeout
+- _setup_computer_use_mcp (built-in MCP, always returns True)
 - --yes flag does NOT activate Computer Use
 """
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -151,96 +148,16 @@ class TestLoadConfigWithoutComputerUse:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestSetupComputerUseMcp:
-    """Tests for _setup_computer_use_mcp(project_root)."""
+    """Tests for _setup_computer_use_mcp(project_root).
 
-    def test_returns_false_when_claude_cli_missing(self, tmp_path):
-        with patch("shutil.which", return_value=None):
+    Computer Use is a built-in Claude Code MCP server — the function
+    always returns True and prints activation instructions.
+    """
+
+    def test_always_returns_true(self, tmp_path):
+        with patch("pocketteam.init.console"):
             result = _setup_computer_use_mcp(tmp_path)
-        assert result is False
-
-    def test_returns_true_on_success(self, tmp_path):
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "MCP server 'computer-use' added"
-        mock_result.stderr = ""
-
-        with (
-            patch("shutil.which", return_value="/usr/local/bin/claude"),
-            patch("subprocess.run", return_value=mock_result),
-        ):
-            result = _setup_computer_use_mcp(tmp_path)
-
         assert result is True
-
-    def test_returns_true_when_server_already_exists(self, tmp_path):
-        """If the MCP server already exists, the function must still return True."""
-        mock_result = MagicMock()
-        mock_result.returncode = 1
-        mock_result.stdout = ""
-        mock_result.stderr = "already exists"
-
-        with (
-            patch("shutil.which", return_value="/usr/local/bin/claude"),
-            patch("subprocess.run", return_value=mock_result),
-        ):
-            result = _setup_computer_use_mcp(tmp_path)
-
-        assert result is True
-
-    def test_returns_false_on_timeout(self, tmp_path):
-        with (
-            patch("shutil.which", return_value="/usr/local/bin/claude"),
-            patch(
-                "subprocess.run",
-                side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=90),
-            ),
-        ):
-            result = _setup_computer_use_mcp(tmp_path)
-
-        assert result is False
-
-    def test_returns_false_on_unexpected_error(self, tmp_path):
-        with (
-            patch("shutil.which", return_value="/usr/local/bin/claude"),
-            patch("subprocess.run", side_effect=OSError("unexpected")),
-        ):
-            result = _setup_computer_use_mcp(tmp_path)
-
-        assert result is False
-
-    def test_uses_project_scope(self, tmp_path):
-        """The MCP server must be registered with --scope project."""
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "added"
-        mock_result.stderr = ""
-
-        with (
-            patch("shutil.which", return_value="/usr/local/bin/claude"),
-            patch("subprocess.run", return_value=mock_result) as mock_run,
-        ):
-            _setup_computer_use_mcp(tmp_path)
-
-        call_args = mock_run.call_args[0][0]  # positional argv list
-        assert "--scope" in call_args
-        scope_idx = call_args.index("--scope")
-        assert call_args[scope_idx + 1] == "project"
-
-    def test_command_uses_npx(self, tmp_path):
-        """The MCP server must be launched via npx."""
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "added"
-        mock_result.stderr = ""
-
-        with (
-            patch("shutil.which", return_value="/usr/local/bin/claude"),
-            patch("subprocess.run", return_value=mock_result) as mock_run,
-        ):
-            _setup_computer_use_mcp(tmp_path)
-
-        call_args = mock_run.call_args[0][0]
-        assert "npx" in call_args
 
 
 # ─────────────────────────────────────────────────────────────────────────────

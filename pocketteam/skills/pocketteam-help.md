@@ -24,8 +24,6 @@ Display the following overview exactly as formatted below.
 **Quick Reference:**
 - `pocketteam start` — resume last session with COO agent
 - `pocketteam start new` — fresh session with COO agent
-- `pocketteam kill` — emergency stop
-- `pocketteam resume` — clear kill switch
 - `pocketteam status` — show project status
 - `pocketteam health` — system health check
 - `pocketteam logs -f` — follow event stream
@@ -40,9 +38,9 @@ Display the following overview exactly as formatted below.
 
 | Mode | How to activate |
 |---|---|
-| Browser MCP | Installed at init. Always available to agents via MCP tool. |
-| Native macOS | Run `/mcp` in a Claude Code session. Requires Accessibility permissions. |
+| Built-in MCP | Run `/mcp` in Claude Code → enable `computer-use`. Built-in, no npm package needed. |
+| Native macOS | Requires Accessibility permissions in System Settings. |
 
-- Browser MCP: `claude mcp add --scope project computer-use -- npx -y @anthropic-ai/claude-code-computer-use`
+- Activate: `/mcp` → `computer-use` → Enable
 - Native: System Settings → Privacy & Security → Accessibility → Claude Code ✓
-- Not installed with `--yes` — must be explicitly opted in.
+- Not enabled with `--yes` — must be explicitly opted in.

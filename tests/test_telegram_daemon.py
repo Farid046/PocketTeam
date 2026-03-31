@@ -74,7 +74,6 @@ class TestInit:
         d = TelegramDaemon(project_root, "tok", [])
         assert d.state_file.parent == project_root / ".pocketteam"
         assert d.inbox_file.parent == project_root / ".pocketteam"
-        assert d.kill_file.parent == project_root / ".pocketteam"
         assert d.launching_lock.parent == project_root / ".pocketteam"
 
     def test_restores_cooldown_from_state_file(self, project_root: Path):
@@ -331,46 +330,6 @@ class TestHandleUpdate:
     @pytest.mark.asyncio
     async def test_ignores_missing_user(self, daemon: TelegramDaemon):
         update = {"update_id": 1, "message": {"text": "hi", "from": {}, "chat": {"id": 999}}}
-        with patch.object(daemon, "_write_inbox") as mock_inbox:
-            await daemon._handle_update(update)
-        mock_inbox.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_kill_command_creates_kill_file(self, daemon: TelegramDaemon):
-        update = _make_update("/kill")
-        with patch.object(daemon, "_send_message", new_callable=AsyncMock):
-            await daemon._handle_update(update)
-        assert daemon.kill_file.exists()
-
-    @pytest.mark.asyncio
-    async def test_stop_command_creates_kill_file(self, daemon: TelegramDaemon):
-        update = _make_update("/stop")
-        with patch.object(daemon, "_send_message", new_callable=AsyncMock):
-            await daemon._handle_update(update)
-        assert daemon.kill_file.exists()
-
-    @pytest.mark.asyncio
-    async def test_kill_command_case_insensitive(self, daemon: TelegramDaemon):
-        update = _make_update("  /KILL  ")
-        with patch.object(daemon, "_send_message", new_callable=AsyncMock):
-            await daemon._handle_update(update)
-        assert daemon.kill_file.exists()
-
-    @pytest.mark.asyncio
-    async def test_kill_command_sends_confirmation(self, daemon: TelegramDaemon):
-        update = _make_update("/kill")
-        mock_send = AsyncMock()
-        with patch.object(daemon, "_send_message", mock_send):
-            await daemon._handle_update(update)
-        mock_send.assert_awaited_once()
-        _, call_args, _ = mock_send.mock_calls[0]
-        assert "999" in call_args  # chat_id
-        assert "Kill switch" in call_args[1] or "Kill" in call_args[1]
-
-    @pytest.mark.asyncio
-    async def test_kill_switch_active_ignores_normal_message(self, daemon: TelegramDaemon):
-        daemon.kill_file.touch()
-        update = _make_update("do something")
         with patch.object(daemon, "_write_inbox") as mock_inbox:
             await daemon._handle_update(update)
         mock_inbox.assert_not_called()

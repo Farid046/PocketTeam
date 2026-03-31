@@ -326,7 +326,6 @@ class Channel:
     CEO_REJECTED = "ceo_rejected"
 
     # System
-    KILL_SWITCH = "kill_switch"
     PIPELINE_DONE = "pipeline_done"
     PIPELINE_FAILED = "pipeline_failed"
 

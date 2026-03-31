@@ -47,7 +47,7 @@ class AgentContext:
 class BaseAgent(ABC):
     """
     Base class for all PocketTeam agents.
-    Provides: SDK integration, event logging, safety hook registration, kill switch check.
+    Provides: SDK integration, event logging, safety hook registration.
     """
 
     def __init__(
@@ -85,17 +85,9 @@ class BaseAgent(ABC):
             return bundled.read_text()
         return f"You are the {self.agent_id} agent. Complete your assigned task."
 
-    def _check_kill_switch(self) -> None:
-        """Raise KillSwitchError if kill switch is active."""
-        from ..safety.kill_switch import KillSwitch, KillSwitchError
-        ks = KillSwitch(self.project_root)
-        if ks.is_active:
-            raise KillSwitchError(f"Kill switch active — {self.agent_id} halted")
-
     async def execute(self, task: str, context: AgentContext | None = None) -> AgentResult:
         """
         Execute a task. Wraps the actual run with:
-        - Kill switch check
         - Event logging (start/end)
         - Error handling
         """
@@ -103,7 +95,6 @@ class BaseAgent(ABC):
         self._start_time = time.time()
 
         try:
-            self._check_kill_switch()
             await self._log_event("awake", task[:100])
             result = await self._run(task, ctx)
             await self._log_event("done", f"Task complete: {task[:50]}")
@@ -132,7 +123,6 @@ class BaseAgent(ABC):
         context: AgentContext | None = None,
     ) -> AgentResult:
         """Spawn a sub-agent for specialized work."""
-        self._check_kill_switch()
         subagent = subagent_class(self.project_root, context or self.context)
         await self._log_event("delegating", f"→ {subagent.agent_id}: {task[:50]}")
         return await subagent.execute(task, context)

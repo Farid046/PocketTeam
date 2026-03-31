@@ -16,7 +16,7 @@ Apply STRIDE to PocketTeam's key assets. Document threats, current mitigations, 
 | ptbrowse | Headless browser — runs in agent context |
 | Telegram bot | CEO communication channel |
 | Event stream | `.pocketteam/events/stream.jsonl` — audit log |
-| `.pocketteam/` | State directory — rate limits, KILL switch, artifacts |
+| `.pocketteam/` | State directory — rate limits, artifacts |
 
 ## STRIDE Template
 

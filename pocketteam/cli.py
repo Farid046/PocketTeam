@@ -195,7 +195,7 @@ async def _status(show_all: bool) -> None:
     import json
 
     from .config import load_config
-    from .constants import EVENTS_FILE, KILL_SWITCH_FILE
+    from .constants import EVENTS_FILE
 
     project_root = Path.cwd()
     config_path = project_root / ".pocketteam/config.yaml"
@@ -205,7 +205,6 @@ async def _status(show_all: bool) -> None:
         sys.exit(1)
 
     cfg = load_config(project_root)
-    kill_active = (project_root / KILL_SWITCH_FILE).exists()
 
     table = Table(title=f"PocketTeam: {cfg.project_name}", show_header=True)
     table.add_column("Setting", style="cyan")
@@ -217,7 +216,6 @@ async def _status(show_all: bool) -> None:
     table.add_row("Telegram", "✅ configured" if cfg.telegram.bot_token else "❌ not configured")
     table.add_row("Monitoring", "✅ enabled" if cfg.monitoring.enabled else "❌ disabled")
     table.add_row("GitHub Actions", "✅ enabled" if cfg.github_actions.enabled else "❌ disabled")
-    table.add_row("Kill Switch", "[red]🔴 ACTIVE[/]" if kill_active else "🟢 inactive")
 
     # Show last event if stream exists
     events_path = project_root / EVENTS_FILE
@@ -234,56 +232,6 @@ async def _status(show_all: bool) -> None:
             logger.debug("Failed to read last event", exc_info=True)
 
     console.print(table)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# pocketteam kill
-# ─────────────────────────────────────────────────────────────────────────────
-
-@main.command()
-@click.option("--force", is_flag=True, help="Skip confirmation prompt.")
-def kill(force: bool) -> None:
-    """Activate the kill switch — stop all running agents immediately."""
-    from .constants import KILL_SWITCH_FILE
-
-    kill_path = Path.cwd() / KILL_SWITCH_FILE
-    kill_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if not force:
-        confirmed = Confirm.ask(
-            "[bold red]This will stop ALL running PocketTeam agents. Continue?[/]",
-            default=False,
-        )
-        if not confirmed:
-            console.print("Aborted.")
-            return
-
-    kill_path.touch()
-    console.print(Panel(
-        "🔴 [bold red]KILL SWITCH ACTIVATED[/]\n"
-        "All agents will stop within 1 second.\n"
-        f"Signal file: {kill_path}\n\n"
-        "To resume: [bold]rm .pocketteam/KILL[/] then restart your task.",
-        title="Kill Switch",
-        border_style="red",
-    ))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# pocketteam resume (reset kill switch)
-# ─────────────────────────────────────────────────────────────────────────────
-
-@main.command()
-def resume() -> None:
-    """Remove the kill switch to allow agents to run again."""
-    from .constants import KILL_SWITCH_FILE
-
-    kill_path = Path.cwd() / KILL_SWITCH_FILE
-    if kill_path.exists():
-        kill_path.unlink()
-        console.print("✅ Kill switch removed. Agents can now run.")
-    else:
-        console.print("[dim]Kill switch was not active.[/]")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -311,7 +259,7 @@ HEALTH_CHECK_TIMEOUT = 5  # seconds for HTTP health endpoint requests
 
 @main.command()
 def health() -> None:
-    """Show system health: project, config, kill switch, last event, dashboard."""
+    """Show system health: project, config, last event, dashboard."""
     asyncio.run(_health())
 
 
@@ -319,7 +267,7 @@ async def _health() -> None:
     import json
 
     from .config import load_config
-    from .constants import CONFIG_FILE, EVENTS_FILE, KILL_SWITCH_FILE, POCKETTEAM_DIR
+    from .constants import CONFIG_FILE, EVENTS_FILE, POCKETTEAM_DIR
 
     project_root = Path.cwd()
     ok = "[bold green]OK[/]"
@@ -353,14 +301,7 @@ async def _health() -> None:
             console.print(f"  Config:       {fail} (config.yaml parse error: {exc})")
             cfg = None
 
-    # ── 3. Kill switch ────────────────────────────────────────────────────────
-    kill_path = project_root / KILL_SWITCH_FILE
-    if kill_path.exists():
-        console.print(f"  Kill Switch:  [bold red]ACTIVE[/] ({kill_path} exists — run pocketteam resume)")
-    else:
-        console.print(f"  Kill Switch:  {ok} (inactive)")
-
-    # ── 4. Last event ─────────────────────────────────────────────────────────
+    # ── 3. Last event ─────────────────────────────────────────────────────────
     events_path = project_root / EVENTS_FILE
     if not events_path.exists():
         console.print(f"  Last Event:   {warn} (no events yet)")
