@@ -8,10 +8,11 @@ version = "1.0.0"
 description = "Your autonomous AI IT team. 12 agents. 55 skills. 10 safety layers. Self-healing via GitHub Actions."
 readme = "README.md"
 license = { text = "MIT" }
+authors = [{name = "Farid", email = "farid.shamsaldini@proton.me"}]
 requires-python = ">=3.11"
 keywords = ["ai-agent", "agent-framework", "autonomous-agents", "multi-agent", "claude-code", "agentic-ai", "self-healing", "developer-tools", "devops", "monitoring"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
@@ -54,6 +55,17 @@ Issues = "https://github.com/Farid046/PocketTeam/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pocketteam"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  ".claude/",
+  ".mcp.json",
+  ".pocketteam/",
+  "PLAN.md",
+  "dashboard/",
+  "tests/",
+  ".github/",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
