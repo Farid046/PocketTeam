@@ -37,6 +37,7 @@ from pocketteam.dashboard import (
     find_free_port,
     generate_compose,
     get_real_username,
+    sanitize_container_name,
 )
 
 
@@ -52,6 +53,7 @@ def _make_cfg(
     docker_context: str = "default",
     compose_dir: str | None = None,
     project_root_str: str | None = None,
+    container_name: str = "pocketteam-dashboard",
 ) -> tuple[PocketTeamConfig, Path]:
     """Build a minimal PocketTeamConfig with a real compose file on disk."""
     compose_dir_path = Path(compose_dir) if compose_dir else tmp_path / "compose"
@@ -71,6 +73,7 @@ def _make_cfg(
         project_root=project_root_str or str(tmp_path),
         claude_project_hash=str(tmp_path).replace("/", "-"),
         compose_checksum="",
+        container_name=container_name,
     )
     return cfg, compose_file
 
@@ -336,6 +339,108 @@ class TestGenerateCompose:
             env_file_path=Path("/c/.env"),
         )
         assert "PORT=3847" in content
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# sanitize_container_name
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestSanitizeContainerName:
+    def test_simple_name_gets_dashboard_suffix(self):
+        assert sanitize_container_name("myproject") == "myproject-dashboard"
+
+    def test_spaces_replaced_with_hyphens(self):
+        assert sanitize_container_name("My Cool Project") == "my-cool-project-dashboard"
+
+    def test_uppercased_to_lowercase(self):
+        assert sanitize_container_name("ACME") == "acme-dashboard"
+
+    def test_special_chars_stripped(self):
+        assert sanitize_container_name("my_project!@#") == "myproject-dashboard"
+
+    def test_empty_string_falls_back_to_default(self):
+        assert sanitize_container_name("") == "pocketteam-dashboard"
+
+    def test_all_special_chars_falls_back_to_default(self):
+        assert sanitize_container_name("!@#$%") == "pocketteam-dashboard"
+
+    def test_leading_trailing_hyphens_stripped(self):
+        assert sanitize_container_name("-myproject-") == "myproject-dashboard"
+
+    def test_numbers_preserved(self):
+        assert sanitize_container_name("project42") == "project42-dashboard"
+
+    def test_mixed_spaces_and_special_chars(self):
+        assert sanitize_container_name("My Project 2.0!") == "my-project-20-dashboard"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# generate_compose — container_name
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestGenerateComposeContainerName:
+    def _minimal_dash(self, container_name: str = "pocketteam-dashboard") -> DashboardConfig:
+        return DashboardConfig(
+            enabled=True,
+            port=3847,
+            image=DASHBOARD_IMAGE,
+            image_version=DASHBOARD_VERSION,
+            container_name=container_name,
+        )
+
+    def test_uses_dash_container_name_by_default(self):
+        dash = self._minimal_dash(container_name="myproject-dashboard")
+        content = generate_compose(
+            dash=dash,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+        )
+        assert "container_name: myproject-dashboard" in content
+
+    def test_explicit_container_name_overrides_dash(self):
+        dash = self._minimal_dash(container_name="myproject-dashboard")
+        content = generate_compose(
+            dash=dash,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+            container_name="override-dashboard",
+        )
+        assert "container_name: override-dashboard" in content
+        assert "myproject-dashboard" not in content
+
+    def test_fallback_when_container_name_empty(self):
+        dash = self._minimal_dash(container_name="")
+        content = generate_compose(
+            dash=dash,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+        )
+        assert "container_name: pocketteam-dashboard" in content
+
+    def test_different_projects_get_different_container_names(self):
+        dash_a = self._minimal_dash(container_name="project-alpha-dashboard")
+        dash_b = self._minimal_dash(container_name="project-beta-dashboard")
+        content_a = generate_compose(
+            dash=dash_a,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+        )
+        content_b = generate_compose(
+            dash=dash_b,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+        )
+        assert "container_name: project-alpha-dashboard" in content_a
+        assert "container_name: project-beta-dashboard" in content_b
+        assert "project-alpha-dashboard" not in content_b
+        assert "project-beta-dashboard" not in content_a
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -657,7 +762,11 @@ class TestDashboardStatusCmd:
             dashboard_status_cmd(tmp_path)
 
     def test_uses_docker_inspect(self, tmp_path):
-        cfg, compose_file = _make_cfg(tmp_path, docker_context="desktop-linux")
+        cfg, compose_file = _make_cfg(
+            tmp_path,
+            docker_context="desktop-linux",
+            container_name="myproject-dashboard",
+        )
         pocketteam_dir = tmp_path / ".pocketteam"
         pocketteam_dir.mkdir(parents=True, exist_ok=True)
 
@@ -675,7 +784,7 @@ class TestDashboardStatusCmd:
 
         cmd = mock_run.call_args[0][0]
         assert "inspect" in cmd
-        assert "pocketteam-dashboard" in cmd
+        assert "myproject-dashboard" in cmd
         assert "desktop-linux" in cmd
 
 
