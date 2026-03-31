@@ -276,6 +276,7 @@ def pre_tool_hook(
             }
 
     # ── All layers passed ────────────────────────────────────────────────────
+    _log_allowed(agent_id, tool_name, tool_input, project_root)
     return {"allow": True, "layer": None, "reason": ""}
 
 
@@ -311,6 +312,31 @@ def _log_denial(
                 decision=decision,
                 layer=layer,
                 reason=reason,
+            )
+    except Exception:
+        logger.debug("Audit log write failed (non-critical)", exc_info=True)
+
+
+def _log_allowed(
+    agent_id: str,
+    tool_name: str,
+    tool_input: Any,
+    project_root: Path | None = None,
+) -> None:
+    """Write ALLOWED decision to audit log without crashing."""
+    try:
+        if project_root is None:
+            project_root = _find_project_root()
+        if project_root:
+            from .audit_log import AuditLog, SafetyDecision
+            audit = AuditLog(project_root)
+            audit.log(
+                agent_id=agent_id or "unknown",
+                tool_name=tool_name,
+                tool_input=tool_input,
+                decision=SafetyDecision.ALLOWED,
+                layer=None,
+                reason="All 10 safety layers passed",
             )
     except Exception:
         logger.debug("Audit log write failed (non-critical)", exc_info=True)
