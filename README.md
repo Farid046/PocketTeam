@@ -215,41 +215,30 @@ ptbrowse assert text "Dashboard"
 
 #### Token Efficiency Benchmark
 
-ptbrowse is significantly more token-efficient than screenshot-based browser automation. Here are measured results:
+ptbrowse uses text-based accessibility trees instead of screenshots or full DOM, making it dramatically more token-efficient than conventional browser automation approaches.
 
-**8-Step Browser Task** (httpbin.org/forms/post — navigate, snapshot, fill 3 fields, submit, verify)
+**ptbrowse Token Usage** (measured on httpbin.org/forms/post)
 
-| Approach | Tokens per Task | vs ptbrowse |
-|---|---|---|
-| **ptbrowse** | ~820 | 1x (baseline) |
-| **Playwright MCP** (accessibility tree) | ~74,700 | 91x more |
-| **Playwright MCP** (with screenshots) | ~84,500 | 103x more |
+| Operation | Tokens |
+|---|---|
+| Navigate to page | 11 |
+| Page snapshot (full) | 285 |
+| Interactive elements only | 101 |
+| Fill a form field | 6 |
+| Click an element | 15 |
+| Screenshot (returns file path) | 20 |
+| **Complete 8-step task** | **~820** |
 
-**Per-Operation Comparison** (measured on httpbin.org/forms/post)
+Screenshot-based and DOM-based browser automation tools typically consume **up to 90x more tokens** for the same tasks — a single page snapshot can cost 20,000+ tokens when the full accessibility tree or DOM is inlined into the conversation context.
 
-| Operation | ptbrowse | Playwright MCP | Ratio |
-|---|---|---|---|
-| Page snapshot | 285 tokens | 21,590 tokens | 76x |
-| Interactive elements only | 101 tokens | 21,590 tokens (no filter) | 213x |
-| Screenshot | 20 tokens (file path) | 9,786 tokens (base64) | 472x |
-| Fill field | 6 tokens | ~200 tokens | 33x |
-| Click element | 15 tokens | ~300 tokens | 20x |
-
-**Extended Scenario: 30-Step E2E Test** (projected from measurements)
-
-| Approach | Tokens Used | Context Remaining (200K) |
-|---|---|---|
-| **ptbrowse** | ~3,000 | 98% free |
-| **Playwright MCP** | ~280,000 | exceeds context |
-
-**Why ptbrowse wins:**
-- **Accessibility trees** — 2–5 KB per page vs 500 KB–2 MB for screenshots (100–150x smaller)
+**Why ptbrowse is efficient:**
+- **Accessibility trees** — compact text representation (2–5 KB per page)
 - **Persistent daemon** — one Chromium instance reused, no browser startup per step
 - **Diff snapshots** — only changes returned, not full page re-scan
-- **Structured element refs** — stable `@e1`…`@eN` references across steps, no CSS selector overhead
-- **ptbrowse returns file paths for screenshots** (20 tokens) — Playwright MCP inlines base64 (9,786 tokens per screenshot)
+- **Structured element refs** — stable `@e1`…`@eN` references across steps
+- **Screenshots stay on disk** — returns a file path (20 tokens), not base64-encoded image data
 
-**Sources:** Measured on httpbin.org/forms/post using ptbrowse v1.0 and Playwright CDP accessibility API. Token estimates: 1 token ≈ 4 characters.
+**Measured with** ptbrowse v1.0 on httpbin.org/forms/post. Token estimate: 1 token ≈ 4 characters.
 
 #### Headed Mode (For QA)
 
