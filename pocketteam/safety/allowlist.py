@@ -87,14 +87,16 @@ def check_agent_allowlist(agent_id: str, tool_name: str) -> AllowlistResult:
             tool_name=tool_name,
         )
 
-    # COO: delegates only — but needs Agent tool and read tools to understand context
+    # COO delegates ALL work. Only Agent (spawn), TodoWrite/TodoRead (task tracking)
+    # are permitted. Read/Glob/Grep are intentionally excluded — the COO must
+    # delegate file reading to a sub-agent (e.g., planner, reviewer, engineer).
     if agent_id == "coo":
-        coo_allowed = {"Agent", "Read", "Glob", "Grep", "TodoWrite", "TodoRead"}
+        coo_allowed = {"Agent", "TodoWrite", "TodoRead"}
         if tool_name in coo_allowed:
             return AllowlistResult(allowed=True, agent_id=agent_id, tool_name=tool_name)
         return AllowlistResult(
             allowed=False,
-            reason=f"COO is not allowed to use {tool_name} directly — delegate to specialized agents",
+            reason=f"COO is not allowed to use {tool_name} directly. Delegate to a specialized sub-agent (planner, reviewer, engineer, etc.). Only Agent, TodoWrite, and TodoRead are permitted for the COO.",
             agent_id=agent_id,
             tool_name=tool_name,
         )

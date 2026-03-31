@@ -15,9 +15,9 @@ class TestAgentAllowlist:
         result = check_agent_allowlist("coo", "Agent")
         assert result.allowed
 
-    def test_coo_can_read(self):
+    def test_coo_cannot_read(self):
         result = check_agent_allowlist("coo", "Read")
-        assert result.allowed
+        assert not result.allowed
 
     def test_coo_cannot_write(self):
         result = check_agent_allowlist("coo", "Write")

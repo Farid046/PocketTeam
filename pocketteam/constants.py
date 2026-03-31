@@ -131,13 +131,6 @@ DASHBOARD_VERSION = "1.0.0"
 DASHBOARD_PORT = 3847
 DASHBOARD_PORT_RANGE_END = 3857
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Kill switch
-# ─────────────────────────────────────────────────────────────────────────────
-
-KILL_SWITCH_FILE = ".pocketteam/KILL"
-KILL_SWITCH_CHECK_INTERVAL = 1    # Check every 1 second
-
 RATE_LIMIT_WINDOW_SECONDS = 24 * 60 * 60  # Rolling 24-hour window for rate limiting
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -179,9 +172,9 @@ SKILLS_DIR = ".claude/skills/pocketteam"
 # ─────────────────────────────────────────────────────────────────────────────
 
 AGENT_ALLOWED_TOOLS: dict[str, list[str]] = {
-    # COO's actual allowed tools (Agent, Read, Glob, Grep, TodoWrite, TodoRead) are
-    # handled via a special branch in allowlist.py — the empty list here means
-    # "no tools permitted via the generic per-agent allowlist path".
+    # COO is delegation-only. Allowed tools are handled via special branch in
+    # allowlist.py: only Agent, TodoWrite, TodoRead. Read/Glob/Grep/Write/Edit/Bash
+    # are ALL blocked — the COO must delegate to sub-agents for any file access.
     "coo": [],
     "product": ["Read", "Glob", "Grep", "WebSearch", "WebFetch"],
     "planner": ["Read", "Glob", "Grep"],

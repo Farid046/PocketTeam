@@ -29,9 +29,9 @@ class SafetyDecision(StrEnum):
     DENIED_RATE_LIMIT = "DENIED_RATE_LIMIT"
     DENIED_SCOPE = "DENIED_SCOPE"
     ALLOWED_WITH_APPROVAL = "ALLOWED_WITH_APPROVAL"
-    KILL_SWITCH = "KILL_SWITCH"
     DENIED_DSAC_REINITIATION = "DENIED_DSAC_REINITIATION"
     DENIED_DSAC_SCOPE_ESCALATION = "DENIED_DSAC_SCOPE_ESCALATION"
+    DENIED_COO_DIRECT_TOOL = "DENIED_COO_DIRECT_TOOL"
 
 
 class AuditLog:
@@ -89,26 +89,9 @@ class AuditLog:
             # Audit log must never crash the safety system
             pass
 
-        # Escalate immediately for Layer 1 blocks and kill switch
-        if decision in (SafetyDecision.DENIED_NEVER_ALLOW, SafetyDecision.KILL_SWITCH):
+        # Escalate immediately for Layer 1 blocks
+        if decision == SafetyDecision.DENIED_NEVER_ALLOW:
             self._escalate_immediately(entry)
-
-    def log_kill_switch(self, trigger_source: str, project_root: Path) -> None:
-        """Log kill switch activation."""
-        entry = {
-            "ts": datetime.now().isoformat(),
-            "agent": "system",
-            "tool": "kill_switch",
-            "input_hash": "n/a",
-            "decision": SafetyDecision.KILL_SWITCH.value,
-            "layer": 10,
-            "reason": f"Kill switch activated via: {trigger_source}",
-            "project": str(project_root),
-        }
-        try:
-            append_jsonl(self._log_path(), entry)
-        except OSError:
-            pass
 
     def _escalate_immediately(self, entry: dict) -> None:
         """

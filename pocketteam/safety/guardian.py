@@ -78,7 +78,6 @@ def pre_tool_hook(
     # Import lazily to avoid import errors if called before install
     try:
         from .allowlist import check_agent_allowlist
-        from .kill_switch import KillSwitch
         from .mcp_rules import check_mcp_safety
         from .network_rules import check_network_safety, extract_url_from_tool_input
         from .rules import check_destructive, check_never_allow
@@ -101,7 +100,7 @@ def pre_tool_hook(
     else:
         check_str = input_str
 
-    # Compute project root once — reused by Layer 10, Layer 4, Layer 7, and _log_denial
+    # Compute project root once — reused by Layer 4, Layer 7, and _log_denial
     project_root = _find_project_root()
 
     # ── Resolve agent_id ────────────────────────────────────────────────────
@@ -115,16 +114,6 @@ def pre_tool_hook(
         resolved = _resolve_agent_type(agent_id)
         if resolved:
             agent_id = resolved
-
-    # ── Layer 10: Kill Switch (checked first, highest priority) ──────────────
-    if project_root:
-        ks = KillSwitch(project_root)
-        if ks.is_active:
-            return {
-                "allow": False,
-                "layer": 10,
-                "reason": "Kill switch is active (.pocketteam/KILL). Run: pocketteam resume",
-            }
 
     # ── Layer 1: NEVER_ALLOW ─────────────────────────────────────────────────
     result = check_never_allow(tool_name, check_str)
@@ -280,6 +269,36 @@ def pre_tool_hook(
     return {"allow": True, "layer": None, "reason": ""}
 
 
+def _log_coo_violation_to_stream(
+    tool_name: str,
+    tool_input: Any,
+    reason: str,
+    project_root: Path | None,
+) -> None:
+    """Log a COO direct-tool-use violation to the event stream."""
+    if not project_root:
+        return
+    try:
+        from datetime import datetime, UTC
+        import json as _json
+
+        events_file = project_root / ".pocketteam" / "events" / "stream.jsonl"
+        events_file.parent.mkdir(parents=True, exist_ok=True)
+        event = {
+            "ts": datetime.now(UTC).isoformat(),
+            "agent": "coo",
+            "type": "coo_direct_tool_use",
+            "action": f"BLOCKED: {tool_name}",
+            "tool": tool_name,
+            "reason": reason,
+            "severity": "critical",
+        }
+        with open(events_file, "a") as f:
+            f.write(_json.dumps(event) + "\n")
+    except Exception:
+        pass  # Event stream write is best-effort
+
+
 def _log_denial(
     agent_id: str,
     tool_name: str,
@@ -304,7 +323,12 @@ def _log_denial(
                 6: SafetyDecision.DENIED_ALLOWLIST,
                 7: SafetyDecision.DENIED_RATE_LIMIT,
             }
-            decision = decision_map.get(layer, SafetyDecision.DENIED)
+            # Map Layer 6 COO violations to a more specific decision type
+            if layer == 6 and agent_id == "coo":
+                decision = SafetyDecision.DENIED_COO_DIRECT_TOOL
+                _log_coo_violation_to_stream(tool_name, tool_input, reason, project_root)
+            else:
+                decision = decision_map.get(layer, SafetyDecision.DENIED)
             audit.log(
                 agent_id=agent_id or "unknown",
                 tool_name=tool_name,

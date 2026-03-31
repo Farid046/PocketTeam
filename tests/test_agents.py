@@ -3,7 +3,7 @@ Tests for Phase 8: Agent SDK Integration.
 
 All tests mock the Claude Agent SDK so no real API calls are made.
 Covers: instantiation, agent IDs, system prompts, SDK wiring,
-artifact extraction, error handling, kill switch, and upgrade path.
+artifact extraction, error handling, and upgrade path.
 """
 
 from __future__ import annotations
@@ -315,27 +315,13 @@ class TestArtifactExtraction:
         assert result.artifacts.get("requires_human") is True
 
 
-# ── Kill switch integration ───────────────────────────────────────────────────
+# ── Session stop (Esc replaces kill switch) ───────────────────────────────────
 
-class TestKillSwitch:
-    """Kill switch prevents agent execution."""
+class TestAgentExecution:
+    """Agent execution without kill switch — sessions stopped via Esc in Claude Code."""
 
-    async def test_kill_switch_halts_agent(self, tmp_path: Path):
-        # Create the KILL file
-        kill_dir = tmp_path / ".pocketteam"
-        kill_dir.mkdir()
-        (kill_dir / "KILL").touch()
-
-        agent = EngineerAgent(tmp_path)
-        result = await agent.execute("implement something")
-
-        # Should fail gracefully — kill switch raises KillSwitchError
-        # which execute() catches and returns as AgentResult(success=False)
-        assert result.success is False
-        assert result.error is not None
-
-    async def test_no_kill_switch_proceeds(self, tmp_path: Path):
-        """Without KILL file the agent proceeds to SDK call."""
+    async def test_agent_proceeds_normally(self, tmp_path: Path):
+        """Agent proceeds to SDK call when no interruption."""
         agent = PlannerAgent(tmp_path)
         with patch("claude_agent_sdk.query", side_effect=_fake_query_success):
             result = await agent.execute("Create plan")
@@ -368,6 +354,64 @@ class TestEngineerOpusUpgrade:
         assert recorded_models[0] == "claude-opus-4-6"
         # Model restored after upgrade
         assert agent._model == original_model
+
+
+# ── COO Allowlist Enforcement ─────────────────────────────────────────────────
+
+class TestCOOAllowlistEnforcement:
+    """Test that COO is blocked from all direct tools except Agent/Todo."""
+
+    def test_coo_blocked_read(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "Read")
+        assert result.allowed is False
+        assert "delegate" in result.reason.lower()
+
+    def test_coo_blocked_glob(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "Glob")
+        assert result.allowed is False
+
+    def test_coo_blocked_grep(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "Grep")
+        assert result.allowed is False
+
+    def test_coo_blocked_bash(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "Bash")
+        assert result.allowed is False
+
+    def test_coo_blocked_write(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "Write")
+        assert result.allowed is False
+
+    def test_coo_blocked_edit(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "Edit")
+        assert result.allowed is False
+
+    def test_coo_allowed_agent(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "Agent")
+        assert result.allowed is True
+
+    def test_coo_allowed_todo_write(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "TodoWrite")
+        assert result.allowed is True
+
+    def test_coo_allowed_todo_read(self):
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "TodoRead")
+        assert result.allowed is True
+
+    def test_coo_block_reason_mentions_delegation(self):
+        """Block reason must guide the model toward delegation."""
+        from pocketteam.safety.allowlist import check_agent_allowlist
+        result = check_agent_allowlist("coo", "Read")
+        assert "sub-agent" in result.reason.lower() or "delegate" in result.reason.lower()
 
 
 # ── COO pipeline delegation ───────────────────────────────────────────────────

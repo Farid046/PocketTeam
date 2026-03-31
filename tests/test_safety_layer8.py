@@ -100,16 +100,6 @@ class TestAuditLog:
         assert len(alerts) >= 1
         assert alerts[0].get("alert") is True
 
-    def test_kill_switch_log(self, tmp_project):
-        audit = AuditLog(tmp_project)
-        audit.log_kill_switch("telegram", tmp_project)
-
-        log_files = list((tmp_project / ".pocketteam/artifacts/audit").glob("*.jsonl"))
-        entries = [json.loads(line) for line in log_files[0].read_text().splitlines()]
-        kill_entry = entries[0]
-        assert kill_entry["decision"] == SafetyDecision.KILL_SWITCH.value
-        assert "telegram" in kill_entry["reason"]
-
     def test_get_recent_denials(self, tmp_project):
         audit = AuditLog(tmp_project)
         audit.log("eng", "Bash", "cmd1", SafetyDecision.DENIED, 2, "blocked")
@@ -141,6 +131,11 @@ class TestAuditLog:
         audit.log("eng", "Bash", "x", SafetyDecision.DENIED, 1, "test")
 
 
+def test_denied_coo_direct_tool_enum_exists():
+    from pocketteam.safety.audit_log import SafetyDecision
+    assert SafetyDecision.DENIED_COO_DIRECT_TOOL == "DENIED_COO_DIRECT_TOOL"
+
+
 class TestIncidentPlaybooks:
     """Incident playbooks for each safety layer."""
 
@@ -155,11 +150,6 @@ class TestIncidentPlaybooks:
 
     def test_layer1_is_critical(self):
         playbook = get_playbook(1)
-        assert playbook["severity"] == "CRITICAL"
-        assert playbook["escalate"] is True
-
-    def test_layer10_kill_switch_is_critical(self):
-        playbook = get_playbook(10)
         assert playbook["severity"] == "CRITICAL"
         assert playbook["escalate"] is True
 
