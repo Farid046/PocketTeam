@@ -751,5 +751,90 @@ def dashboard_install() -> None:
     dashboard_install_cmd(Path.cwd())
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# pocketteam insights
+# ─────────────────────────────────────────────────────────────────────────────
+
+@main.group()
+def insights() -> None:
+    """Auto-Insights: self-improvement schedule management."""
+
+
+@insights.command("on")
+@click.option("--cron", default=None, help="Custom cron schedule (e.g. '0 8 * * *')")
+def insights_on(cron: str | None) -> None:
+    """Enable the daily insights schedule."""
+    from .config import load_config, save_config
+
+    cfg = load_config(Path.cwd())
+    cfg.insights.enabled = True
+    if cron:
+        cfg.insights.schedule = cron
+    cfg.insights.telegram_notify = bool(cfg.telegram.chat_id)
+    save_config(cfg)
+
+    console.print(f"[green]✓[/] Insights enabled (schedule: {cfg.insights.schedule})")
+    console.print()
+    console.print("To create the Remote Agent trigger, run:")
+    console.print(f'  claude /schedule create --cron "{cfg.insights.schedule}" --prompt "Run /self-improve for this project"')
+    console.print()
+    console.print("Or use: pocketteam insights run")
+
+
+@insights.command("off")
+def insights_off() -> None:
+    """Disable the insights schedule."""
+    from .config import load_config, save_config
+
+    cfg = load_config(Path.cwd())
+    cfg.insights.enabled = False
+    save_config(cfg)
+
+    console.print("[green]✓[/] Insights disabled.")
+    console.print()
+    console.print("Remember to also remove the Remote Agent trigger at:")
+    console.print("  https://claude.ai/code/scheduled")
+
+
+@insights.command("status")
+def insights_status() -> None:
+    """Show insights schedule status and recent reports."""
+    from .config import load_config
+    from .constants import INSIGHTS_DIR
+
+    cfg = load_config(Path.cwd())
+
+    console.print(f"Enabled:    {'Yes' if cfg.insights.enabled else 'No'}")
+    console.print(f"Schedule:   {cfg.insights.schedule}")
+    console.print(f"Last run:   {cfg.insights.last_run or 'Never'}")
+    console.print(f"Telegram:   {'Yes' if cfg.insights.telegram_notify else 'No'}")
+    console.print("Auto-apply: No (always requires CEO approval)")
+    console.print()
+
+    # List recent reports
+    insights_dir = Path(Path.cwd() / INSIGHTS_DIR)
+    if insights_dir.exists():
+        reports = sorted(insights_dir.glob("*.md"), reverse=True)[:5]
+        if reports:
+            console.print("Recent reports:")
+            for r in reports:
+                console.print(f"  - {r.name}")
+        else:
+            console.print("No reports yet.")
+    else:
+        console.print("No reports yet.")
+
+
+@insights.command("run")
+def insights_run() -> None:
+    """Show instructions for manual insights run."""
+    console.print("To run insights manually, start a Claude Code session and use:")
+    console.print()
+    console.print('  claude -p "Run /self-improve for this project"')
+    console.print()
+    console.print("Or in an active session:")
+    console.print("  /self-improve")
+
+
 if __name__ == "__main__":
     main()
