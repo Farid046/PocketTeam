@@ -18,6 +18,11 @@ def handle(hook_input: dict) -> dict:
     except OSError:
         pass
 
+    # Clear greeting dedup lock
+    greeted_file = pt_dir / "session-greeted.lock"
+    if greeted_file.exists():
+        greeted_file.unlink(missing_ok=True)
+
     return {}
 
 
