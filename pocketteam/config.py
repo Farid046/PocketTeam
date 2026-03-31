@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import yaml
 
@@ -78,6 +78,16 @@ class ComputerUseConfig:
 
 
 @dataclass
+class InsightsConfig:
+    """Auto-Insights self-improvement configuration."""
+    enabled: bool = False
+    schedule: str = "0 22 * * *"
+    last_run: Optional[str] = None
+    telegram_notify: bool = True
+    auto_apply: bool = False
+
+
+@dataclass
 class GitHubConfig:
     """GitHub integration — repo management + Actions monitoring."""
     enabled: bool = True
@@ -128,6 +138,7 @@ class PocketTeamConfig:
     network: NetworkConfig = field(default_factory=NetworkConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
     computer_use: ComputerUseConfig = field(default_factory=ComputerUseConfig)
+    insights: InsightsConfig = field(default_factory=InsightsConfig)
 
     # Absolute path to project root (set at runtime, not stored)
     project_root: Path = field(default_factory=Path.cwd, repr=False)
@@ -227,6 +238,15 @@ def load_config(project_root: Path | None = None) -> PocketTeamConfig:
             native_macos=cu.get("native_macos", False),
         )
 
+    if ins := raw.get("insights"):
+        cfg.insights = InsightsConfig(
+            enabled=ins.get("enabled", False),
+            schedule=ins.get("schedule", "0 22 * * *"),
+            last_run=ins.get("last_run"),
+            telegram_notify=ins.get("telegram_notify", True),
+            auto_apply=False,  # NEVER auto-apply, always require CEO approval
+        )
+
     return cfg
 
 
@@ -297,6 +317,13 @@ def save_config(cfg: PocketTeamConfig) -> None:
             "enabled": cfg.computer_use.enabled,
             "browser_mcp": cfg.computer_use.browser_mcp,
             "native_macos": cfg.computer_use.native_macos,
+        },
+        "insights": {
+            "enabled": cfg.insights.enabled,
+            "schedule": cfg.insights.schedule,
+            "last_run": cfg.insights.last_run,
+            "telegram_notify": cfg.insights.telegram_notify,
+            "auto_apply": False,  # NEVER persisted as True
         },
     }
 

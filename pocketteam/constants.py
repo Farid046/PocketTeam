@@ -153,6 +153,7 @@ CONTEXT_WARNING_RED_PCT = 90
 # ─────────────────────────────────────────────────────────────────────────────
 
 COSTS_DIR = ".pocketteam/costs"
+INSIGHTS_DIR = ".pocketteam/artifacts/insights"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths

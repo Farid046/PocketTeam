@@ -3,7 +3,7 @@
 <p align="center">
   <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge" />
   <img alt="Agents" src="https://img.shields.io/badge/agents-12-blue?style=for-the-badge" />
-  <img alt="Skills" src="https://img.shields.io/badge/skills-55-purple?style=for-the-badge" />
+  <img alt="Skills" src="https://img.shields.io/badge/skills-58-purple?style=for-the-badge" />
   <img alt="Safety Layers" src="https://img.shields.io/badge/safety-10_layers-red?style=for-the-badge" />
   <img alt="Tests" src="https://img.shields.io/badge/tests-passing-brightgreen?style=for-the-badge" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />
@@ -29,7 +29,8 @@
 | | Feature | Description |
 |---|---|---|
 | **12 Agents** | COO, Product, Planner, Reviewer, Engineer, QA, Security, DevOps, Investigator, Documentation, Monitor, Observer |
-| **55 Skills** | From market research to OWASP audits, browser automation to deployment rollbacks |
+| **58 Skills** | From market research to OWASP audits, browser automation to deployment rollbacks |
+| **Auto-Insights** | Daily self-analysis with improvement proposals via Telegram | CEO approval required |
 | **Health Monitoring** | GitHub Actions monitors your app 24/7. On failure: sends Telegram alert and (on macOS) auto-starts a Claude session to diagnose and plan a fix |
 | **3D Dashboard** | Real-time isometric office — see your agents work, track costs, audit safety |
 | **Telegram Control** | Give tasks, approve deploys, receive alerts — all from your phone |
@@ -90,9 +91,9 @@ PocketTeam gives you a full autonomous IT team where:
 | **Monitor** | 24/7 health watcher | Haiku | Health checks every 5 min, log analysis, auto-escalation |
 | **Observer** | Team learner | Haiku | Retrospectives, weekly digests, agent improvement proposals |
 
-### 55 Skills Across the Team
+### 58 Skills Across the Team
 
-PocketTeam agents have 55 specialized skills distributed across product, planning, engineering, QA, security, DevOps, investigation, monitoring, and documentation domains. Skills include everything from market research and task breakdown to browser automation, OWASP audits, database diagnostics, and threat modeling. The skill system is extensible—add custom skills via `.claude/skills/`.
+PocketTeam agents have 58 specialized skills distributed across product, planning, engineering, QA, security, DevOps, investigation, monitoring, and documentation domains. Skills include everything from market research and task breakdown to browser automation, OWASP audits, database diagnostics, and threat modeling. The skill system is extensible—add custom skills via `.claude/skills/`.
 
 ### Real-Time 3D Isometric Office Dashboard
 
@@ -403,7 +404,7 @@ Step 5/5: GitHub Integration .......... auto-creates repo, sets secrets, pushes 
 
 After init, your project has:
 - `.claude/agents/pocketteam/` — 12 agent prompts, ready to delegate
-- `.claude/skills/pocketteam/` — 55 skills for every task type
+- `.claude/skills/pocketteam/` — 58 skills for every task type
 - `.claude/settings.json` — 10-layer safety hooks (structural, not prompts)
 - `.pocketteam/config.yaml` — your project configuration
 - `.github/workflows/pocketteam-monitor.yml` — 24/7 health monitoring
@@ -417,7 +418,7 @@ cd PocketTeam && pip install -e ".[dev]"
 
 ### Run Your First Task
 
-Open Claude Code with PocketTeam:
+Open Claude Code with PocketTeam (automatically loads the COO agent):
 
 ```bash
 pocketteam start
@@ -556,8 +557,8 @@ D-SAC (Dry-run / Staged / Approval / Commit) uses single-use time-limited tokens
 
 ```bash
 pocketteam init              # Setup wizard (5 steps, fully guided)
-pocketteam start             # Resume last session (default: --continue)
-pocketteam start new         # Start a fresh session
+pocketteam start             # Resume last session with COO agent (--agent pocketteam/coo)
+pocketteam start new         # Start a fresh session with COO agent
 pocketteam start resume      # Open session picker to resume a specific session
 pocketteam status            # Show project status (config, kill switch, events)
 ```
@@ -595,6 +596,15 @@ pocketteam health            # System health check
 pocketteam uninstall         # Clean removal (keeps artifacts)
 ```
 
+### Auto-Insights
+
+```bash
+pocketteam insights on                    # Enable with default schedule (22:00 UTC)
+pocketteam insights on --cron "0 8 * * *" # Custom schedule
+pocketteam insights status                # Check current config
+pocketteam insights off                   # Disable
+```
+
 ---
 
 ## Project Structure
@@ -612,7 +622,8 @@ your-project/
 │   ├── artifacts/
 │   │   ├── plans/             ← Detailed plans
 │   │   ├── reviews/           ← Code reviews
-│   │   └── audit/             ← Audit logs
+│   │   ├── audit/             ← Audit logs
+│   │   └── insights/          ← Auto-Insights daily reports
 │   ├── events/
 │   │   └── stream.jsonl       ← Activity stream
 │   ├── sessions/              ← Session artifacts
@@ -629,7 +640,7 @@ your-project/
 | Feature | PocketTeam | gstack | Oh-My-ClaudeCode | OpenClaw | CrewAI |
 |---|---|---|---|---|---|
 | **Agents** | 12 | 0 | 32 | 5 | Role-based |
-| **Skills** | 55 | 25 | 28 | 0 | Custom |
+| **Skills** | 58 | 25 | 28 | 0 | Custom |
 | **Browser Automation** | ptbrowse (text-based, lower tokens) | /browse | No | No | No |
 | **Real-time Dashboard** | 3D isometric office | No | No | No | No |
 | **Self-Healing Loop** | Yes (via GitHub Actions + Tunnel) | No | No | No | No |
@@ -688,7 +699,7 @@ ruff format pocketteam/   # Format
 ### Statistics
 
 - **12 agents** with specialized prompts
-- **55 skills** distributed across agents
+- **58 skills** distributed across agents
 - **~13,000 lines of code** across 78 Python files
 - **Tests** across 21 test files
 - **10 safety layers** blocking 32+ security patterns
@@ -741,7 +752,7 @@ rm .pocketteam/KILL
 
 **Solution:**
 
-By default, `pocketteam start` now continues the last session (equivalent to `--continue`). If you want a fresh session, use:
+By default, `pocketteam start` launches Claude Code with the COO agent (`--agent pocketteam/coo`) and continues the last session (equivalent to `--continue`). If you want a fresh session, use:
 ```bash
 pocketteam start new
 ```
@@ -768,6 +779,48 @@ Restart your session. Agent names are populated when subagents first appear in t
 
 ---
 
+## Auto-Insights: Continuous Self-Improvement
+
+PocketTeam can analyze its own performance daily and propose concrete improvements — without ever applying changes on its own.
+
+### How It Works
+
+1. **Scheduled Analysis** — A Remote Agent runs on your configured cron schedule (default: daily 22:00 UTC)
+2. **Data Gathering** — Reads Claude Code Insights facets, event stream, Observer learnings, and cost data
+3. **Improvement Proposals** — Writes a structured report with specific, actionable changes to `.pocketteam/artifacts/insights/YYYY-MM-DD.md`
+4. **CEO Notification** — Sends a Telegram summary with key metrics and asks for approval
+5. **Human Gate** — Nothing is applied until you say "yes". Each proposal goes through the full pipeline (Plan → Review → Implement → Test)
+
+### Setup
+
+Auto-Insights is configured during `pocketteam init` (Step 7). You can also enable it later:
+
+```bash
+pocketteam insights on                    # Enable with default schedule (22:00 UTC)
+pocketteam insights on --cron "0 8 * * *" # Custom schedule
+pocketteam insights status                # Check current config
+pocketteam insights off                   # Disable
+```
+
+### Deactivation
+
+When you're done with a project, disable the schedule:
+
+```bash
+pocketteam insights off
+```
+
+Then remove the Remote Agent trigger at [claude.ai/code/scheduled](https://claude.ai/code/scheduled).
+
+### What It Never Does
+
+- Never applies changes without CEO approval
+- Never modifies agent prompts directly
+- Never accesses data outside the project scope
+- `auto_apply` is hard-coded to `False` and cannot be overridden
+
+---
+
 ## Self-Improvement: PocketTeam Builds Itself
 
 PocketTeam was designed to improve itself. Run `pocketteam init` in its own repo and watch:
@@ -779,7 +832,7 @@ PocketTeam was designed to improve itself. Run `pocketteam init` in its own repo
 5. **Observer** learns from the process and improves agent prompts
 6. Next task, the agents are better
 
-This is the ultimate proof that the system works.
+Auto-Insights automates this loop — every day, without you having to ask.
 
 ---
 

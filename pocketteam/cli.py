@@ -769,6 +769,10 @@ def insights_on(cron: str | None) -> None:
     cfg = load_config(Path.cwd())
     cfg.insights.enabled = True
     if cron:
+        # Validate cron: must be 5 space-separated fields
+        if not re.match(r"^(\S+\s+){4}\S+$", cron.strip()):
+            click.echo("Error: Invalid cron expression. Expected 5 fields (e.g. '0 22 * * *').")
+            raise SystemExit(1)
         cfg.insights.schedule = cron
     cfg.insights.telegram_notify = bool(cfg.telegram.chat_id)
     save_config(cfg)
@@ -812,7 +816,7 @@ def insights_status() -> None:
     console.print()
 
     # List recent reports
-    insights_dir = Path(Path.cwd() / INSIGHTS_DIR)
+    insights_dir = Path.cwd() / INSIGHTS_DIR
     if insights_dir.exists():
         reports = sorted(insights_dir.glob("*.md"), reverse=True)[:5]
         if reports:
