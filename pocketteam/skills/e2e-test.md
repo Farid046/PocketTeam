@@ -52,7 +52,7 @@ description: End-to-end test execution protocol for CLI and API integration test
 7. Do not skip slow tests — E2E tests must run completely
 
 ### Assert
-8. Compare actual output against expected output exactly
+8. Compare actual output against expected output exactly (modulo dynamic fields such as timestamps, PIDs, and file paths)
 9. Verify no unexpected side effects (no extra files, no state mutations)
 10. Confirm timing is within acceptable bounds (flag tests exceeding 10s)
 
