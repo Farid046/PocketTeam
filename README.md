@@ -392,6 +392,7 @@ The `GH_PAT` secret enables GitHub Actions to install PocketTeam from your priva
 - **[Claude Code CLI](https://docs.anthropic.com/claude-code)** — `npm install -g @anthropic-ai/claude-code`
 - **[Bun](https://bun.sh)** — required for ptbrowse and the Dashboard server
 - **Docker** — optional, required for `pocketteam dashboard`
+- **Anthropic API Key** — optional, needed for the GitHub Actions monitoring workflow (uses Haiku, very low token cost)
 - **Telegram Bot Token** — optional, required for mobile control
 
 ### Install + Init (2 commands)
@@ -405,7 +406,7 @@ That's it. The init wizard guides you through 5 steps:
 
 ```
 Step 1/5: Project Name ................ "my-app"
-Step 2/5: API Key ..................... paste or skip (subscription works)
+Step 2/5: API Key ..................... paste or skip (needed for monitoring workflow, uses Haiku — very token-efficient)
 Step 3/5: Telegram .................... paste bot token (optional)
 Step 4/5: Health URL .................. https://myapp.com/health (optional)
 Step 5/5: GitHub Integration .......... auto-creates repo, sets secrets, pushes workflow
