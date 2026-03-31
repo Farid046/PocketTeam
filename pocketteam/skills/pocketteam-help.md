@@ -22,8 +22,8 @@ Display the following overview exactly as formatted below.
 ---
 
 **Quick Reference:**
-- `pocketteam start` — resume last session
-- `pocketteam start new` — fresh session
+- `pocketteam start` — resume last session with COO agent
+- `pocketteam start new` — fresh session with COO agent
 - `pocketteam kill` — emergency stop
 - `pocketteam resume` — clear kill switch
 - `pocketteam status` — show project status
@@ -33,3 +33,16 @@ Display the following overview exactly as formatted below.
 ---
 
 **Telegram:** Messages arrive via channel plugin. Use CLI for time-critical commands.
+
+---
+
+**Computer Use** *(opt-in)*
+
+| Mode | How to activate |
+|---|---|
+| Browser MCP | Installed at init. Always available to agents via MCP tool. |
+| Native macOS | Run `/mcp` in a Claude Code session. Requires Accessibility permissions. |
+
+- Browser MCP: `claude mcp add --scope project computer-use -- npx -y @anthropic-ai/claude-code-computer-use`
+- Native: System Settings → Privacy & Security → Accessibility → Claude Code ✓
+- Not installed with `--yes` — must be explicitly opted in.

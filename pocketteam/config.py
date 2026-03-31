@@ -71,6 +71,13 @@ class DashboardConfig:
 
 
 @dataclass
+class ComputerUseConfig:
+    enabled: bool = False
+    browser_mcp: bool = False
+    native_macos: bool = False
+
+
+@dataclass
 class GitHubConfig:
     """GitHub integration — repo management + Actions monitoring."""
     enabled: bool = True
@@ -120,6 +127,7 @@ class PocketTeamConfig:
         self.github = value
     network: NetworkConfig = field(default_factory=NetworkConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
+    computer_use: ComputerUseConfig = field(default_factory=ComputerUseConfig)
 
     # Absolute path to project root (set at runtime, not stored)
     project_root: Path = field(default_factory=Path.cwd, repr=False)
@@ -212,6 +220,13 @@ def load_config(project_root: Path | None = None) -> PocketTeamConfig:
             compose_command=dash.get("compose_command", "docker compose"),
         )
 
+    if cu := raw.get("computer_use"):
+        cfg.computer_use = ComputerUseConfig(
+            enabled=cu.get("enabled", False),
+            browser_mcp=cu.get("browser_mcp", False),
+            native_macos=cu.get("native_macos", False),
+        )
+
     return cfg
 
 
@@ -277,6 +292,11 @@ def save_config(cfg: PocketTeamConfig) -> None:
             "project_root": cfg.dashboard.project_root,
             "claude_project_hash": cfg.dashboard.claude_project_hash,
             "compose_command": cfg.dashboard.compose_command,
+        },
+        "computer_use": {
+            "enabled": cfg.computer_use.enabled,
+            "browser_mcp": cfg.computer_use.browser_mcp,
+            "native_macos": cfg.computer_use.native_macos,
         },
     }
 
