@@ -69,8 +69,6 @@ export class SubagentReader {
       const sessionId = path.basename(sessionDir);
       const subagentsDir = path.join(sessionDir, "subagents");
 
-      if (!fs.existsSync(subagentsDir)) continue;
-
       // Check parent session JSONL mtime — this file is written to actively by
       // the running Claude Code session, even when no subagent files change.
       // Path: <projectDir>/<sessionId>.jsonl  (sibling to the session directory)
@@ -83,6 +81,31 @@ export class SubagentReader {
       }
       const now = Date.now();
       const sessionActive = parentMtimeMs > now - ACTIVITY_TIMEOUT_MS;
+
+      if (!fs.existsSync(subagentsDir)) {
+        // Bare session: COO is running but has not delegated to any subagents yet.
+        // Make it visible in the dashboard as a synthetic COO entry.
+        if (parentMtimeMs > 0) {
+          const stats = this.parseJsonl(parentJsonlPath, parentMtimeMs);
+          agents.push({
+            id: `coo-${sessionId}`,
+            role: "coo",
+            agentType: "coo",
+            description: "COO",
+            status: sessionActive ? "working" : "done",
+            startedAt: stats.startedAt,
+            lastActivity: stats.lastActivity,
+            toolCallCount: stats.toolCallCount,
+            messageCount: stats.messageCount,
+            sessionId,
+            sessionActive,
+            tokenUsage: stats.tokenUsage,
+            model: stats.model,
+            gitBranch: stats.gitBranch,
+          });
+        }
+        continue;
+      }
 
       let files: string[] = [];
       try {
