@@ -103,7 +103,7 @@ async def test_broadcast_goes_to_all_known_agents(hub: CoordinationHub) -> None:
 
 @pytest.mark.asyncio
 async def test_broadcast_to_star(hub: CoordinationHub) -> None:
-    msg = await hub.broadcast("coo", "kill_switch", "HALT")
+    msg = await hub.broadcast("coo", "pipeline_done", "HALT")
     assert msg.to_agent == "*"
 
 
@@ -311,7 +311,7 @@ def test_channel_constants_are_strings() -> None:
         Channel.STAGING_OK, Channel.STAGING_FAILED, Channel.PRODUCTION_DEPLOYED,
         Channel.HEALTH_ALERT, Channel.INCIDENT_DETECTED, Channel.INCIDENT_RESOLVED,
         Channel.HUMAN_GATE, Channel.CEO_APPROVED, Channel.CEO_REJECTED,
-        Channel.KILL_SWITCH, Channel.PIPELINE_DONE, Channel.PIPELINE_FAILED,
+        Channel.PIPELINE_DONE, Channel.PIPELINE_FAILED,
     ]
     for ch in channels:
         assert isinstance(ch, str)

@@ -79,31 +79,6 @@ class TestReturnStructure:
 
 
 # ---------------------------------------------------------------------------
-# Layer 10: Kill switch (checked before Layer 1)
-# ---------------------------------------------------------------------------
-
-class TestLayer10KillSwitch:
-    def test_kill_switch_blocks_all_tools(self, project_root: Path, monkeypatch) -> None:
-        monkeypatch.chdir(project_root)
-        kill_file = project_root / ".pocketteam" / "KILL"
-        kill_file.touch()
-
-        result = _call("Read", {"file_path": "/tmp/foo.txt"}, cwd=project_root, monkeypatch=monkeypatch)
-        assert not result["allow"]
-        assert result["layer"] == 10
-        assert "kill" in result["reason"].lower()
-
-    def test_kill_switch_blocks_before_never_allow(self, project_root: Path, monkeypatch) -> None:
-        """Layer 10 must fire before Layer 1 — kill switch takes priority."""
-        monkeypatch.chdir(project_root)
-        kill_file = project_root / ".pocketteam" / "KILL"
-        kill_file.touch()
-
-        # rm -rf / would normally be Layer 1, but kill switch is Layer 10 (fires first)
-        result = _call("Bash", {"command": "rm -rf /"}, cwd=project_root, monkeypatch=monkeypatch)
-        assert result["layer"] == 10
-
-
 # ---------------------------------------------------------------------------
 # Layer 1: NEVER_ALLOW
 # ---------------------------------------------------------------------------
@@ -204,7 +179,7 @@ class TestMissingToolInput:
 
     def test_empty_dict_tool_input_allowed(self, project_root: Path, monkeypatch) -> None:
         monkeypatch.chdir(project_root)
-        result = pre_tool_hook("Read", {})
+        result = pre_tool_hook("Read", {}, agent_id="engineer")
         assert result["allow"] is True
 
     def test_empty_string_tool_input_does_not_crash(self, project_root: Path, monkeypatch) -> None:
@@ -385,12 +360,12 @@ class TestAgentIdHashResolution:
 class TestEmptyAgentIdDefaultsToCoo:
     """When agent_id is empty (main session started without --agent flag),
     pre_tool_hook must treat it as 'coo'.  The COO is allowed to use Agent,
-    Read, Glob, Grep, TodoWrite, TodoRead — but NOT Write or Bash directly."""
+    TodoWrite, TodoRead — but NOT Read, Glob, Grep, Write, or Bash directly."""
 
-    def test_empty_agent_id_allows_read(
+    def test_empty_agent_id_blocks_read(
         self, project_root: Path, monkeypatch
     ) -> None:
-        """Main session (empty agent_id) must be allowed to use Read."""
+        """Main session (empty agent_id) must be BLOCKED from using Read (Layer 6)."""
         monkeypatch.chdir(project_root)
 
         result = _call(
@@ -401,8 +376,11 @@ class TestEmptyAgentIdDefaultsToCoo:
             monkeypatch=monkeypatch,
         )
 
-        assert result["allow"] is True, (
-            f"COO (empty agent_id) must be allowed to Read, got: {result}"
+        assert result["allow"] is False, (
+            f"COO (empty agent_id) must be blocked from Read, got: {result}"
+        )
+        assert result["layer"] == 6, (
+            f"Expected Layer 6 (Allowlist) block, got layer: {result.get('layer')}"
         )
 
     def test_empty_agent_id_allows_agent_tool(

@@ -280,7 +280,6 @@ def _log_coo_violation_to_stream(
         return
     try:
         from datetime import datetime, UTC
-        import json as _json
 
         events_file = project_root / ".pocketteam" / "events" / "stream.jsonl"
         events_file.parent.mkdir(parents=True, exist_ok=True)
@@ -294,7 +293,7 @@ def _log_coo_violation_to_stream(
             "severity": "critical",
         }
         with open(events_file, "a") as f:
-            f.write(_json.dumps(event) + "\n")
+            f.write(json.dumps(event) + "\n")
     except Exception:
         pass  # Event stream write is best-effort
 

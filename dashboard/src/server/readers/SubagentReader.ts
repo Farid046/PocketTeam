@@ -92,7 +92,7 @@ export class SubagentReader {
             role: "coo",
             agentType: "coo",
             description: "COO",
-            status: sessionActive ? "working" : "done",
+            status: stats.isDone ? "done" : sessionActive ? "working" : "done",
             startedAt: stats.startedAt,
             lastActivity: stats.lastActivity,
             toolCallCount: stats.toolCallCount,

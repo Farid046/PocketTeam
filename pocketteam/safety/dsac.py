@@ -11,7 +11,6 @@ Approval tokens are:
   - Bound to specific operation via tool-call hash (NOT preview hash)
   - Bound to agent_id and session_id
   - Never stored in conversation context (survive compaction)
-  - Invalidated by kill switch
   - Single-use (atomic validate-and-consume)
 
 v3 changes from v2:
@@ -74,7 +73,7 @@ class DryRunPreview:
                 "!! D-SAC HARD BLOCK !!",
                 self.blocked_reason,
                 "",
-                "Action required: CEO must intervene or activate kill switch.",
+                "Action required: CEO must intervene (press Esc in Claude Code).",
                 "",
             ])
             return "\n".join(lines)
@@ -578,7 +577,7 @@ class DSACGuard:
     # exists. No read-only validation path.
 
     def invalidate_all_tokens(self) -> int:
-        """Invalidate ALL pending tokens (called by kill switch).
+        """Invalidate ALL pending tokens.
 
         Returns count of tokens invalidated.
         """

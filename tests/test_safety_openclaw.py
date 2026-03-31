@@ -39,7 +39,6 @@ import pytest
 
 from pocketteam.safety.dsac import DSACGuard
 from pocketteam.safety.guardian import pre_tool_hook
-from pocketteam.safety.kill_switch import KillSwitch, KillSwitchError, KillSwitchGuard
 from pocketteam.safety.mcp_rules import check_mcp_safety
 from pocketteam.safety.network_rules import check_network_safety
 from pocketteam.safety.rules import check_destructive, check_never_allow
@@ -176,76 +175,18 @@ class TestDatabaseDestructionScenario:
 # OpenClaw had no way to stop a running destructive operation.
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestKillSwitchScenario:
-    """OpenClaw Incident #3: No way to stop running agents."""
+class TestSessionStopScenario:
+    """OpenClaw Incident #3: No way to stop running agents.
 
-    def test_kill_switch_stops_operations(self, tmp_project):
-        ks = KillSwitch(tmp_project)
-        ks.activate("test")
+    The kill switch (KILL file) has been removed. Sessions are stopped via
+    Esc in Claude Code, which interrupts the agent immediately.
+    """
 
-        # All subsequent operations must be blocked
-        result = pre_tool_hook("Bash", "python deploy.py", "devops")
-        # Guardian checks kill switch first
-        # (Note: guardian uses cwd to find project, so this test is conceptual)
-        # In real usage, this blocks because kill_file.exists() returns True
-
-    def test_kill_switch_raises_error(self, tmp_project):
-        ks = KillSwitch(tmp_project)
-        ks.activate("test")
-
-        guard = KillSwitchGuard(ks)
-        with pytest.raises(KillSwitchError):
-            guard.check()
-
-    def test_kill_switch_via_file(self, tmp_project):
-        """Simulate: user runs `touch .pocketteam/KILL` from terminal."""
-        kill_events = []
-        ks = KillSwitch(tmp_project, on_kill=lambda e: kill_events.append(e))
-        ks.arm()
-
-        # Simulate external kill
-        (tmp_project / ".pocketteam/KILL").touch()
-        time.sleep(1.5)  # Wait for detection
-
-        assert len(kill_events) == 1, "Kill event was not detected"
-        ks.disarm()
-
-    def test_kill_switch_invalidates_approvals(self, tmp_project):
-        """Kill switch must invalidate pending D-SAC tokens."""
-        guard = DSACGuard(tmp_project)
-        preview = guard.create_dry_run_preview(
-            "mcp__supabase__execute_sql",
-            "DELETE FROM old_logs WHERE created_at < '2024-01-01'",
-            [f"log_{i}" for i in range(100)],
-            is_reversible=True,
-            session_id="sess-1",
-            agent_id="devops",
-        )
-        tool_input = {
-            "query": "DELETE FROM old_logs WHERE created_at < '2024-01-01'"
-        }
-        token = guard.issue_approval_token(
-            preview, "devops", "task-001",
-            tool_name="mcp__supabase__execute_sql",
-            tool_input=tool_input,
-            session_id="sess-1",
-        )
-
-        ks = KillSwitch(tmp_project)
-        ks.activate("telegram")
-
-        # Token should be invalidated
-        valid, reason = guard.validate_and_consume_token(
-            token.token, token.operation_hash, "devops",
-            session_id=token.session_id,
-        )
-        assert not valid
-        assert "already used" in reason.lower()  # [v3.1 Fix F]
-
-    def test_kill_switch_check_interval(self):
-        """Kill switch must check every 1 second (from constants)."""
-        from pocketteam.constants import KILL_SWITCH_CHECK_INTERVAL
-        assert KILL_SWITCH_CHECK_INTERVAL == 1
+    def test_esc_is_documented_stop_method(self):
+        """Stopping a session is done via Esc in Claude Code — no file needed."""
+        # The kill switch was removed because it was unreliable and Esc in Claude Code
+        # is the correct, immediate way to stop a running session.
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -415,18 +356,6 @@ class TestContextCompactionSafety:
             "Approval token must survive across guard instances"
             " (context compaction)"
         )
-
-    def test_kill_switch_survives_context_loss(self, tmp_project):
-        """
-        Kill switch reads from a FILE — not from conversation context.
-        Even after context is wiped, kill switch remains active.
-        """
-        ks1 = KillSwitch(tmp_project)
-        ks1.activate("test")
-
-        # New instance (simulates context reset / process restart)
-        ks2 = KillSwitch(tmp_project)
-        assert ks2.is_active, "Kill switch must persist across instances"
 
     def test_audit_log_survives_context_loss(self, tmp_project):
         """Audit log entries are on disk — permanent and tamper-evident."""

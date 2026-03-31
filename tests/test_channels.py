@@ -189,27 +189,6 @@ class TestTelegramChannelUpdates:
         await ch._handle_update(update)
         assert received == ["Build a landing page"]
 
-    async def test_handle_kill_command(self, tmp_path: Path):
-        cfg = PocketTeamConfig(
-            project_root=tmp_path,
-            telegram=TelegramConfig(bot_token="tok", chat_id="123"),
-        )
-        ch = TelegramChannel(tmp_path, config=cfg)
-
-        update = {
-            "message": {
-                "text": "/kill",
-                "chat": {"id": 123},
-            }
-        }
-
-        with patch.object(ch, "send_message", new_callable=AsyncMock):
-            await ch._handle_update(update)
-
-        from pocketteam.safety.kill_switch import KillSwitch
-        ks = KillSwitch(tmp_path)
-        assert ks.is_active is True
-
     def test_stop_polling(self, tmp_path: Path):
         cfg = PocketTeamConfig(
             project_root=tmp_path,

@@ -485,18 +485,17 @@ deep-dive: how do we implement real-time collaboration?
 
 ## Safety Integration
 
-Hooks enforce PocketTeam's 10-layer safety system:
+Hooks enforce PocketTeam's 9-layer safety system:
 
 1. **PreToolUse** — Network allowlist, sensitive path protection
 2. **PostToolUse** — Output redaction, event logging
 3. **UserPromptSubmit** — Workflow keyword validation
 4. **SubagentStart/Stop** — Agent lifecycle tracking
-5. **Kill switch** — Instant stop (.pocketteam/KILL file)
-6. **D-SAC pattern** — Approval tokens for destructive ops
-7. **Budget limits** — Per-agent and per-task caps
-8. **Rate limits** — Max turns per agent
-9. **Network isolation** — Approved domains only
-10. **Secrets protection** — .env, .aws, .ssh protected
+5. **D-SAC pattern** — Approval tokens for destructive ops
+6. **Budget limits** — Per-agent and per-task caps
+7. **Rate limits** — Max turns per agent
+8. **Network isolation** — Approved domains only
+9. **Secrets protection** — .env, .aws, .ssh protected
 
 ## Writing Custom Hooks
 

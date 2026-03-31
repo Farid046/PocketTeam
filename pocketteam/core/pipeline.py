@@ -62,7 +62,7 @@ class Pipeline:
     - CI/CD headless pipeline execution (pocketteam run-headless)
     - Requires ANTHROPIC_API_KEY (each agent call costs tokens)
 
-    Features: phase timeouts, human gates, kill switch, artifact passing.
+    Features: phase timeouts, human gates, artifact passing.
     """
 
     def __init__(
@@ -93,7 +93,6 @@ class Pipeline:
             phases.insert(0, (Phase.PRODUCT, self._run_product))
 
         for phase, runner in phases:
-            self._check_kill_switch()
             self._current_phase = phase
             self.context.advance_phase(phase.value)
 
@@ -337,12 +336,6 @@ class Pipeline:
         )
 
     # ── Helpers ────────────────────────────────────────────────────────────
-
-    def _check_kill_switch(self) -> None:
-        from ..safety.kill_switch import KillSwitch, KillSwitchError
-        ks = KillSwitch(self.context.project_root)
-        if ks.is_active:
-            raise KillSwitchError("Kill switch is active — pipeline halted")
 
     async def _request_approval(self, prompt: str) -> bool:
         """Request CEO approval. In automated mode, raises for Telegram input."""

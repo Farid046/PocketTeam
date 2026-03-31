@@ -52,11 +52,6 @@ def handle(hook_input: dict) -> dict:
 
     pocketteam_dir = project_root / ".pocketteam"
 
-    # ── 2b. Kill-switch guard ────────────────────────────────────────────────
-    kill_file = pocketteam_dir / "KILL"
-    if kill_file.exists():
-        return {}
-
     # ── 3. Min-events guard ──────────────────────────────────────────────────
     events_path = pocketteam_dir / "events" / "stream.jsonl"
     if not events_path.exists():

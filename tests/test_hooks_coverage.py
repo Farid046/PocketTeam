@@ -354,31 +354,6 @@ class TestTelegramInbox:
         entry = json.loads((tmp_path / "telegram-inbox.jsonl").read_text().strip())
         assert entry["text"] == "Deploy now"
 
-    def test_kill_command_creates_kill_file(self, tmp_path):
-        hook_input = {
-            "input": '<channel source="telegram" chat_id="42">/kill</channel>',
-        }
-        result = self._handle(tmp_path, hook_input)
-        assert (tmp_path / "KILL").exists()
-        assert result == {}
-        # Kill command should NOT be queued in inbox
-        assert not (tmp_path / "telegram-inbox.jsonl").exists()
-
-    def test_stop_command_creates_kill_file(self, tmp_path):
-        hook_input = {
-            "input": '<channel source="telegram" chat_id="42">/stop</channel>',
-        }
-        self._handle(tmp_path, hook_input)
-        assert (tmp_path / "KILL").exists()
-
-    def test_kill_bare_word_creates_kill_file(self, tmp_path):
-        """Bare 'kill' without slash also triggers kill switch."""
-        hook_input = {
-            "input": '<channel source="telegram" chat_id="42">kill</channel>',
-        }
-        self._handle(tmp_path, hook_input)
-        assert (tmp_path / "KILL").exists()
-
     def test_plugin_telegram_marker_detected(self, tmp_path):
         hook_input = {"input": "plugin:telegram hello from bot"}
         self._handle(tmp_path, hook_input)
