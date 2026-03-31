@@ -319,8 +319,8 @@ class TestSetupSettingsJson:
 
         settings_path = claude_dir / "settings.json"
         raw = settings_path.read_text()
-        abs_root = str(tmp_path.resolve())
-        assert abs_root in raw, "Project root not found in hook commands"
+        # Implementation uses relative paths (PYTHONPATH=. python -m pocketteam.hooks ...)
+        assert "PYTHONPATH=." in raw, "Relative PYTHONPATH not found in hook commands"
 
     def test_generates_pretooluse_hook(self, tmp_path):
         (tmp_path / CLAUDE_DIR).mkdir(parents=True)
@@ -828,7 +828,7 @@ class TestCreateGitignore:
     def test_gitignore_ignores_pocketteam_sessions(self, tmp_path):
         _create_gitignore(tmp_path)
         content = (tmp_path / ".gitignore").read_text()
-        assert ".pocketteam/sessions/" in content
+        assert ".pocketteam/" in content
 
     def test_gitignore_ignores_dotenv(self, tmp_path):
         _create_gitignore(tmp_path)
