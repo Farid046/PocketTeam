@@ -217,7 +217,7 @@ network:
 To enable the dashboard:
 
 ```bash
-pocketteam skill run dashboard-deploy
+pocketteam dashboard start
 ```
 
 This will:
