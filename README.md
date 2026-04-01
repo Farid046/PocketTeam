@@ -567,7 +567,6 @@ D-SAC (Dry-run / Staged / Approval / Commit) uses single-use time-limited tokens
 pocketteam init              # Setup wizard (7 steps, fully guided)
 pocketteam start             # Resume last session with COO agent (--agent pocketteam/coo)
 pocketteam start new         # Start a fresh session with COO agent
-pocketteam start continue    # Continue the last session (same as default)
 pocketteam start resume [ID] # Resume session by ID, or open picker
 pocketteam sessions          # List and manage pipeline sessions
 pocketteam run-headless      # For CI/GitHub Actions (no interactive Claude window)
