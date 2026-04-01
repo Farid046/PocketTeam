@@ -11,10 +11,10 @@ Common issues and how to fix them.
 **Solution**:
 
 ```bash
-# Re-install from source
-pip install -e .
+# Use pipx — it handles PATH automatically
+pipx install pocketteam
 
-# Or add to PATH manually
+# Or add pip's user bin to PATH manually
 export PATH="$PATH:$(python -c 'import site; print(site.USER_SITE)')/bin"
 ```
 
