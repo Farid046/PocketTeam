@@ -1279,6 +1279,7 @@ dist/
 venv/
 .env
 .env.*
+!.env.example
 
 # PocketTeam - exclude entire directory (sessions, events, credentials)
 .pocketteam/

@@ -30,7 +30,6 @@ from pocketteam.init import (
     POCKETTEAM_START,
     _copy_skills,
     _create_directories,
-    _create_env_example,
     _create_gitignore,
     _get_pocketteam_claude_md_section,
     _setup_claude_md,
@@ -781,37 +780,6 @@ class TestRunUninstall:
             data = json.loads(settings_path.read_text())
             hooks_str = json.dumps(data.get("hooks", {}))
             assert "pocketteam" not in hooks_str
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# _create_env_example
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestCreateEnvExample:
-    """Tests for _create_env_example(project_root)."""
-
-    def test_creates_env_example(self, tmp_path):
-        _create_env_example(tmp_path)
-        assert (tmp_path / ".env.example").exists()
-
-    def test_env_example_contains_anthropic_key(self, tmp_path):
-        _create_env_example(tmp_path)
-        content = (tmp_path / ".env.example").read_text()
-        assert "ANTHROPIC_API_KEY" in content
-
-    def test_env_example_contains_telegram_token(self, tmp_path):
-        _create_env_example(tmp_path)
-        content = (tmp_path / ".env.example").read_text()
-        assert "TELEGRAM_BOT_TOKEN" in content
-
-    def test_does_not_overwrite_existing_env_example(self, tmp_path):
-        existing = "# Custom env example\nMY_VAR=hello\n"
-        (tmp_path / ".env.example").write_text(existing)
-
-        _create_env_example(tmp_path)
-
-        content = (tmp_path / ".env.example").read_text()
-        assert content == existing
 
 
 # ─────────────────────────────────────────────────────────────────────────────
