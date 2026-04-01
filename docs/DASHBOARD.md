@@ -376,7 +376,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://localhost:3847/api/v1/agents
 ```
 
-The token is printed when you run `dashboard-deploy`:
+The token is printed when you run `pocketteam dashboard start`:
 
 ```
 Dashboard running at: http://localhost:3847?token=YOUR_TOKEN

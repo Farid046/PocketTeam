@@ -337,7 +337,7 @@ with open(inbox, 'w') as f:
 **Solution**:
 
 1. **Check the access URL**:
-   - When you run `dashboard-deploy`, it prints: `Dashboard running at: http://localhost:3847?token=abc123...`
+   - When you run `pocketteam dashboard start`, it prints: `Dashboard running at: http://localhost:3847?token=abc123...`
    - Make sure you're using the full URL with the `?token=` parameter
 
 2. **Verify auth token is in the URL**:
