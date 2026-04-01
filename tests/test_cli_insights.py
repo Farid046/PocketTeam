@@ -270,22 +270,67 @@ class TestInsightsStatus:
 # ---------------------------------------------------------------------------
 
 class TestInsightsRun:
-    def test_run_shows_claude_command(self, tmp_path, monkeypatch):
-        """'insights run' prints the manual invocation command."""
+    def test_run_invokes_claude_with_self_improve(self, tmp_path, monkeypatch):
+        """'insights run' actually invokes claude with /self-improve."""
+        import shutil
+        import subprocess
         monkeypatch.chdir(tmp_path)
+
+        # Patch shutil.which to return a fake claude path
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/claude" if name == "claude" else None)
+
+        # Patch subprocess.run to capture the call without actually running it
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            class FakeResult:
+                returncode = 0
+            return FakeResult()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
 
         runner = CliRunner()
         result = runner.invoke(main, ["insights", "run"])
 
         assert result.exit_code == 0
-        assert "claude" in result.output.lower()
+        assert len(calls) == 1
+        cmd = calls[0]
+        assert "claude" in cmd[0]
+        # Must pass /self-improve as part of the prompt
+        assert any("/self-improve" in arg for arg in cmd)
 
-    def test_run_shows_self_improve_skill(self, tmp_path, monkeypatch):
-        """'insights run' mentions the /self-improve skill."""
+    def test_run_shows_running_message(self, tmp_path, monkeypatch):
+        """'insights run' prints a running message and success confirmation."""
+        import shutil
+        import subprocess
         monkeypatch.chdir(tmp_path)
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/claude" if name == "claude" else None)
+
+        def fake_run(cmd, **kwargs):
+            class FakeResult:
+                returncode = 0
+            return FakeResult()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
 
         runner = CliRunner()
         result = runner.invoke(main, ["insights", "run"])
 
         assert result.exit_code == 0
-        assert "/self-improve" in result.output
+        assert "self-improve" in result.output.lower() or "analysis" in result.output.lower()
+        assert "complete" in result.output.lower() or "done" in result.output.lower() or "complete" in result.output.lower()
+
+    def test_run_fails_when_claude_not_found(self, tmp_path, monkeypatch):
+        """'insights run' exits with error when claude is not in PATH."""
+        import shutil
+        monkeypatch.chdir(tmp_path)
+
+        monkeypatch.setattr(shutil, "which", lambda name: None)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["insights", "run"])
+
+        assert result.exit_code != 0
+        assert "not found" in result.output.lower() or "claude" in result.output.lower()

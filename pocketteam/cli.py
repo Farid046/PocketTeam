@@ -1,6 +1,6 @@
 """
 PocketTeam CLI
-Entry point for: pocketteam init | status | kill | retro | logs | health
+Entry point for: pocketteam init | start | status | health | dashboard | insights | logs | retro | sessions | run-headless | uninstall | help
 """
 
 from __future__ import annotations
@@ -69,12 +69,13 @@ async def _init(project_name: str | None, yes: bool, no_dashboard: bool) -> None
 @click.option("--no-telegram", is_flag=True, help="Start without Telegram channel.")
 @click.pass_context
 def start(ctx: click.Context, no_telegram: bool) -> None:
-    """Start Claude Code with PocketTeam safety enabled.
+    """Resume last session (or start new if none exists).
 
     Uses --dangerously-skip-permissions with PocketTeam's 9-layer safety hooks.
 
-    Default (no subcommand): continues the last session.
+    Default (no subcommand): resumes the last session.
     Use 'pocketteam start new' to start a fresh session.
+    Use 'pocketteam start resume' to pick a session interactively.
     """
     ctx.ensure_object(dict)
     ctx.obj["no_telegram"] = no_telegram
@@ -89,14 +90,6 @@ def start_new(ctx: click.Context) -> None:
     """Start a fresh new session."""
     no_telegram = ctx.parent.obj.get("no_telegram", False) if ctx.parent else False
     _launch_claude(no_telegram=no_telegram, resume="new", session_id=None)
-
-
-@start.command("continue")
-@click.pass_context
-def start_continue(ctx: click.Context) -> None:
-    """Continue the last session (same as default)."""
-    no_telegram = ctx.parent.obj.get("no_telegram", False) if ctx.parent else False
-    _launch_claude(no_telegram=no_telegram, resume="continue", session_id=None)
 
 
 @start.command("resume")
@@ -772,13 +765,27 @@ def insights_status() -> None:
 
 @insights.command("run")
 def insights_run() -> None:
-    """Show instructions for manual insights run."""
-    console.print("To run insights manually, start a Claude Code session and use:")
-    console.print()
-    console.print('  claude -p "Run /self-improve for this project"')
-    console.print()
-    console.print("Or in an active session:")
-    console.print("  /self-improve")
+    """Run insights analysis now (outside of schedule)."""
+    import shutil
+    import subprocess
+
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        console.print("[red]Claude CLI not found in PATH[/]")
+        raise SystemExit(1)
+
+    project_root = Path.cwd()
+    console.print("[cyan]Running self-improve analysis...[/]")
+
+    result = subprocess.run(
+        [claude_path, "-p", "Run /self-improve for this project", "--cwd", str(project_root)],
+        cwd=str(project_root),
+    )
+
+    if result.returncode == 0:
+        console.print("[green]Insights analysis complete.[/]")
+    else:
+        console.print(f"[red]Insights analysis failed (exit code {result.returncode})[/]")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -791,7 +798,9 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
         "Getting Started",
         [
             ("init", "Set up PocketTeam in your project"),
-            ("start", "Launch a PocketTeam session (new / continue / resume)"),
+            ("start", "Resume last session (or start new if none exists)"),
+            ("start new", "Start a fresh session"),
+            ("start resume", "Pick a session to resume"),
             ("status", "Show project status"),
         ],
     ),
