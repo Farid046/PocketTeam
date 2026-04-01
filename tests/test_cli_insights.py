@@ -497,3 +497,110 @@ class TestSendInsightsTelegram:
 
         assert result.exit_code != 0
         assert len(telegram_calls) == 0
+
+
+# ---------------------------------------------------------------------------
+# _parse_schedule_input and _cron_to_time helpers
+# ---------------------------------------------------------------------------
+
+class TestParseScheduleInput:
+    """Unit tests for _parse_schedule_input helper (TDD — written before impl)."""
+
+    def test_hhmm_converts_to_cron(self):
+        """'14:00' → '0 14 * * *'"""
+        from pocketteam.cli import _parse_schedule_input
+        assert _parse_schedule_input("14:00") == "0 14 * * *"
+
+    def test_hhmm_single_digit_hour(self):
+        """'9:30' → '30 9 * * *'"""
+        from pocketteam.cli import _parse_schedule_input
+        assert _parse_schedule_input("9:30") == "30 9 * * *"
+
+    def test_hhmm_midnight(self):
+        """'00:00' → '0 0 * * *'"""
+        from pocketteam.cli import _parse_schedule_input
+        assert _parse_schedule_input("00:00") == "0 0 * * *"
+
+    def test_hhmm_leading_zero_hour(self):
+        """'08:15' → '15 8 * * *'"""
+        from pocketteam.cli import _parse_schedule_input
+        assert _parse_schedule_input("08:15") == "15 8 * * *"
+
+    def test_cron_passes_through(self):
+        """'0 14 * * *' passes through unchanged."""
+        from pocketteam.cli import _parse_schedule_input
+        assert _parse_schedule_input("0 14 * * *") == "0 14 * * *"
+
+    def test_complex_cron_passes_through(self):
+        """'0 8 * * 1' (Monday-only) passes through unchanged."""
+        from pocketteam.cli import _parse_schedule_input
+        assert _parse_schedule_input("0 8 * * 1") == "0 8 * * 1"
+
+    def test_whitespace_stripped(self):
+        """Input with surrounding whitespace is handled correctly."""
+        from pocketteam.cli import _parse_schedule_input
+        assert _parse_schedule_input("  22:00  ") == "0 22 * * *"
+
+    def test_invalid_input_passes_through(self):
+        """Garbage input passes through unchanged (not our job to validate here)."""
+        from pocketteam.cli import _parse_schedule_input
+        assert _parse_schedule_input("not-a-time") == "not-a-time"
+
+
+class TestCronToTime:
+    """Unit tests for _cron_to_time helper (TDD — written before impl)."""
+
+    def test_daily_cron_to_hhmm(self):
+        """'0 14 * * *' → '14:00'"""
+        from pocketteam.cli import _cron_to_time
+        assert _cron_to_time("0 14 * * *") == "14:00"
+
+    def test_daily_cron_with_minutes(self):
+        """'30 9 * * *' → '09:30'"""
+        from pocketteam.cli import _cron_to_time
+        assert _cron_to_time("30 9 * * *") == "09:30"
+
+    def test_midnight_cron(self):
+        """'0 0 * * *' → '00:00'"""
+        from pocketteam.cli import _cron_to_time
+        assert _cron_to_time("0 0 * * *") == "00:00"
+
+    def test_complex_cron_returns_as_is(self):
+        """'0 8 * * 1' is not a simple daily cron — returned as-is."""
+        from pocketteam.cli import _cron_to_time
+        assert _cron_to_time("0 8 * * 1") == "0 8 * * 1"
+
+    def test_non_cron_returns_as_is(self):
+        """Random string is returned unchanged."""
+        from pocketteam.cli import _cron_to_time
+        assert _cron_to_time("not-a-cron") == "not-a-cron"
+
+
+class TestInsightsOnHHMM:
+    """Integration tests: 'insights on --cron' accepts HH:MM format."""
+
+    def test_on_cron_hhmm_converts_and_saves(self, tmp_path, monkeypatch):
+        """'insights on --cron 14:00' saves '0 14 * * *' in config."""
+        _make_project(tmp_path, enabled=False)
+        monkeypatch.chdir(tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["insights", "on", "--cron", "14:00"])
+
+        assert result.exit_code == 0
+
+        from pocketteam.config import load_config
+        cfg = load_config(tmp_path)
+        assert cfg.insights.schedule == "0 14 * * *"
+
+    def test_on_cron_hhmm_shown_in_output(self, tmp_path, monkeypatch):
+        """Output reflects the converted cron, not raw HH:MM."""
+        _make_project(tmp_path, enabled=False)
+        monkeypatch.chdir(tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["insights", "on", "--cron", "8:00"])
+
+        assert result.exit_code == 0
+        # The cron string should appear in output (in the schedule hint)
+        assert "0 8 * * *" in result.output

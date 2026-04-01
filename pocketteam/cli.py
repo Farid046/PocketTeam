@@ -22,6 +22,25 @@ logger = logging.getLogger(__name__)
 
 console = Console()
 
+
+def _parse_schedule_input(user_input: str) -> str:
+    """Convert HH:MM to cron string, or pass through if already cron."""
+    match = re.match(r'^(\d{1,2}):(\d{2})$', user_input.strip())
+    if match:
+        hour, minute = match.groups()
+        return f"{int(minute)} {int(hour)} * * *"
+    # Already cron format or custom — pass through
+    return user_input
+
+
+def _cron_to_time(cron: str) -> str:
+    """Convert simple daily cron to HH:MM for display."""
+    match = re.match(r'^(\d+)\s+(\d+)\s+\*\s+\*\s+\*$', cron.strip())
+    if match:
+        minute, hour = match.groups()
+        return f"{int(hour):02d}:{int(minute):02d}"
+    return cron  # Complex cron, show as-is
+
 # Rich color names for each agent role used in log output
 AGENT_COLORS: dict[str, str] = {
     "coo": "yellow",
@@ -695,7 +714,7 @@ def insights() -> None:
 
 
 @insights.command("on")
-@click.option("--cron", default=None, help="Custom cron schedule (e.g. '0 8 * * *')")
+@click.option("--cron", default=None, help="Custom cron schedule or HH:MM time (e.g. '14:00' or '0 8 * * *')")
 def insights_on(cron: str | None) -> None:
     """Enable the daily insights schedule."""
     from .config import load_config, save_config
@@ -703,11 +722,12 @@ def insights_on(cron: str | None) -> None:
     cfg = load_config(Path.cwd())
     cfg.insights.enabled = True
     if cron:
-        # Validate cron: must be 5 space-separated fields
-        if not re.match(r"^(\S+\s+){4}\S+$", cron.strip()):
-            click.echo("Error: Invalid cron expression. Expected 5 fields (e.g. '0 22 * * *').")
+        converted = _parse_schedule_input(cron)
+        # Validate: must be 5 space-separated fields after conversion
+        if not re.match(r"^(\S+\s+){4}\S+$", converted.strip()):
+            click.echo("Error: Invalid schedule. Use HH:MM (e.g. '14:00') or cron (e.g. '0 22 * * *').")
             raise SystemExit(1)
-        cfg.insights.schedule = cron
+        cfg.insights.schedule = converted
     cfg.insights.telegram_notify = bool(cfg.telegram.chat_id)
     save_config(cfg)
 
