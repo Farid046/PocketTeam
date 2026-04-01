@@ -25,7 +25,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install Python dependencies
 pip install -e .
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 
 # Install dashboard dependencies
 cd dashboard
@@ -358,9 +358,9 @@ Describe the output format and success criteria.
 
 ## Example Usage
 
-```
-Run the skill with: pocketteam skill run <skill-name> --param1 value
-```
+Skills are invoked internally via Claude Code agents, not via a CLI command.
+To trigger a skill, ask PocketTeam's COO in your Claude Code session, e.g.:
+> "Use the **engineer** agent with the `<skill-name>` skill."
 
 ## Implementation
 
@@ -517,7 +517,7 @@ logger.error("Error message")
 Set log level:
 
 ```bash
-LOGLEVEL=DEBUG pocketteam agent run
+LOGLEVEL=DEBUG pocketteam start
 ```
 
 ### Run Dashboard in Dev Mode
@@ -534,8 +534,8 @@ VITE_AUTH_TOKEN=test-token npm run dev
 # Start monitoring logs
 tail -f .pocketteam/events/stream.jsonl
 
-# In another terminal, send a task via Telegram or run:
-pocketteam agent run --agent product --task "your task"
+# In another terminal, send a task via Telegram or use Claude Code directly.
+# Agents are invoked internally via the COO — there is no `pocketteam agent run` CLI command.
 
 # Watch the events stream for real-time updates
 ```
