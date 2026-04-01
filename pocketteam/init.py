@@ -559,7 +559,7 @@ async def _interview(
 
     if enable_insights:
         cfg.insights.enabled = True
-        default_schedule = "0 22 * * *"
+        default_schedule = cfg.insights.schedule or "0 22 * * *"
         custom = Prompt.ask(
             "Cron schedule [dim](default: daily 22:00 UTC)[/dim]",
             default=default_schedule,
