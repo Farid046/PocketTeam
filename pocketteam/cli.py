@@ -781,5 +781,85 @@ def insights_run() -> None:
     console.print("  /self-improve")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# pocketteam help
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Command groups displayed in the help output, in order.
+_HELP_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
+    (
+        "Getting Started",
+        [
+            ("init", "Set up PocketTeam in your project"),
+            ("start", "Launch a PocketTeam session (new / continue / resume)"),
+            ("status", "Show project status"),
+        ],
+    ),
+    (
+        "Monitoring",
+        [
+            ("health", "System health check"),
+            ("logs", "Show event log"),
+            ("sessions", "List or manage pipeline sessions"),
+        ],
+    ),
+    (
+        "Dashboard",
+        [
+            ("dashboard", "Dashboard management (start/stop/status/logs/install/update/configure)"),
+        ],
+    ),
+    (
+        "Automation",
+        [
+            ("insights", "Self-improvement schedule (on/off/status/run)"),
+            ("retro", "Run a retrospective"),
+            ("run-headless", "CI/GitHub Actions pipeline"),
+        ],
+    ),
+    (
+        "Maintenance",
+        [
+            ("uninstall", "Remove PocketTeam from project"),
+            ("help", "Show this help message"),
+        ],
+    ),
+]
+
+
+@main.command(name="help")
+def help_command() -> None:
+    """Show a grouped overview of all available commands."""
+    try:
+        from importlib.metadata import version as pkg_version
+        ver = pkg_version("pocketteam")
+    except Exception:
+        ver = "?"
+
+    console.print()
+    console.print(f"[bold cyan]PocketTeam v{ver}[/] — Autonomous AI IT Team")
+    console.print()
+
+    for group_name, commands in _HELP_GROUPS:
+        table = Table(
+            show_header=False,
+            box=None,
+            padding=(0, 2),
+            show_edge=False,
+        )
+        table.add_column("Command", style="bold green", no_wrap=True, min_width=22)
+        table.add_column("Description", style="")
+
+        for cmd_name, description in commands:
+            table.add_row(f"pocketteam {cmd_name}", description)
+
+        console.print(f"[bold]{group_name}:[/]")
+        console.print(table)
+        console.print()
+
+    console.print("[dim]Tip: Use [bold]pocketteam <command> --help[/bold] for details on any command.[/]")
+    console.print()
+
+
 if __name__ == "__main__":
     main()
