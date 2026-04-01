@@ -393,7 +393,7 @@ services:
       - ALL
     mem_limit: 256m
     cpus: 0.5
-    restart: on-failure:3
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:{dash.port}/api/v1/health"]
       interval: 10s

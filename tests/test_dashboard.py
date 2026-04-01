@@ -328,7 +328,7 @@ class TestGenerateCompose:
             pocketteam_dir=Path("/b"),
             env_file_path=Path("/c/.env"),
         )
-        assert "restart: on-failure:3" in content
+        assert "restart: unless-stopped" in content
 
     def test_port_env_var(self):
         dash = self._minimal_dash(port=3847)
