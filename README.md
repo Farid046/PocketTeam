@@ -384,7 +384,7 @@ GitHub Actions (runs every hour)
 3. Pushes the monitoring workflow (`pocketteam-monitor.yml`)
 4. Optionally triggers a first test run
 
-The `GH_PAT` secret enables GitHub Actions to install PocketTeam from your private repo. Once PocketTeam is on PyPI, this won't be needed.
+The `GH_PAT` secret enables GitHub Actions to install PocketTeam from your private repo.
 
 ---
 
@@ -402,7 +402,7 @@ The `GH_PAT` secret enables GitHub Actions to install PocketTeam from your priva
 ### Install + Init (2 commands)
 
 ```bash
-pip install git+https://github.com/Farid046/PocketTeam.git
+pip install pocketteam
 pocketteam init
 ```
 

@@ -16,6 +16,7 @@ venv/
 # These are runtime files, not source code.
 # When bootstrapping, they live here but are never committed.
 .pocketteam/
+.claude/worktrees/
 .env.example
 .claude/CLAUDE.md
 .claude/CLAUDE.md.backup

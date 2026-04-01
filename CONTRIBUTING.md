@@ -6,7 +6,7 @@ Thank you for contributing to PocketTeam! This guide explains the development se
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Node.js 18+
 - Bun (for dashboard development)
 - Docker + Docker Compose v2
@@ -16,12 +16,12 @@ Thank you for contributing to PocketTeam! This guide explains the development se
 
 ```bash
 # Clone the repository
-git clone https://github.com/farid046/pocketteam.git
+git clone https://github.com/Farid046/PocketTeam.git
 cd pocketteam
 
 # Create a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install Python dependencies
 pip install -e .
@@ -74,33 +74,36 @@ python -m pytest tests/test_config.py::test_load_config -v
 
 ```
 tests/
-├── unit/
-│   ├── test_config.py          # Config loading/saving
-│   ├── test_hooks.py           # Hook system
-│   └── test_safety.py          # Safety layer validation
-├── integration/
-│   ├── test_dashboard.py       # Dashboard API endpoints
-│   ├── test_websocket.py       # WebSocket messages
-│   └── test_agent_lifecycle.py # Agent spawn/complete
-└── fixtures/
-    ├── sample_config.yaml      # Test configs
-    └── mock_agents.json        # Mock agent states
+├── test_channels.py
+├── test_cli_health_logs.py
+├── test_computer_use.py
+├── test_coordination.py
+├── test_e2e.py
+├── test_guardian.py
+├── test_hooks_coverage.py
+├── test_init.py
+├── test_safety_layer10.py
+├── test_safety_openclaw.py
+├── test_telegram_daemon.py
+└── sdk_integration/
+    ├── test_healer_live.py
+    └── test_init_github.py
 ```
 
 ### Key Test Commands
 
 ```bash
-# Test config system
-python -m pytest tests/unit/test_config.py -v
-
 # Test safety system
-python -m pytest tests/unit/test_safety.py -v
+python -m pytest tests/test_guardian.py -v
 
-# Test dashboard API
-python -m pytest tests/integration/test_dashboard.py -v
+# Test hooks coverage
+python -m pytest tests/test_hooks_coverage.py -v
 
-# Test with live Telegram (requires setup)
-TELEGRAM_BOT_TOKEN=... python -m pytest tests/integration/test_telegram.py -v
+# Test Telegram daemon
+python -m pytest tests/test_telegram_daemon.py -v
+
+# Test with live SDK (requires setup)
+python -m pytest tests/sdk_integration/ -v
 
 # Test dashboard frontend (Node)
 cd dashboard && npm run test
@@ -300,7 +303,7 @@ def agent_name(ctx: click.Context):
 
 ### Step 4: Add Tests
 
-Create `tests/unit/test_<agent-name>.py`:
+Create `tests/test_<agent-name>.py`:
 
 ```python
 from pathlib import Path
@@ -384,7 +387,7 @@ def skill_name(param1: str):
 
 ### Step 3: Add Tests
 
-Create `tests/integration/test_<skill-name>.py`:
+Create `tests/test_<skill-name>.py`:
 
 ```python
 def test_skill_exists():
@@ -482,14 +485,14 @@ def new_command(param: str):
 2. Update `pocketteam/config.py` dataclasses
 3. Add migration if needed
 4. Update `docs/CONFIGURATION.md`
-5. Add tests in `tests/unit/test_config.py`
+5. Add tests in `tests/test_config.py`
 
 ### Add a New Hook
 
 1. Create hook function in `pocketteam/hooks/<hook-name>.py`
 2. Register in `.claude/settings.json` under the appropriate hook type
 3. Document in `docs/HOOKS.md`
-4. Add tests in `tests/unit/test_hooks.py`
+4. Add tests in `tests/test_hooks_coverage.py`
 
 ### Update Dashboard API
 

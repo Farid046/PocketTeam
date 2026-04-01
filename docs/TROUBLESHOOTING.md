@@ -186,7 +186,7 @@ The auth token in the dashboard URL expires after 60 minutes of inactivity.
 
 1. **Refresh the dashboard page**:
    - Close the tab/window
-   - Restart the dashboard: `pocketteam skill run dashboard-deploy`
+   - Restart the dashboard: `pocketteam dashboard start`
    - Open the new URL
 
 2. **Check token in URL**:
@@ -327,7 +327,7 @@ with open(inbox, 'w') as f:
 
    # Remove image and retry
    docker rmi pocketteam-dashboard:1.0.0
-   pocketteam skill run dashboard-deploy
+   pocketteam dashboard start
    ```
 
 ### "Dashboard shows "Unauthorized" or blank page"
@@ -352,7 +352,7 @@ with open(inbox, 'w') as f:
 3. **Regenerate token**:
    ```bash
    docker compose -f .pocketteam/docker-compose.yml restart
-   # Then run `pocketteam skill run dashboard-deploy` again for a new token
+   # Then run `pocketteam dashboard start` again for a new token
    ```
 
 4. **Check browser console**:
@@ -651,8 +651,8 @@ tar czf pocketteam-logs.tar.gz .pocketteam/artifacts/ .pocketteam/events/
 
 ## Getting Help
 
-1. **Check the docs**: https://github.com/farid046/pocketteam/tree/main/docs
-2. **Search issues**: https://github.com/farid046/pocketteam/issues
+1. **Check the docs**: https://github.com/Farid046/PocketTeam/tree/main/docs
+2. **Search issues**: https://github.com/Farid046/PocketTeam/issues
 3. **Open a new issue** with:
    - Error message (full output)
    - Command you ran

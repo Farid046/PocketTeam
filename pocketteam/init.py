@@ -191,7 +191,7 @@ async def run_init(
     features.append("  [green]✓[/] Remote Control: [bold]active[/] (claude.ai/code + Mobile)")
     features.append("  [green]✓[/] Auto Memory: [bold]active[/]")
     features.append("  [green]✓[/] PocketTeam HUD: [bold]configured[/]")
-    features.append("  [green]✓[/] Safety Hooks: [bold]10-Layer Guardian[/]")
+    features.append("  [green]✓[/] Safety Hooks: [bold]9-Layer Guardian[/]")
     if tg_active:
         features.append("  [green]✓[/] Telegram: [bold]configured[/]")
     if cfg.github.enabled and cfg.github.repo_name:
