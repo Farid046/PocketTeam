@@ -359,7 +359,7 @@ def _log_allowed(
                 tool_input=tool_input,
                 decision=SafetyDecision.ALLOWED,
                 layer=None,
-                reason="All 10 safety layers passed",
+                reason="All 9 safety layers passed",
             )
     except Exception:
         logger.debug("Audit log write failed (non-critical)", exc_info=True)
