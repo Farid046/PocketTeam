@@ -633,5 +633,5 @@ def handle(hook_input: dict) -> dict:
 ## See Also
 
 - [CONFIGURATION.md](CONFIGURATION.md) — Hook-related config options
-- [README.md](../README.md) — 10-layer safety system overview
+- [README.md](../README.md) — 9-layer safety system overview
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — How to add custom hooks

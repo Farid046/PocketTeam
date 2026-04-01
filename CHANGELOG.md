@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- COO delegation-only tool policy: tools restricted to `["Agent"]` via allowlist enforcement
+- Fan-out/fan-in parallel investigation pattern for multi-agent research
+- Skill catalog surfaced in COO system prompt
+- `e2e-test` skill added for end-to-end test execution
+- Session greeting dedup guard — prevents repeated Telegram welcome messages on re-entry
+- Launch preparation: README polish, test coverage improvements, security hardening
+
 ### Fixed
 
 - `pocketteam start` now correctly passes `--agent pocketteam/coo` flag to Claude Code
@@ -32,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - SubagentStart writes `agent_id → agent_type` mapping to `.pocketteam/agent-registry.json`
   - Guardian reads registry before checking the allowlist
   - Fixes critical bug where all subagent tool calls were denied as "Unknown agent"
-- **55 skills** (was 37) — added `create-skill`, `add-mcp-server`, and 16 others
+- **59 skills** (was 37) — added `create-skill`, `add-mcp-server`, and 20 others
 - **Agent SDK Integration Tests** — 47 tests covering healer, health checker, escalation, GitHub setup
   - Fake HTTP server with chaos modes for testing
   - CI workflow: `pocketteam-sdk-test.yml` (mock + live matrix)
@@ -74,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Live event feed with agent actions and audit trail
   - Session picker for multi-session monitoring
   - Usage tracking (tokens, cost per agent, subscription vs API breakdown)
-- **10-layer safety system** with runtime hooks that survive context compaction
+- **9-layer safety system** with runtime hooks that survive context compaction
   - PreToolUse and PostToolUse validation hooks
   - Network allowlist enforcement
   - Secrets detection and redaction

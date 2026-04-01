@@ -7,7 +7,7 @@ The PocketTeam Dashboard is a real-time 3D isometric visualization of your AI te
 ### Deploy the Dashboard
 
 ```bash
-pocketteam skill run dashboard-deploy
+pocketteam dashboard start
 ```
 
 This will:
@@ -166,7 +166,7 @@ Get recent events from the event stream.
 Get audit log entries for a specific date.
 
 **Query parameters**:
-- `date` (optional): Date to fetch. Only `today` is supported in v0.1. Default: today.
+- `date` (optional): Date to fetch. Only `today` is supported in v1.0.0. Default: today.
 
 **Response**:
 ```json
@@ -504,7 +504,7 @@ docker run -p 3847:3847 \
   pocketteam-dashboard:1.0.0
 
 # Or via docker-compose
-pocketteam skill run dashboard-deploy
+pocketteam dashboard start
 ```
 
 ### Kubernetes
@@ -556,4 +556,3 @@ spec:
 
 - [CONFIGURATION.md](CONFIGURATION.md) — Dashboard config options
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — Common issues and fixes
-- [API.md](API.md) — Full API specification (if exists)

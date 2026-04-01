@@ -71,7 +71,7 @@ async def _init(project_name: str | None, yes: bool, no_dashboard: bool) -> None
 def start(ctx: click.Context, no_telegram: bool) -> None:
     """Start Claude Code with PocketTeam safety enabled.
 
-    Uses --dangerously-skip-permissions with PocketTeam's 10-layer safety hooks.
+    Uses --dangerously-skip-permissions with PocketTeam's 9-layer safety hooks.
 
     Default (no subcommand): continues the last session.
     Use 'pocketteam start new' to start a fresh session.
@@ -116,7 +116,7 @@ def _launch_claude(
 ) -> None:
     """Launch Claude Code with --dangerously-skip-permissions.
 
-    PocketTeam's 10-layer safety hooks run on every tool call regardless.
+    PocketTeam's 9-layer safety hooks run on every tool call regardless.
     Auto mode (--permission-mode auto) will be added when available on Max plan.
 
     resume modes:
@@ -175,7 +175,7 @@ def _launch_claude(
     else:
         console.print(f"Starting Claude Code for [bold]{cfg.project_name}[/]")
 
-    console.print("[green]PocketTeam[/] — 10-layer safety hooks active")
+    console.print("[green]PocketTeam[/] — 9-layer safety hooks active")
     console.print()
     os.execvp(cmd[0], cmd)
 

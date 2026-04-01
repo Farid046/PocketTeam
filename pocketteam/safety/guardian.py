@@ -3,7 +3,7 @@ SafetyGuardian — PreToolUse Hook (runs on EVERY tool call)
 
 This is NOT an agent. It's a deterministic script that:
 1. Receives tool call info on stdin (JSON from Claude Code hooks)
-2. Checks all 10 safety layers
+2. Checks all 9 safety layers
 3. Returns allow/deny decision on stdout
 
 Registered as a PreToolUse hook in .claude/settings.json
