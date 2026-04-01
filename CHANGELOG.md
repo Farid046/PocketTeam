@@ -184,7 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 1. **Initialize a project** with `pocketteam init`
 2. **Configure** via `.pocketteam/config.yaml`
-3. **Start the dashboard** with the dashboard-deploy skill
+3. **Start the dashboard** with `pocketteam dashboard start`
 4. **Send a task** via Telegram or Claude Code's input
 
 ### Next Steps

@@ -40,11 +40,8 @@ cd ..
 pocketteam init --name dev-project
 
 # Set up local Telegram (optional)
-mkdir -p .pocketteam
-cat > .pocketteam/.env << EOF
-ANTHROPIC_API_KEY=sk-ant-...
-TELEGRAM_BOT_TOKEN=...
-EOF
+# Set environment variables in your shell or use a secrets manager.
+# Never write credentials to files in the repo.
 
 # Create .env for dashboard
 cat > .env << EOF
