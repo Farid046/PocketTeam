@@ -98,7 +98,7 @@ _SENSITIVE_RE = [re.compile(p, re.IGNORECASE) for p in SENSITIVE_PATH_PATTERNS]
 
 # Safe alternatives to suggest
 SAFE_ALTERNATIVES: dict[str, str] = {
-    ".env": ".env.example (template) or environment variables",
+    ".env": ".pocketteam/config.yaml (template) or environment variables",
     "id_rsa": "SSH agent or ssh-add command",
     "credentials": "IAM roles or environment variables",
     "service_account": "Workload Identity or environment variables",
