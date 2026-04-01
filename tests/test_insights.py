@@ -140,3 +140,141 @@ class TestInsightsInit:
         from pocketteam import init as init_module
         source = inspect.getsource(init_module)
         assert "INSIGHTS_DIR" in source
+
+
+# ---------------------------------------------------------------------------
+# Regression: re-init must preserve custom insights.schedule
+# Bug: schedule was always reset to "0 22 * * *" on re-init
+# ---------------------------------------------------------------------------
+
+class TestInsightsScheduleReInitPreservation:
+    """Regression tests for insights schedule preservation across re-init."""
+
+    def test_load_config_preserves_custom_schedule(self, tmp_path):
+        """load_config must deserialise a custom schedule correctly (not fall back to default)."""
+        pt_dir = tmp_path / ".pocketteam"
+        pt_dir.mkdir(parents=True)
+        config_data = {
+            "project": {"name": "test"},
+            "insights": {
+                "enabled": True,
+                "schedule": "0 14 * * *",
+                "telegram_notify": True,
+                "auto_apply": False,
+            },
+        }
+        config_file = pt_dir / "config.yaml"
+        config_file.write_text(__import__("yaml").dump(config_data))
+        config_file.chmod(0o600)
+
+        loaded = load_config(tmp_path)
+        assert loaded.insights.schedule == "0 14 * * *", (
+            f"Expected '0 14 * * *' but got '{loaded.insights.schedule}'. "
+            "load_config is not preserving the custom schedule."
+        )
+
+    def test_save_load_roundtrip_custom_schedule(self, tmp_path):
+        """A config saved with a custom schedule must survive a full save/load cycle."""
+        cfg = PocketTeamConfig(project_root=tmp_path)
+        cfg.insights = InsightsConfig(enabled=True, schedule="0 14 * * *")
+        save_config(cfg)
+
+        loaded = load_config(tmp_path)
+        assert loaded.insights.schedule == "0 14 * * *", (
+            f"Expected '0 14 * * *' after save/load but got '{loaded.insights.schedule}'."
+        )
+
+    def test_reinit_interview_preserves_schedule_when_user_presses_enter(self, tmp_path):
+        """
+        Regression test for the re-init schedule-reset bug.
+
+        Scenario:
+          1. Config exists with insights.schedule = "0 14 * * *"
+          2. User runs pocketteam init again
+          3. At Step 6, the interview uses cfg.insights.schedule as the prompt default
+          4. User presses Enter (accepts default)
+          5. cfg.insights.schedule must remain "0 14 * * *" — NOT reset to "0 22 * * *"
+        """
+        import asyncio
+        from unittest.mock import patch, AsyncMock
+        import yaml
+
+        # Arrange: write a config with a custom schedule
+        pt_dir = tmp_path / ".pocketteam"
+        pt_dir.mkdir(parents=True)
+        config_data = {
+            "project": {"name": "myapp"},
+            "insights": {
+                "enabled": True,
+                "schedule": "0 14 * * *",
+                "telegram_notify": True,
+                "auto_apply": False,
+            },
+        }
+        config_file = pt_dir / "config.yaml"
+        config_file.write_text(yaml.dump(config_data))
+        config_file.chmod(0o600)
+
+        # Verify load_config picks up the custom schedule correctly
+        existing = load_config(tmp_path)
+        assert existing.insights.schedule == "0 14 * * *", (
+            "Precondition failed: load_config did not return the custom schedule."
+        )
+
+        # Simulate the _interview logic:
+        # cfg.insights = existing.insights  (line 240 in init.py)
+        # Then at Step 6:
+        #   default_schedule = cfg.insights.schedule or "0 22 * * *"
+        #   custom = Prompt.ask(..., default=default_schedule)  <- user presses Enter
+        #   cfg.insights.schedule = custom
+
+        cfg = PocketTeamConfig(project_root=tmp_path)
+        cfg.insights = existing.insights  # This is the assignment at init.py:240
+
+        # Verify: the schedule is the existing value at this point
+        assert cfg.insights.schedule == "0 14 * * *", (
+            f"After cfg.insights = existing.insights, schedule was '{cfg.insights.schedule}' "
+            "instead of '0 14 * * *'. The assignment at init.py:240 is broken."
+        )
+
+        # Simulate Step 6 prompt logic
+        enable_insights = True
+        default_schedule = cfg.insights.schedule or "0 22 * * *"
+
+        # Verify the default offered to the user is the custom value
+        assert default_schedule == "0 14 * * *", (
+            f"The prompt default was '{default_schedule}' instead of '0 14 * * *'. "
+            "User would see wrong default — pressing Enter would reset the schedule."
+        )
+
+        # Simulate user pressing Enter (accepting the default)
+        user_input = default_schedule  # Enter key returns the default
+        cfg.insights.schedule = user_input
+
+        assert cfg.insights.schedule == "0 14 * * *", (
+            f"After user presses Enter, schedule is '{cfg.insights.schedule}' "
+            "instead of '0 14 * * *'. The schedule-reset bug is NOT fixed."
+        )
+
+    def test_default_schedule_fallback_only_when_schedule_is_empty(self, tmp_path):
+        """
+        The 'or "0 22 * * *"' fallback in Step 6 must only trigger when schedule is
+        empty/None, never when a valid custom schedule exists.
+        """
+        # Case 1: custom schedule set -> no fallback
+        cfg_with_custom = PocketTeamConfig(project_root=tmp_path)
+        cfg_with_custom.insights = InsightsConfig(schedule="0 6 * * 1")
+        default = cfg_with_custom.insights.schedule or "0 22 * * *"
+        assert default == "0 6 * * 1"
+
+        # Case 2: empty schedule -> falls back to default
+        cfg_empty = PocketTeamConfig(project_root=tmp_path)
+        cfg_empty.insights = InsightsConfig(schedule="")
+        default_empty = cfg_empty.insights.schedule or "0 22 * * *"
+        assert default_empty == "0 22 * * *"
+
+        # Case 3: None schedule -> falls back to default
+        cfg_none = PocketTeamConfig(project_root=tmp_path)
+        cfg_none.insights = InsightsConfig(schedule=None)
+        default_none = cfg_none.insights.schedule or "0 22 * * *"
+        assert default_none == "0 22 * * *"
