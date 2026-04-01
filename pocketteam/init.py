@@ -138,22 +138,6 @@ async def run_init(
     # MCP Starter Pack
     _setup_mcp_servers(cfg, console)
 
-    # Computer Use MCP (only when opted in)
-    if cfg.computer_use.enabled:
-        import platform as _platform
-        cu_ok = _setup_computer_use_mcp(project_root)
-        if cu_ok:
-            cfg.computer_use.browser_mcp = True
-            console.print("  [green]✓[/] Computer Use: Browser MCP installed")
-            if _platform.system() == "Darwin":
-                console.print(
-                    "  [dim]For Native macOS: System Settings → Privacy & Security → "
-                    "Accessibility → Claude Code ✓, then run /mcp[/]"
-                )
-            # Re-save config with updated browser_mcp flag
-            # native_macos remains False — it requires manual Accessibility permission grant
-            save_config(cfg)
-
     # Setup dashboard (default ON, skip with --no-dashboard)
     if not no_dashboard:
         try:
@@ -198,8 +182,6 @@ async def run_init(
         features.append(f"  [green]✓[/] GitHub: [bold]{cfg.github.repo_owner}/{cfg.github.repo_name}[/]")
     if cfg.dashboard.enabled:
         features.append(f"  [green]✓[/] Dashboard: [bold cyan]http://localhost:{cfg.dashboard.port}[/]")
-    if cfg.computer_use.enabled and cfg.computer_use.browser_mcp:
-        features.append("  [green]✓[/] Computer Use: [bold]Browser MCP active[/]")
     if cfg.insights.enabled:
         features.append(f"  [green]✓[/] Auto-Insights: [bold]{cfg.insights.schedule or '0 22 * * *'}[/]")
     features.append("  [dim]Tip: Enable Auto Dream via /memory[/]")
@@ -258,7 +240,7 @@ async def _interview(
 
     # ── Step 1: Project Name ────────────────────────────────────────────
     console.print(Panel(
-        "[bold]Step 1/7: Project Name[/]\n\n"
+        "[bold]Step 1/6: Project Name[/]\n\n"
         "This name is used in status messages and Telegram notifications.",
         title="[cyan]1[/] Project",
         border_style="cyan",
@@ -275,7 +257,7 @@ async def _interview(
     key_display = f"{current_key[:10]}...{current_key[-4:]}" if len(current_key) > 20 else ("set" if current_key else "not set")
 
     console.print(Panel(
-        "[bold]Step 2/7: Anthropic API Key[/] [dim](optional)[/]\n\n"
+        "[bold]Step 2/6: Anthropic API Key[/] [dim](optional)[/]\n\n"
         "Only needed for self-healing via Agent SDK (e.g. GitHub Actions monitoring).\n"
         "Uses Haiku model for minimal cost.\n"
         "[bold]Normal operation runs entirely on your Claude subscription[/] —\n"
@@ -326,7 +308,7 @@ async def _interview(
     has_bun = shutil.which("bun") is not None
 
     console.print(Panel(
-        "[bold]Step 3/7: Telegram via Claude Code Channels[/]\n\n"
+        "[bold]Step 3/6: Telegram via Claude Code Channels[/]\n\n"
         "Send tasks to your AI team from your phone via Telegram.\n"
         "Uses Claude Code's native Channel system (research preview).\n\n"
         "How it works:\n"
@@ -464,7 +446,7 @@ async def _interview(
 
     # ── Step 4: Health Monitoring ───────────────────────────────────────
     console.print(Panel(
-        "[bold]Step 4/7: Production Health URL[/] (optional)\n\n"
+        "[bold]Step 4/6: Production Health URL[/] (optional)\n\n"
         "If your app has a health endpoint, PocketTeam can monitor it\n"
         "24/7 and auto-fix issues.\n\n"
         f"Current: [{'green' if cfg.health_url else 'dim'}]{cfg.health_url or 'none'}[/]",
@@ -482,7 +464,7 @@ async def _interview(
     # ── Step 5: GitHub Integration ────────────────────────────────────────
     gh_status = "configured" if cfg.github.repo_name else "not configured"
     console.print(Panel(
-        "[bold]Step 5/7: GitHub Integration[/]\n\n"
+        "[bold]Step 5/6: GitHub Integration[/]\n\n"
         "Creates a GitHub repo, sets secrets, and adds a monitoring workflow.\n"
         "PocketTeam wakes up automatically when your health check fails.\n\n"
         f"Current: [{'green' if cfg.github.enabled else 'dim'}]{gh_status}[/]",
@@ -497,46 +479,7 @@ async def _interview(
         cfg.github.enabled = setup_gh
     # Actual repo creation happens in run_init() after config is saved
 
-    # ── Step 6: Computer Use ──────────────────────────────────────────────
-    import platform as _platform
-    _is_macos = _platform.system() == "Darwin"
-
-    cu_description = (
-        "[bold]Step 6/7: Computer Use[/] [dim](opt-in)[/]\n\n"
-        "Enables AI agents to control a browser and interact with your desktop.\n\n"
-        "[bold]Browser MCP[/]\n"
-        "  Installs a headless browser MCP server agents can call via the MCP tool.\n"
-        "  Works on all platforms. No extra permissions required.\n\n"
-    )
-    if _is_macos:
-        cu_description += (
-            "[bold]Native macOS Computer Use[/] [dim](macOS only)[/]\n"
-            "  Full screen control: mouse, keyboard, screenshots.\n"
-            "  Requires Accessibility permissions for Claude Code.\n"
-            "  Enable after init: System Settings → Privacy & Security → "
-            "Accessibility → Claude Code ✓\n"
-            "  Then run [bold]/mcp[/] inside a Claude Code session.\n\n"
-        )
-    cu_description += (
-        "[yellow]Not enabled automatically — must be explicitly opted in.[/]\n"
-        "[dim]You can always enable this later by re-running pocketteam init.[/]"
-    )
-
-    console.print(Panel(
-        cu_description,
-        title="[cyan]6[/] Computer Use",
-        border_style="cyan",
-    ))
-
-    # --yes must NEVER auto-enable Computer Use (too sensitive)
-    if not accept_defaults:
-        enable_cu = Confirm.ask(
-            "  Enable Computer Use (Browser MCP)?",
-            default=cfg.computer_use.enabled,
-        )
-        cfg.computer_use.enabled = enable_cu
-
-    # ── Step 7: Insights Schedule ────────────────────────────────────────
+    # ── Step 6: Insights Schedule ────────────────────────────────────────
     console.print()
     console.print(Panel(
         "[bold]Auto-Insights: Continuous Self-Improvement[/bold]\n\n"
@@ -544,7 +487,7 @@ async def _interview(
         "improvements. You'll receive a Telegram summary with proposed\n"
         "changes — nothing is applied without your approval.\n\n"
         "[dim]Recommended: Yes (daily at 22:00 UTC)[/dim]",
-        title="[cyan]7[/] Insights Schedule",
+        title="[cyan]6[/] Insights Schedule",
         border_style="cyan",
     ))
 
@@ -588,8 +531,6 @@ async def _interview(
     table.add_row("Health URL", cfg.health_url or "none", "[dim]optional[/]")
     gh_summary = f"{cfg.github.repo_owner}/{cfg.github.repo_name}" if cfg.github.repo_name else "will be created"
     table.add_row("GitHub", gh_summary if cfg.github.enabled else "disabled", "")
-    cu_status = "enabled" if cfg.computer_use.enabled else "disabled"
-    table.add_row("Computer Use", cu_status, "[green]opt-in[/]" if cfg.computer_use.enabled else "[dim]optional[/]")
     if cfg.insights.enabled:
         insights_schedule_display = cfg.insights.schedule or "0 22 * * *"
         table.add_row("Insights", f"Daily ({insights_schedule_display})", "[green]active[/]")
@@ -1135,23 +1076,6 @@ def _setup_telegram_plugin(bot_token: str) -> bool:
 
     except Exception:
         return False
-
-
-def _setup_computer_use_mcp(project_root: Path) -> bool:  # noqa: ARG001
-    """Enable the built-in Computer Use MCP server.
-
-    Computer Use is a built-in Claude Code feature (not an npm package).
-    It must be enabled via /mcp in an interactive session.
-
-    Returns True after printing activation instructions.
-    """
-    console.print("  [green]✓[/] Computer Use: built-in MCP (no install needed)")
-    console.print(
-        "  [yellow]Empfohlen:[/] Aktiviere Computer Use in deiner nächsten Claude Code Session:\n"
-        "    /mcp → computer-use → Enable\n"
-        "  [dim]Dies ist ein built-in Feature und kann nicht automatisch aktiviert werden.[/]"
-    )
-    return True
 
 
 def _setup_mcp_servers(config: PocketTeamConfig, console: Console) -> None:  # noqa: ARG001
