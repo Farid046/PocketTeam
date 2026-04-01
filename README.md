@@ -402,8 +402,19 @@ The `GH_PAT` secret enables GitHub Actions to install PocketTeam from your priva
 ### Install + Init (2 commands)
 
 ```bash
-pip install pocketteam
+# Recommended — installs globally without polluting your Python environment
+pipx install pocketteam
 pocketteam init
+```
+
+If pipx is not installed yet:
+```bash
+pip install pipx   # or: brew install pipx
+```
+
+If you prefer pip directly:
+```bash
+pip install pocketteam
 ```
 
 That's it. The init wizard guides you through 7 steps:
