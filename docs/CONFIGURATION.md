@@ -119,7 +119,7 @@ Setup Telegram:
 4. Store in `.pocketteam/.env`:
 
 ```bash
-TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+TELEGRAM_BOT_TOKEN=<your-bot-token-from-botfather>
 ```
 
 ### Monitoring Section
@@ -255,7 +255,7 @@ PocketTeam reads from system environment variables and `.pocketteam/.env`.
 ```bash
 # .pocketteam/.env (gitignored)
 ANTHROPIC_API_KEY=sk-ant-...
-TELEGRAM_BOT_TOKEN=123456:ABC-...
+TELEGRAM_BOT_TOKEN=<your-bot-token-from-botfather>
 ```
 
 Load with:
