@@ -831,7 +831,7 @@ def insights_run() -> None:
     console.print("[cyan]Running self-improve analysis...[/]")
 
     result = subprocess.run(
-        [claude_path, "-p", "Run /self-improve for this project"],
+        [claude_path, "--continue", "-p", "Run /self-improve for this project"],
         cwd=str(project_root),
     )
 

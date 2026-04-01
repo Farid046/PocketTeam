@@ -237,6 +237,7 @@ async def _interview(
     cfg.budget = existing.budget
     cfg.github = existing.github
     cfg.network = existing.network
+    cfg.insights = existing.insights
 
     # ── Step 1: Project Name ────────────────────────────────────────────
     console.print(Panel(
