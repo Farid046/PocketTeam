@@ -109,9 +109,6 @@ async def run_init(
             console.print(f"  [yellow]⚠ GitHub setup: {e}[/]")
             console.print("  Run later: [bold]gh auth login[/] then [bold]pocketteam init[/]")
 
-    # Create .env.example
-    _create_env_example(project_root)
-
     # Create start script + ensure plugin is installed if Telegram configured
     tg_active = bool(cfg.telegram.bot_token and not cfg.telegram.bot_token.startswith("$"))
     if tg_active:
@@ -1282,11 +1279,9 @@ dist/
 venv/
 .env
 .env.*
-!.env.example
 
 # PocketTeam - exclude entire directory (sessions, events, credentials)
 .pocketteam/
-!.pocketteam/.env.example
 
 # macOS
 .DS_Store
@@ -1299,24 +1294,6 @@ venv/
 node_modules/
 """
     (project_root / ".gitignore").write_text(gitignore)
-
-
-def _create_env_example(project_root: Path) -> None:
-    """Create .env.example with required variables."""
-    env_example = """# PocketTeam Environment Variables
-# Copy to .env and fill in your values (never commit .env!)
-
-# Claude API (only needed for GitHub Actions / headless mode)
-# Interactive use via Claude Code Subscription does NOT need this
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Telegram Bot (get from @BotFather)
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...   # Your personal chat ID (from @userinfobot)
-"""
-    env_example_path = project_root / ".env.example"
-    if not env_example_path.exists():
-        env_example_path.write_text(env_example)
 
 
 async def run_uninstall(keep_artifacts: bool) -> None:

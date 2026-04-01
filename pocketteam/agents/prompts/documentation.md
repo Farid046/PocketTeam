@@ -29,7 +29,7 @@ After every feature:
 ### README.md
 - New features listed in Features section
 - Installation changes documented
-- New environment variables added to .env.example reference
+- New environment variables added to .pocketteam/config.yaml reference
 
 ### ARCHITECTURE.md (if exists)
 - New components added to component diagram

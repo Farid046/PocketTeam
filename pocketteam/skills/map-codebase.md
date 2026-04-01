@@ -28,7 +28,7 @@ Spawn all three agents simultaneously. Each has a focused mandate:
 
 ```
 Read: package.json / requirements.txt / Gemfile / go.mod / Cargo.toml / pom.xml
-      Dockerfile, docker-compose.yml, .env.example
+      Dockerfile, docker-compose.yml, .pocketteam/config.yaml
       Any config files (webpack, vite, tsconfig, jest.config, etc.)
 
 Report:

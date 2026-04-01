@@ -198,7 +198,7 @@ INCIDENT_PLAYBOOKS = {
         "name": "Sensitive file access",
         "severity": "HIGH",
         "immediate_action": "Log + agent gets safe alternative",
-        "agent_action": "Use .env.example or environment variables",
+        "agent_action": "Use .pocketteam/config.yaml or environment variables",
         "escalate": False,
     },
     6: {
