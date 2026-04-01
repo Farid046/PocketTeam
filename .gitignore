@@ -18,6 +18,7 @@ venv/
 .pocketteam/
 .claude/
 .github/
+.mcp.json
 
 # Node / Dashboard
 node_modules/
