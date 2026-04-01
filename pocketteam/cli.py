@@ -763,11 +763,64 @@ def insights_status() -> None:
         console.print("No reports yet.")
 
 
+def _send_insights_telegram(project_root: Path, content: str) -> None:
+    """Send an insights report via Telegram Bot API.
+
+    Reads bot token from ~/.claude/channels/telegram/.env and chat_id from
+    ~/.claude/channels/telegram/access.json (first allowFrom entry).
+    Truncates content to 4000 characters to stay within Telegram's 4096-char limit.
+    Silent (no exception) when Telegram is not configured.
+    """
+    try:
+        import json as _json
+        import urllib.parse
+        import urllib.request
+
+        env_file = Path.home() / ".claude" / "channels" / "telegram" / ".env"
+        access_file = Path.home() / ".claude" / "channels" / "telegram" / "access.json"
+
+        if not env_file.exists() or not access_file.exists():
+            return
+
+        bot_token = ""
+        for line in env_file.read_text().splitlines():
+            if line.startswith("TELEGRAM_BOT_TOKEN="):
+                bot_token = line.split("=", 1)[1].strip()
+                break
+
+        if not bot_token:
+            return
+
+        access_data = _json.loads(access_file.read_text())
+        allowed = access_data.get("allowFrom", [])
+        if not allowed:
+            return
+
+        chat_id = allowed[0]
+
+        # Truncate to Telegram's practical limit (leaving room for header)
+        MAX_LENGTH = 4000
+        text = content if len(content) <= MAX_LENGTH else content[:MAX_LENGTH]
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        data = urllib.parse.urlencode({
+            "chat_id": chat_id,
+            "text": text,
+        }).encode()
+
+        req = urllib.request.Request(url, data=data, method="POST")
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        pass  # Telegram notification is best-effort — never block insights run
+
+
 @insights.command("run")
 def insights_run() -> None:
     """Run insights analysis now (outside of schedule)."""
     import shutil
     import subprocess
+
+    from .constants import INSIGHTS_DIR
 
     claude_path = shutil.which("claude")
     if not claude_path:
@@ -784,8 +837,16 @@ def insights_run() -> None:
 
     if result.returncode == 0:
         console.print("[green]Insights analysis complete.[/]")
+        # Find and send latest insights report via Telegram
+        artifacts_dir = project_root / INSIGHTS_DIR
+        if artifacts_dir.exists():
+            reports = sorted(artifacts_dir.glob("*.md"), reverse=True)
+            if reports:
+                report_content = reports[0].read_text()
+                _send_insights_telegram(project_root, report_content)
     else:
         console.print(f"[red]Insights analysis failed (exit code {result.returncode})[/]")
+        raise SystemExit(result.returncode)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

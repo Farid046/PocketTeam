@@ -334,3 +334,166 @@ class TestInsightsRun:
 
         assert result.exit_code != 0
         assert "not found" in result.output.lower() or "claude" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# _send_insights_telegram helper
+# ---------------------------------------------------------------------------
+
+class TestSendInsightsTelegram:
+    """Unit tests for the _send_insights_telegram helper function."""
+
+    def test_send_telegram_reads_latest_report_and_calls_api(self, tmp_path, monkeypatch):
+        """After a successful run, _send_insights_telegram sends the report content."""
+        import shutil
+        import subprocess
+        import urllib.request
+
+        # Set up project with insights dir and a report
+        _make_project(tmp_path)
+        insights_dir = tmp_path / ".pocketteam" / "artifacts" / "insights"
+        insights_dir.mkdir(parents=True)
+        report = insights_dir / "report-2026-04-01.md"
+        report.write_text("# Insights\nThis is the report content.")
+
+        # Set up Telegram access files in a temp home
+        fake_home = tmp_path / "home"
+        tg_dir = fake_home / ".claude" / "channels" / "telegram"
+        tg_dir.mkdir(parents=True)
+        (tg_dir / ".env").write_text("TELEGRAM_BOT_TOKEN=fake-token\n")
+        (tg_dir / "access.json").write_text('{"allowFrom": ["99999"]}')
+
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+        # Capture HTTP calls
+        requests_made = []
+
+        class FakeResponse:
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+            def read(self): return b""
+
+        real_urlopen = urllib.request.urlopen
+
+        def fake_urlopen(req, timeout=None):
+            requests_made.append(req)
+            return FakeResponse()
+
+        monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+        from pocketteam.cli import _send_insights_telegram
+        _send_insights_telegram(tmp_path, "# Insights\nThis is the report content.")
+
+        assert len(requests_made) == 1
+        req = requests_made[0]
+        assert "fake-token" in req.full_url
+        assert "sendMessage" in req.full_url
+
+    def test_send_telegram_truncates_at_4000_chars(self, tmp_path, monkeypatch):
+        """Report content longer than 4000 chars is truncated before sending."""
+        import urllib.request
+
+        fake_home = tmp_path / "home"
+        tg_dir = fake_home / ".claude" / "channels" / "telegram"
+        tg_dir.mkdir(parents=True)
+        (tg_dir / ".env").write_text("TELEGRAM_BOT_TOKEN=fake-token\n")
+        (tg_dir / "access.json").write_text('{"allowFrom": ["99999"]}')
+
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+        bodies_sent = []
+
+        class FakeResponse:
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+
+        def fake_urlopen(req, timeout=None):
+            bodies_sent.append(req.data)
+            return FakeResponse()
+
+        monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+        long_content = "x" * 5000
+        from pocketteam.cli import _send_insights_telegram
+        _send_insights_telegram(tmp_path, long_content)
+
+        assert len(bodies_sent) == 1
+        import urllib.parse
+        body = urllib.parse.unquote(bodies_sent[0].decode())
+        # The text parameter must not exceed 4000 chars
+        # Find the text= part in the body
+        assert "xxxxx" in body
+        # Verify length of the text value is at most 4000
+        params = dict(pair.split("=", 1) for pair in bodies_sent[0].decode().split("&") if "=" in pair)
+        text_val = urllib.parse.unquote_plus(params.get("text", ""))
+        assert len(text_val) <= 4000
+
+    def test_send_telegram_no_error_when_not_configured(self, tmp_path, monkeypatch):
+        """_send_insights_telegram is silent (no exception) when Telegram is not configured."""
+        fake_home = tmp_path / "home"
+        # No telegram config files
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+        from pocketteam.cli import _send_insights_telegram
+        # Must not raise
+        _send_insights_telegram(tmp_path, "some content")
+
+    def test_run_sends_telegram_after_success(self, tmp_path, monkeypatch):
+        """'insights run' calls _send_insights_telegram when subprocess succeeds."""
+        import shutil
+        import subprocess
+
+        _make_project(tmp_path)
+        insights_dir = tmp_path / ".pocketteam" / "artifacts" / "insights"
+        insights_dir.mkdir(parents=True)
+        (insights_dir / "report-2026-04-01.md").write_text("# Report")
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/claude" if name == "claude" else None)
+
+        def fake_run(cmd, **kwargs):
+            class FakeResult:
+                returncode = 0
+            return FakeResult()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        telegram_calls = []
+
+        import pocketteam.cli as cli_module
+        monkeypatch.setattr(cli_module, "_send_insights_telegram",
+                            lambda root, content: telegram_calls.append((root, content)))
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["insights", "run"])
+
+        assert result.exit_code == 0
+        assert len(telegram_calls) == 1
+
+    def test_run_does_not_send_telegram_on_failure(self, tmp_path, monkeypatch):
+        """'insights run' does NOT call _send_insights_telegram when subprocess fails."""
+        import shutil
+        import subprocess
+
+        _make_project(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/claude" if name == "claude" else None)
+
+        def fake_run(cmd, **kwargs):
+            class FakeResult:
+                returncode = 1
+            return FakeResult()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        telegram_calls = []
+
+        import pocketteam.cli as cli_module
+        monkeypatch.setattr(cli_module, "_send_insights_telegram",
+                            lambda root, content: telegram_calls.append((root, content)))
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["insights", "run"])
+
+        assert result.exit_code != 0
+        assert len(telegram_calls) == 0

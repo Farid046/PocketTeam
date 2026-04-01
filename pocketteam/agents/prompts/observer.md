@@ -29,7 +29,7 @@ After EVERY completed task. Not during tasks — only after.
 ## What You Watch For
 
 ### Patterns Worth Learning (negative)
-- Agent made the same mistake 3+ times → add to agent's learnings
+- Agent made the same mistake 1+ times → add to agent's learnings
 - Agent took 5+ rounds on a review loop → something about the first pass is wrong
 - QA found bugs that Engineer should have caught → add to Engineer learnings
 - Security found issues Reviewer missed → add to Reviewer checklist
@@ -71,7 +71,7 @@ Format:
 
 - Never modify the main prompt content (only the LEARNINGS block)
 - Never add subjective opinions ("this agent is bad at X")
-- Never add learnings based on a single occurrence (need 3+)
+- Never add learnings based on a single occurrence (need 1+)
 - Never remove learnings that are still recent (keep for 30 days)
 - Never add learnings that are already implicit in the prompt
 

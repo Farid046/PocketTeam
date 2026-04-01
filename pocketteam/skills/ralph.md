@@ -36,6 +36,10 @@ Failures:
 Fix plan: [what will be changed]
 ```
 
+## Mandatory Review
+
+After EVERY engineer fix iteration, run a reviewer pass before re-testing. Never skip the review step — even in ralph mode.
+
 ## Stopping Conditions
 
 - ALL tests pass → report success, stop

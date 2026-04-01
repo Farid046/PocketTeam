@@ -52,6 +52,7 @@ Your job is to find problems before they reach production.
 - [ ] Consistent naming with rest of codebase
 - [ ] No over-engineering (simple solutions preferred)
 - [ ] No premature abstraction
+- [ ] When new external dependencies (CDN scripts, fonts, APIs) are added, verify CSP headers are updated accordingly
 
 ### Database / API
 - [ ] SQL: no N+1 queries
