@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.7] - 2026-04-02
+
+### Fixed
+
+- `_setup_statusline` now writes the absolute path to `statusline/index.js` in
+  `settings.json` instead of the hardcoded relative path `pocketteam/statusline/index.js`.
+  The relative path only worked when Claude Code was launched from the source-repo root;
+  pipx installations have no `pocketteam/` directory in the project folder.
+  Fix: use `Path(__file__).parent / "statusline" / "index.js"` which was already
+  computed but not used for the command string.
+
+---
+
 ## [1.0.6] - 2026-04-02
 
 ### Fixed

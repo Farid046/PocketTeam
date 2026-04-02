@@ -35,6 +35,7 @@ from pocketteam.init import (
     _setup_claude_md,
     _setup_optimal_defaults,
     _setup_settings_json,
+    _setup_statusline,
     _setup_telegram_plugin,
 )
 
@@ -1052,3 +1053,95 @@ class TestCreateGitignore:
         _create_gitignore(tmp_path)
         content = (tmp_path / ".gitignore").read_text()
         assert "__pycache__/" in content
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _setup_statusline
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestSetupStatusline:
+    """Tests for _setup_statusline(project_root).
+
+    The command written to settings.json must be an absolute path so that
+    pipx-installed pocketteam works outside the source tree.
+    """
+
+    def _make_settings(self, project_root: Path) -> Path:
+        settings_path = project_root / ".claude" / "settings.json"
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text("{}")
+        return settings_path
+
+    def test_skips_when_settings_missing(self, tmp_path):
+        """No settings.json → function returns without error, no file created."""
+        _setup_statusline(tmp_path)
+        assert not (tmp_path / ".claude" / "settings.json").exists()
+
+    def test_skips_when_statusline_script_missing(self, tmp_path):
+        """settings.json present but index.js missing → no statusLine key written."""
+        settings_path = self._make_settings(tmp_path)
+        with patch("pocketteam.init.Path") as _mock:
+            # Simulate the script not existing by patching __file__ resolution
+            pass
+        # Use a real missing path by patching the specific check
+        with patch("pocketteam.init._setup_statusline", wraps=_setup_statusline):
+            # Patch Path.__truediv__ to return a non-existent path for the script
+            real_setup = _setup_statusline
+            fake_script = tmp_path / "nonexistent" / "index.js"
+            import pocketteam.init as init_mod
+            original_file = init_mod.__file__
+
+            # Patch __file__ on the module so statusline_script resolves to missing path
+            with patch.object(init_mod, "__file__", str(tmp_path / "fake_init.py")):
+                real_setup(tmp_path)
+
+        data = json.loads(settings_path.read_text())
+        assert "statusLine" not in data
+
+    def test_writes_absolute_path_command(self, tmp_path):
+        """statusLine command must be an absolute path, not a relative one."""
+        settings_path = self._make_settings(tmp_path)
+
+        # Create a fake statusline/index.js so the script-existence check passes
+        fake_pkg_dir = tmp_path / "fakepkg"
+        fake_statusline = fake_pkg_dir / "statusline" / "index.js"
+        fake_statusline.parent.mkdir(parents=True)
+        fake_statusline.write_text("// fake")
+
+        import pocketteam.init as init_mod
+
+        with patch.object(init_mod, "__file__", str(fake_pkg_dir / "__init__.py")):
+            _setup_statusline(tmp_path)
+
+        data = json.loads(settings_path.read_text())
+        assert "statusLine" in data
+        command = data["statusLine"]["command"]
+        # Must be absolute — no relative "pocketteam/" prefix
+        assert not command.startswith("node pocketteam/"), (
+            f"command must use absolute path, got: {command!r}"
+        )
+        assert command.startswith("node /"), (
+            f"command must start with 'node /', got: {command!r}"
+        )
+        assert "statusline/index.js" in command
+
+    def test_does_not_overwrite_existing_statusline(self, tmp_path):
+        """If statusLine already exists in settings.json it must not be changed."""
+        settings_path = self._make_settings(tmp_path)
+        existing_command = "node /custom/path/index.js"
+        settings_path.write_text(
+            json.dumps({"statusLine": {"type": "command", "command": existing_command}})
+        )
+
+        fake_pkg_dir = tmp_path / "fakepkg"
+        fake_statusline = fake_pkg_dir / "statusline" / "index.js"
+        fake_statusline.parent.mkdir(parents=True)
+        fake_statusline.write_text("// fake")
+
+        import pocketteam.init as init_mod
+
+        with patch.object(init_mod, "__file__", str(fake_pkg_dir / "__init__.py")):
+            _setup_statusline(tmp_path)
+
+        data = json.loads(settings_path.read_text())
+        assert data["statusLine"]["command"] == existing_command
