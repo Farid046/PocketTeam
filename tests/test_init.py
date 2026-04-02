@@ -838,10 +838,11 @@ class TestRunUninstallDashboard:
         ):
             await run_uninstall(keep_artifacts=True)
 
-        # docker stop and docker rm must have been called
+        # docker compose down must have been called (replaces old stop/rm)
         calls = [str(c) for c in mock_run.call_args_list]
-        assert any("stop" in c for c in calls)
-        assert any("rm" in c for c in calls)
+        assert any("compose" in c and "down" in c for c in calls), (
+            f"Expected 'docker compose ... down' call, got: {calls}"
+        )
 
     @pytest.mark.asyncio
     async def test_removes_compose_dir_when_confirmed(self, tmp_path):
@@ -921,6 +922,102 @@ class TestRunUninstallDashboard:
         calls = [str(c) for c in mock_run.call_args_list]
         assert not any("stop" in c for c in calls)
         assert not any("rm" in c for c in calls)
+
+    @pytest.mark.asyncio
+    async def test_uses_compose_down_instead_of_stop_rm(self, tmp_path):
+        """Dashboard stop must use 'docker compose down', not 'docker stop/rm'."""
+        from pocketteam.init import run_uninstall
+
+        self._prepare_project_with_dashboard(tmp_path)
+
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch("pocketteam.init.Confirm.ask", return_value=True),
+            patch("pocketteam.init.console"),
+            patch("pocketteam.init.subprocess.run") as mock_run,
+        ):
+            await run_uninstall(keep_artifacts=True)
+
+        calls = [c.args[0] for c in mock_run.call_args_list]
+        # At least one call must be "docker compose ... down"
+        assert any(
+            "compose" in cmd and "down" in cmd
+            for cmd in calls
+        ), f"Expected 'docker compose ... down' call, got: {calls}"
+        # The old individual stop/rm calls must NOT be used
+        assert not any(cmd == ["docker", "--context", "default", "stop", "testproject-dashboard"] for cmd in calls)
+        assert not any(cmd == ["docker", "--context", "default", "rm", "testproject-dashboard"] for cmd in calls)
+
+    @pytest.mark.asyncio
+    async def test_dashboard_stopped_before_pocketteam_dir_deleted(self, tmp_path):
+        """Dashboard must be stopped BEFORE .pocketteam/ is deleted."""
+        from pocketteam.init import run_uninstall
+
+        self._prepare_project_with_dashboard(tmp_path)
+
+        call_order: list[str] = []
+
+        def mock_subprocess_run(cmd, **kwargs):  # noqa: ANN001
+            call_order.append(f"subprocess:{cmd}")
+            return None
+
+        def mock_shutil_rmtree(path, *args, **kwargs):  # noqa: ANN001
+            call_order.append(f"rmtree:{path}")
+
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch("pocketteam.init.Confirm.ask", return_value=True),
+            patch("pocketteam.init.console"),
+            patch("pocketteam.init.subprocess.run", side_effect=mock_subprocess_run),
+            patch("pocketteam.init.shutil.rmtree", side_effect=mock_shutil_rmtree),
+        ):
+            await run_uninstall(keep_artifacts=True)
+
+        # Find positions: first compose-down call vs first rmtree of .pocketteam
+        compose_idx = next(
+            (i for i, e in enumerate(call_order) if "subprocess" in e and "compose" in e and "down" in e),
+            None,
+        )
+        pt_rmtree_idx = next(
+            (i for i, e in enumerate(call_order) if "rmtree" in e and POCKETTEAM_DIR in e),
+            None,
+        )
+        assert compose_idx is not None, f"No compose down call found. Order: {call_order}"
+        # .pocketteam is kept when keep_artifacts=True, so pt_rmtree_idx may be None — that's fine
+        if pt_rmtree_idx is not None:
+            assert compose_idx < pt_rmtree_idx, (
+                f"compose down (idx {compose_idx}) must happen before rmtree of .pocketteam (idx {pt_rmtree_idx}). "
+                f"Order: {call_order}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_warns_when_compose_down_fails(self, tmp_path):
+        """A visible warning must be printed when docker compose down fails."""
+        import subprocess as _subprocess
+        from pocketteam.init import run_uninstall
+
+        self._prepare_project_with_dashboard(tmp_path)
+
+        mock_console = MagicMock()
+
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch("pocketteam.init.Confirm.ask", return_value=True),
+            patch("pocketteam.init.console", mock_console),
+            patch(
+                "pocketteam.init.subprocess.run",
+                side_effect=_subprocess.SubprocessError("docker not found"),
+            ),
+        ):
+            # Must not raise
+            await run_uninstall(keep_artifacts=True)
+
+        # A warning must have been printed (print/console.print with "warn" or "[yellow]")
+        all_printed = " ".join(str(c) for c in mock_console.print.call_args_list)
+        assert any(
+            word in all_printed.lower()
+            for word in ("warn", "yellow", "could not", "failed", "error")
+        ), f"Expected a warning about compose down failure, got: {all_printed}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1350,7 +1350,43 @@ async def run_uninstall(keep_artifacts: bool) -> None:
         workflow.unlink()
         console.print("  ✅ Removed GitHub Actions workflow")
 
-    # 6. Remove .pocketteam/ (optionally keep artifacts)
+    # 6. Stop and remove dashboard container (must happen BEFORE .pocketteam/ is deleted)
+    try:
+        from .config import load_config
+        cfg = load_config(project_root)
+        if cfg.dashboard.enabled and cfg.dashboard.container_name:
+            remove_dashboard = Confirm.ask(
+                "Stop and remove dashboard container?", default=True
+            )
+            if remove_dashboard:
+                cname = cfg.dashboard.container_name
+                stopped = False
+                if cfg.dashboard.compose_dir:
+                    compose_dir_path = Path(cfg.dashboard.compose_dir)
+                    for compose_file in compose_dir_path.rglob("docker-compose.yml"):
+                        try:
+                            subprocess.run(
+                                ["docker", "compose", "-f", str(compose_file), "down"],
+                                capture_output=True,
+                                timeout=30,
+                                check=False,
+                            )
+                            stopped = True
+                        except Exception as exc:  # noqa: BLE001
+                            console.print(
+                                f"  [yellow]Warning: could not run compose down for {compose_file}: {exc}[/]"
+                            )
+                if stopped:
+                    console.print(f"  ✅ Dashboard container stopped: {cname}")
+                    if cfg.dashboard.compose_dir:
+                        compose_dir_path = Path(cfg.dashboard.compose_dir)
+                        if compose_dir_path.exists():
+                            shutil.rmtree(compose_dir_path)
+                            console.print(f"  ✅ Removed compose directory: {compose_dir_path}")
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"  [yellow]Warning: could not stop dashboard container: {exc}[/]")
+
+    # 7. Remove .pocketteam/ (optionally keep artifacts)
     pt_dir = project_root / POCKETTEAM_DIR
     if pt_dir.exists():
         if keep_artifacts:
@@ -1363,37 +1399,6 @@ async def run_uninstall(keep_artifacts: bool) -> None:
             if confirmed:
                 shutil.rmtree(pt_dir)
                 console.print("  ✅ Removed .pocketteam/")
-
-    # 7. Stop and remove dashboard container
-    try:
-        from .config import load_config
-        cfg = load_config(project_root)
-        if cfg.dashboard.enabled and cfg.dashboard.container_name:
-            remove_dashboard = Confirm.ask(
-                "Stop and remove dashboard container?", default=True
-            )
-            if remove_dashboard:
-                ctx = cfg.dashboard.docker_context or "default"
-                cname = cfg.dashboard.container_name
-                subprocess.run(
-                    ["docker", "--context", ctx, "stop", cname],
-                    capture_output=True,
-                    check=False,
-                )
-                subprocess.run(
-                    ["docker", "--context", ctx, "rm", cname],
-                    capture_output=True,
-                    check=False,
-                )
-                console.print(f"  ✅ Dashboard container removed: {cname}")
-                # Remove compose directory
-                if cfg.dashboard.compose_dir:
-                    compose_dir = Path(cfg.dashboard.compose_dir)
-                    if compose_dir.exists():
-                        shutil.rmtree(compose_dir)
-                        console.print(f"  ✅ Removed compose directory: {compose_dir}")
-    except Exception:
-        pass
 
     # Remove Telegram auto-session daemon if installed
     try:

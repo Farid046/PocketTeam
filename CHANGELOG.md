@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.5] - 2026-04-02
+
+### Fixed
+
+- `pocketteam uninstall` now stops the dashboard **before** deleting `.pocketteam/`
+  (previously the config was deleted first, making it impossible to read the container name).
+
+- Dashboard teardown now uses `docker compose -f <compose-file> down` instead of
+  individual `docker stop` / `docker rm` calls — cleaner for Compose-managed containers.
+
+- Replaced `except Exception: pass` in the dashboard-stop block with a visible
+  `[yellow]Warning: could not stop dashboard container: ...[/]` message so failures
+  are no longer silently swallowed.
+
+---
+
 ## [1.0.4] - 2026-04-01
 
 ### Fixed
