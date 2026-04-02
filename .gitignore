@@ -33,6 +33,7 @@ dashboard/dist/
 *.pem
 *.key
 *.p12
+.pypirc
 credentials.json
 service-account.json
 
