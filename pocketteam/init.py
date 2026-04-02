@@ -828,9 +828,10 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
     """Merge PocketTeam safety hooks into .claude/settings.json."""
     settings_path = project_root / CLAUDE_DIR / "settings.json"
 
-    # Use relative paths — Claude Code always runs hooks from project root
-    hook_prefix = "PYTHONPATH=. python -m pocketteam.safety"
-    hooks_prefix = "PYTHONPATH=. python -m pocketteam.hooks"
+    # Use sys.executable so hooks work with pipx/venv installations on any OS
+    _py = sys.executable
+    hook_prefix = f"{_py} -m pocketteam.safety"
+    hooks_prefix = f"{_py} -m pocketteam.hooks"
 
     pocketteam_hooks = {
         "PreToolUse": [

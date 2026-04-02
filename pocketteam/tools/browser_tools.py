@@ -15,6 +15,7 @@ Capabilities:
 from __future__ import annotations
 
 import asyncio
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -197,7 +198,7 @@ class BrowserTool:
 
         if py_specs:
             result = await self._run_subprocess(
-                ["python", "-m", "pytest"] + [str(f) for f in py_specs],
+                [sys.executable, "-m", "pytest"] + [str(f) for f in py_specs],
                 timeout=timeout,
             )
             outputs.append(result.output)

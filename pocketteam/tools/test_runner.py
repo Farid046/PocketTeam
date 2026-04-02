@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import re
 import shutil
+import sys
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -97,7 +98,7 @@ class TestRunner:
         timeout: int = DEFAULT_TIMEOUT,
     ) -> TestResult:
         """Run pytest and return structured results."""
-        cmd = ["python", "-m", "pytest"]
+        cmd = [sys.executable, "-m", "pytest"]
         if args:
             cmd.extend(args)
         else:

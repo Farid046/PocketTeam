@@ -310,7 +310,8 @@ class TestSetupSettingsJson:
         data = json.loads(settings_path.read_text())
         assert "hooks" in data
 
-    def test_hooks_use_project_root_in_commands(self, tmp_path):
+    def test_hooks_use_sys_executable_in_commands(self, tmp_path):
+        import sys
         claude_dir = tmp_path / CLAUDE_DIR
         claude_dir.mkdir(parents=True)
 
@@ -318,8 +319,9 @@ class TestSetupSettingsJson:
 
         settings_path = claude_dir / "settings.json"
         raw = settings_path.read_text()
-        # Implementation uses relative paths (PYTHONPATH=. python -m pocketteam.hooks ...)
-        assert "PYTHONPATH=." in raw, "Relative PYTHONPATH not found in hook commands"
+        # Implementation uses sys.executable so hooks work with pipx/venv on any OS
+        assert sys.executable in raw, f"sys.executable ({sys.executable!r}) not found in hook commands"
+        assert "pocketteam" in raw, "pocketteam module reference not found in hook commands"
 
     def test_generates_pretooluse_hook(self, tmp_path):
         (tmp_path / CLAUDE_DIR).mkdir(parents=True)
