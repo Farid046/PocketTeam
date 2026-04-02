@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.8] - 2026-04-02
+
+### Fixed
+
+- `_setup_ptbrowse` now runs `bun install` in `pocketteam/browse/` after creating the
+  wrapper script. Fixes missing `node_modules` (playwright-core etc.) for pipx users who
+  never ran `bun install` manually.
+- `_setup_statusline` now resolves the absolute path to `node` via `shutil.which` so the
+  statusline command works regardless of the user's `PATH` at Claude Code startup.
+- Updated stale docstring in `activity_logger.py`: removed obsolete `PYTHONPATH=.` prefix
+  from the invocation example (hooks now use `sys.executable` and the installed package).
+
+---
+
 ## [1.0.7] - 2026-04-02
 
 ### Fixed

@@ -1116,12 +1116,20 @@ class TestSetupStatusline:
         data = json.loads(settings_path.read_text())
         assert "statusLine" in data
         command = data["statusLine"]["command"]
-        # Must be absolute — no relative "pocketteam/" prefix
+        # Must not use a relative "pocketteam/" prefix
         assert not command.startswith("node pocketteam/"), (
             f"command must use absolute path, got: {command!r}"
         )
-        assert command.startswith("node /"), (
-            f"command must start with 'node /', got: {command!r}"
+        # node binary must be either an absolute path (shutil.which result) or
+        # the bare "node" fallback; script path must always be absolute
+        parts = command.split(" ", 1)
+        node_bin = parts[0]
+        script_path = parts[1] if len(parts) > 1 else ""
+        assert node_bin == "node" or node_bin.startswith("/"), (
+            f"node binary must be absolute or 'node' fallback, got: {node_bin!r}"
+        )
+        assert script_path.startswith("/"), (
+            f"script path must be absolute, got: {script_path!r}"
         )
         assert "statusline/index.js" in command
 
