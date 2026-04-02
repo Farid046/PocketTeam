@@ -610,12 +610,14 @@ def _setup_statusline(project_root: Path) -> None:
     except (json.JSONDecodeError, OSError):
         return
 
-    # Only add if not already configured
-    if "statusLine" not in existing:
-        node_bin = shutil.which("node") or "node"
+    # Always set the correct absolute path (fixes stale relative paths from older versions)
+    node_bin = shutil.which("node") or "node"
+    correct_command = f"{node_bin} {statusline_script}"
+    current = existing.get("statusLine", {}).get("command", "")
+    if current != correct_command:
         existing["statusLine"] = {
             "type": "command",
-            "command": f"{node_bin} {statusline_script}",
+            "command": correct_command,
         }
         settings_path.write_text(json.dumps(existing, indent=2))
         console.print("  [green]PocketTeam HUD configured[/]")
@@ -987,12 +989,16 @@ def _setup_settings_json(project_root: Path, is_new: bool) -> None:
         if event_type not in existing_hooks:
             existing_hooks[event_type] = hook_list
         else:
-            # Append our hooks if not already present
+            # Replace existing hooks with matching matchers (updates stale commands)
             existing_matchers = {
-                h.get("matcher") for h in existing_hooks[event_type]
+                h.get("matcher"): i for i, h in enumerate(existing_hooks[event_type])
             }
             for hook in hook_list:
-                if hook.get("matcher") not in existing_matchers:
+                matcher = hook.get("matcher")
+                if matcher in existing_matchers:
+                    # Update in place — fixes stale python/PYTHONPATH commands
+                    existing_hooks[event_type][existing_matchers[matcher]] = hook
+                else:
                     existing_hooks[event_type].append(hook)
 
     existing["agent"] = "pocketteam/coo"
