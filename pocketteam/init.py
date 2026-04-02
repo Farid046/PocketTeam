@@ -526,7 +526,7 @@ async def _interview(
     table.add_column("Status")
 
     table.add_row("Project", cfg.project_name, "")
-    table.add_row("API Key", cfg.auth.mode, "[green]ready[/]" if api_final else "[red]needed for agents[/]")
+    table.add_row("API Key", cfg.auth.mode, "[green]ready[/]" if api_final else "[dim]optional (GitHub Actions only)[/]")
     table.add_row("Telegram", "configured" if tg_final else "not configured", "[green]ready[/]" if tg_final else "[dim]optional[/]")
     table.add_row("Health URL", cfg.health_url or "none", "[dim]optional[/]")
     gh_summary = f"{cfg.github.repo_owner}/{cfg.github.repo_name}" if cfg.github.repo_name else "will be created"
@@ -541,9 +541,8 @@ async def _interview(
 
     if not api_final:
         console.print()
-        console.print("  [yellow]Warning:[/] No API key set. Agents won't work until you either:")
-        console.print("    - Run [bold]pocketteam init[/] again and paste your key")
-        console.print("    - Or set [bold]export ANTHROPIC_API_KEY=sk-ant-...[/]")
+        console.print("  [dim]No API key set — that's fine for normal use (Claude Code subscription).[/]")
+        console.print("  [dim]Only needed for self-healing via GitHub Actions.[/]")
 
     if not accept_defaults:
         proceed = Confirm.ask("\n  Looks good? Save configuration", default=True)
