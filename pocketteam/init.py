@@ -614,7 +614,7 @@ def _setup_statusline(project_root: Path) -> None:
     if "statusLine" not in existing:
         existing["statusLine"] = {
             "type": "command",
-            "command": "node pocketteam/statusline/index.js",
+            "command": f"node {statusline_script}",
         }
         settings_path.write_text(json.dumps(existing, indent=2))
         console.print("  [green]PocketTeam HUD configured[/]")
