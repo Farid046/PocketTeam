@@ -783,6 +783,147 @@ class TestRunUninstall:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# run_uninstall — dashboard container removal
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestRunUninstallDashboard:
+    """Tests for dashboard container/compose removal in run_uninstall."""
+
+    def _prepare_project_with_dashboard(self, tmp_path: Path) -> Path:
+        """Create project with a dashboard-enabled config and compose dir."""
+        from pocketteam.config import DashboardConfig, PocketTeamConfig, save_config
+        from pocketteam.constants import DASHBOARD_IMAGE, DASHBOARD_VERSION
+
+        # Minimal project structure
+        claude_dir = tmp_path / CLAUDE_DIR
+        claude_dir.mkdir(parents=True)
+        (claude_dir / "CLAUDE.md").write_text("# Existing\n")
+
+        pt_dir = tmp_path / POCKETTEAM_DIR
+        pt_dir.mkdir(parents=True)
+
+        # Create a compose directory with a file
+        compose_dir = tmp_path / ".pocketteam-compose"
+        compose_dir.mkdir(parents=True)
+        (compose_dir / "docker-compose.yml").write_text("name: test-dashboard\n")
+
+        # Write config with dashboard enabled
+        cfg = PocketTeamConfig(project_root=tmp_path)
+        cfg.project_name = "TestProject"
+        cfg.dashboard = DashboardConfig(
+            enabled=True,
+            port=3847,
+            image=DASHBOARD_IMAGE,
+            image_version=DASHBOARD_VERSION,
+            compose_dir=str(compose_dir),
+            docker_context="default",
+            container_name="testproject-dashboard",
+        )
+        save_config(cfg)
+
+        return compose_dir
+
+    @pytest.mark.asyncio
+    async def test_stops_and_removes_container_when_confirmed(self, tmp_path):
+        from pocketteam.init import run_uninstall
+
+        compose_dir = self._prepare_project_with_dashboard(tmp_path)
+
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch("pocketteam.init.Confirm.ask", return_value=True),
+            patch("pocketteam.init.console"),
+            patch("pocketteam.init.subprocess.run") as mock_run,
+        ):
+            await run_uninstall(keep_artifacts=True)
+
+        # docker stop and docker rm must have been called
+        calls = [str(c) for c in mock_run.call_args_list]
+        assert any("stop" in c for c in calls)
+        assert any("rm" in c for c in calls)
+
+    @pytest.mark.asyncio
+    async def test_removes_compose_dir_when_confirmed(self, tmp_path):
+        from pocketteam.init import run_uninstall
+
+        compose_dir = self._prepare_project_with_dashboard(tmp_path)
+        assert compose_dir.exists()
+
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch("pocketteam.init.Confirm.ask", return_value=True),
+            patch("pocketteam.init.console"),
+            patch("pocketteam.init.subprocess.run"),
+        ):
+            await run_uninstall(keep_artifacts=True)
+
+        assert not compose_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_skips_docker_when_user_declines(self, tmp_path):
+        from pocketteam.init import run_uninstall
+
+        compose_dir = self._prepare_project_with_dashboard(tmp_path)
+        assert compose_dir.exists()
+
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch("pocketteam.init.Confirm.ask", return_value=False),
+            patch("pocketteam.init.console"),
+            patch("pocketteam.init.subprocess.run") as mock_run,
+        ):
+            await run_uninstall(keep_artifacts=True)
+
+        # subprocess.run must NOT have been called with docker stop/rm
+        calls = [str(c) for c in mock_run.call_args_list]
+        assert not any("stop" in c for c in calls)
+        assert not any("rm" in c for c in calls)
+
+    @pytest.mark.asyncio
+    async def test_compose_dir_preserved_when_user_declines(self, tmp_path):
+        from pocketteam.init import run_uninstall
+
+        compose_dir = self._prepare_project_with_dashboard(tmp_path)
+        assert compose_dir.exists()
+
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch("pocketteam.init.Confirm.ask", return_value=False),
+            patch("pocketteam.init.console"),
+            patch("pocketteam.init.subprocess.run"),
+        ):
+            await run_uninstall(keep_artifacts=True)
+
+        assert compose_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_skips_dashboard_removal_when_dashboard_not_enabled(self, tmp_path):
+        """Existing projects without dashboard should not trigger docker calls."""
+        from pocketteam.init import run_uninstall
+
+        # Minimal project without dashboard config
+        claude_dir = tmp_path / CLAUDE_DIR
+        claude_dir.mkdir(parents=True)
+        (claude_dir / "CLAUDE.md").write_text("# Existing\n")
+        pt_dir = tmp_path / POCKETTEAM_DIR
+        pt_dir.mkdir(parents=True)
+        (pt_dir / "config.yaml").write_text("project_name: test")
+
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch("pocketteam.init.Confirm.ask", return_value=True),
+            patch("pocketteam.init.console"),
+            patch("pocketteam.init.subprocess.run") as mock_run,
+        ):
+            await run_uninstall(keep_artifacts=True)
+
+        calls = [str(c) for c in mock_run.call_args_list]
+        assert not any("stop" in c for c in calls)
+        assert not any("rm" in c for c in calls)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # _create_gitignore
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -1364,6 +1364,37 @@ async def run_uninstall(keep_artifacts: bool) -> None:
                 shutil.rmtree(pt_dir)
                 console.print("  ✅ Removed .pocketteam/")
 
+    # 7. Stop and remove dashboard container
+    try:
+        from .config import load_config
+        cfg = load_config(project_root)
+        if cfg.dashboard.enabled and cfg.dashboard.container_name:
+            remove_dashboard = Confirm.ask(
+                "Stop and remove dashboard container?", default=True
+            )
+            if remove_dashboard:
+                ctx = cfg.dashboard.docker_context or "default"
+                cname = cfg.dashboard.container_name
+                subprocess.run(
+                    ["docker", "--context", ctx, "stop", cname],
+                    capture_output=True,
+                    check=False,
+                )
+                subprocess.run(
+                    ["docker", "--context", ctx, "rm", cname],
+                    capture_output=True,
+                    check=False,
+                )
+                console.print(f"  ✅ Dashboard container removed: {cname}")
+                # Remove compose directory
+                if cfg.dashboard.compose_dir:
+                    compose_dir = Path(cfg.dashboard.compose_dir)
+                    if compose_dir.exists():
+                        shutil.rmtree(compose_dir)
+                        console.print(f"  ✅ Removed compose directory: {compose_dir}")
+    except Exception:
+        pass
+
     # Remove Telegram auto-session daemon if installed
     try:
         from .telegram_daemon_plist import uninstall_plist
