@@ -28,6 +28,7 @@ from pocketteam.constants import (
 from pocketteam.init import (
     POCKETTEAM_END,
     POCKETTEAM_START,
+    _build_active_features_summary,
     _copy_skills,
     _create_directories,
     _create_gitignore,
@@ -596,6 +597,43 @@ class TestSetupOptimalDefaults:
         # No settings.json created
         with patch("pathlib.Path.home", return_value=fake_home):
             _setup_optimal_defaults(tmp_path)  # Must not raise
+
+    def test_enables_auto_dream_by_default(self, tmp_path):
+        """_setup_optimal_defaults enables autoDreamEnabled=True in project settings.json."""
+        claude_dir = tmp_path / CLAUDE_DIR
+        claude_dir.mkdir(parents=True)
+        (claude_dir / "settings.json").write_text('{"hooks": {}}')
+
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        with patch("pathlib.Path.home", return_value=fake_home):
+            _setup_optimal_defaults(tmp_path)
+
+        data = json.loads((claude_dir / "settings.json").read_text())
+        assert data.get("autoDreamEnabled") is True
+
+    def test_does_not_overwrite_existing_auto_dream_setting(self, tmp_path):
+        """_setup_optimal_defaults does not override autoDreamEnabled if already set."""
+        claude_dir = tmp_path / CLAUDE_DIR
+        claude_dir.mkdir(parents=True)
+        (claude_dir / "settings.json").write_text('{"autoDreamEnabled": false, "hooks": {}}')
+
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        with patch("pathlib.Path.home", return_value=fake_home):
+            _setup_optimal_defaults(tmp_path)
+
+        data = json.loads((claude_dir / "settings.json").read_text())
+        # Explicit false must be respected — user opted out
+        assert data.get("autoDreamEnabled") is False
+
+    def test_init_tip_not_showing_manual_dream_enable(self, tmp_path):
+        """The init summary must not show 'Tip: Enable Auto Dream via /memory'."""
+        from pocketteam.init import _build_active_features_summary
+        cfg = _minimal_config(tmp_path)
+        features = _build_active_features_summary(cfg, tg_active=False)
+        combined = "\n".join(features)
+        assert "Tip: Enable Auto Dream via /memory" not in combined
 
 
 # ─────────────────────────────────────────────────────────────────────────────
