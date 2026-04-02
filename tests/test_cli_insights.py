@@ -67,6 +67,15 @@ class TestInsightsGroupRegistered:
 # ---------------------------------------------------------------------------
 
 class TestInsightsOn:
+    @pytest.fixture(autouse=True)
+    def mock_scheduler(self, monkeypatch):
+        """Prevent install_scheduler from writing real plists or calling launchctl."""
+        import pocketteam.insights_scheduler as sched_mod
+        import pocketteam.cli as cli_mod
+        monkeypatch.setattr(sched_mod, "install_scheduler", lambda root, cron: True)
+        monkeypatch.setattr(sched_mod, "uninstall_scheduler", lambda root: True)
+        monkeypatch.setattr(cli_mod, "insights_scheduler", sched_mod)
+
     def test_on_enables_insights(self, tmp_path, monkeypatch):
         """'insights on' sets enabled=True in config."""
         _make_project(tmp_path, enabled=False)
@@ -146,6 +155,15 @@ class TestInsightsOn:
 # ---------------------------------------------------------------------------
 
 class TestInsightsOff:
+    @pytest.fixture(autouse=True)
+    def mock_scheduler(self, monkeypatch):
+        """Prevent uninstall_scheduler from calling launchctl."""
+        import pocketteam.insights_scheduler as sched_mod
+        import pocketteam.cli as cli_mod
+        monkeypatch.setattr(sched_mod, "install_scheduler", lambda root, cron: True)
+        monkeypatch.setattr(sched_mod, "uninstall_scheduler", lambda root: True)
+        monkeypatch.setattr(cli_mod, "insights_scheduler", sched_mod)
+
     def test_off_disables_insights(self, tmp_path, monkeypatch):
         """'insights off' sets enabled=False in config."""
         _make_project(tmp_path, enabled=True)
