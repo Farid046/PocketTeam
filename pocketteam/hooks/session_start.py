@@ -17,8 +17,36 @@ from ._utils import _find_pocketteam_dir
 
 
 def _notify_telegram(pt_dir: Path, message: str) -> None:
-    """Send a notification to the CEO via Telegram Bot API."""
+    """Send a notification to the CEO via Telegram Bot API.
+
+    Only fires when Telegram is explicitly configured for THIS project.
+    This prevents notifications leaking into projects that have not set
+    up Telegram (the global ~/.claude/channels/telegram/.env is never
+    sufficient on its own).
+    """
     try:
+        # Project-level gate: check that THIS project has a non-empty chat_id.
+        # We avoid importing yaml to keep hooks lightweight; simple text scan
+        # is safe because we only need to detect an empty/absent value.
+        config_file = pt_dir / "config.yaml"
+        if not config_file.exists():
+            return
+        config_text = config_file.read_text()
+        # Skip if there is no telegram section or chat_id is empty / unset
+        if "telegram:" not in config_text:
+            return
+        # Extract chat_id value via simple parsing (handles both '' and "")
+        chat_id_configured = False
+        for line in config_text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("chat_id:"):
+                value = stripped[len("chat_id:"):].strip().strip("'\"")
+                if value:
+                    chat_id_configured = True
+                break
+        if not chat_id_configured:
+            return
+
         env_file = Path.home() / ".claude" / "channels" / "telegram" / ".env"
         access_file = Path.home() / ".claude" / "channels" / "telegram" / "access.json"
 

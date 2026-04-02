@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.10] - 2026-04-02
+
+### Fixed
+
+- **CRITICAL**: `_notify_telegram` in `session_start.py` now gates on the project-level
+  `config.yaml` before attempting to send. Previously, the hook would send Telegram
+  notifications in ANY project as long as the global `~/.claude/channels/telegram/.env`
+  file existed — even if that project never configured Telegram. Now the function returns
+  early if `config.yaml` is absent, if there is no `telegram:` section, or if `chat_id`
+  is empty. Telegram notifications are strictly opt-in per project.
+
+---
+
+## [1.0.9] - 2026-04-02
+
+---
+
 ## [1.0.8] - 2026-04-02
 
 ### Fixed
