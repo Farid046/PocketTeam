@@ -1133,12 +1133,12 @@ class TestSetupStatusline:
         )
         assert "statusline/index.js" in command
 
-    def test_does_not_overwrite_existing_statusline(self, tmp_path):
-        """If statusLine already exists in settings.json it must not be changed."""
+    def test_updates_stale_statusline_on_reinit(self, tmp_path):
+        """Re-init must fix stale relative paths in statusLine."""
         settings_path = self._make_settings(tmp_path)
-        existing_command = "node /custom/path/index.js"
+        stale_command = "node pocketteam/statusline/index.js"
         settings_path.write_text(
-            json.dumps({"statusLine": {"type": "command", "command": existing_command}})
+            json.dumps({"statusLine": {"type": "command", "command": stale_command}})
         )
 
         fake_pkg_dir = tmp_path / "fakepkg"
@@ -1152,4 +1152,5 @@ class TestSetupStatusline:
             _setup_statusline(tmp_path)
 
         data = json.loads(settings_path.read_text())
-        assert data["statusLine"]["command"] == existing_command
+        assert data["statusLine"]["command"] != stale_command
+        assert str(fake_statusline) in data["statusLine"]["command"]
