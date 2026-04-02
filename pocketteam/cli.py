@@ -120,6 +120,21 @@ def start_resume(ctx: click.Context, session_id: str | None) -> None:
     _launch_claude(no_telegram=no_telegram, resume="pick" if not session_id else "id", session_id=session_id)
 
 
+def _has_existing_session(project_root: Path) -> bool:
+    """Return True if Claude has at least one saved conversation for this project.
+
+    Claude stores per-project conversations in:
+      ~/.claude/projects/<path-encoded-cwd>/*.jsonl
+
+    The path is encoded by replacing all "/" with "-" and stripping the leading "-".
+    """
+    project_key = str(project_root).replace("/", "-").lstrip("-")
+    session_dir = Path.home() / ".claude" / "projects" / project_key
+    if not session_dir.is_dir():
+        return False
+    return any(session_dir.glob("*.jsonl"))
+
+
 def _launch_claude(
     *,
     no_telegram: bool,
@@ -169,8 +184,11 @@ def _launch_claude(
 
     # Session handling
     if resume == "continue":
-        cmd.append("--continue")
-        console.print("[dim]Continuing last session...[/]")
+        if _has_existing_session(root):
+            cmd.append("--continue")
+            console.print("[dim]Continuing last session...[/]")
+        else:
+            console.print("[dim]No previous session found — starting new session...[/]")
     elif resume == "pick":
         cmd.append("--resume")
         console.print("[dim]Opening session picker...[/]")

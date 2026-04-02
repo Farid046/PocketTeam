@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3] - 2026-04-01
+
+### Fixed
+
+- `pocketteam start` no longer exits with "No conversation found to continue" when no previous session exists.
+  The command now detects whether a Claude session exists for the current project (by checking `~/.claude/projects/<project-key>/*.jsonl`) and automatically starts a fresh session instead of passing `--continue` when none is found.
+
+---
+
 ## [1.0.2] - 2026-04-01
 
 ### Fixed
