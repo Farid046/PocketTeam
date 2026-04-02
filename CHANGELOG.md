@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-04-02
+
+### Fixed
+
+- Dashboard auto-pulls from Docker Hub for pipx installations (no source code needed)
+- API key warning softened — subscription mode is fully functional without API key
+- GitHub repo creation handles empty repos gracefully
+- Init no longer crashes when dashboard source is missing
+
+---
+
 ## [1.0.0] - 2026-03-30
 
 ### Added
