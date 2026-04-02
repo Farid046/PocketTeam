@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.0.2] - 2026-04-01
+
+### Fixed
+
+- Dashboard Docker context was passed as executable instead of as `--context` flag; `pull` and `tag` subprocess calls now use `["docker", "--context", detected_context, ...]`
+
 ### Added
 
 - COO delegation-only tool policy: tools restricted to `["Agent"]` via allowlist enforcement

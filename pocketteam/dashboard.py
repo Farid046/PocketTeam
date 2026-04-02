@@ -487,14 +487,14 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
     image_ref = f"{DASHBOARD_REGISTRY_IMAGE}:latest"
     console.print(f"  Pulling dashboard image...")
     pull_result = subprocess.run(
-        [detected_context, "pull", image_ref],
+        ["docker", "--context", detected_context, "pull", image_ref],
         capture_output=True, text=True, timeout=120,
     )
     if pull_result.returncode == 0:
         console.print("  [green]Dashboard image ready.[/]")
         # Tag it as local image name for compose
         subprocess.run(
-            [detected_context, "tag", image_ref, f"{DASHBOARD_IMAGE}:{DASHBOARD_VERSION}"],
+            ["docker", "--context", detected_context, "tag", image_ref, f"{DASHBOARD_IMAGE}:{DASHBOARD_VERSION}"],
             capture_output=True, check=False,
         )
     else:
