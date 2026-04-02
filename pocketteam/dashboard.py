@@ -30,6 +30,7 @@ from .constants import (
     DASHBOARD_IMAGE,
     DASHBOARD_PORT,
     DASHBOARD_PORT_RANGE_END,
+    DASHBOARD_REGISTRY_IMAGE,
     DASHBOARD_VERSION,
 )
 
@@ -259,11 +260,9 @@ def build_image(project_root: Path, context: str) -> None:
     """Build the dashboard Docker image from local source."""
     dashboard_dir = project_root / "dashboard"
     if not dashboard_dir.exists():
-        console.print("[yellow]dashboard/ directory not found.[/]")
-        console.print("Dashboard requires PocketTeam source (git clone) or a pre-built image.")
-        console.print("Skip with: [bold]pocketteam init --no-dashboard[/]")
-        console.print("Or pull image: [bold]docker pull pocketteam-dashboard:latest[/]")
-        raise SystemExit(1)
+        console.print("[yellow]dashboard/ directory not found — cannot build from source.[/]")
+        console.print("  Install later with: [bold]pocketteam dashboard install[/]")
+        return
     console.print("  Building dashboard image (first time ~2 min, cached after)...")
     try:
         subprocess.run(
@@ -484,9 +483,31 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
     # Step 2: Disk space
     check_disk_space(min_mb=600)
 
-    # Step 3: Build image from local source
-    build_image(project_root, detected_context)
-    console.print("  [green]Image ready.[/]")
+    # Step 3: Try to pull pre-built image first (works for pipx installations)
+    image_ref = f"{DASHBOARD_REGISTRY_IMAGE}:latest"
+    console.print(f"  Pulling dashboard image...")
+    pull_result = subprocess.run(
+        [detected_context, "pull", image_ref],
+        capture_output=True, text=True, timeout=120,
+    )
+    if pull_result.returncode == 0:
+        console.print("  [green]Dashboard image ready.[/]")
+        # Tag it as local image name for compose
+        subprocess.run(
+            [detected_context, "tag", image_ref, f"{DASHBOARD_IMAGE}:{DASHBOARD_VERSION}"],
+            capture_output=True, check=False,
+        )
+    else:
+        # Fallback: build from source (only works with git clone)
+        dashboard_dir = project_root / "dashboard"
+        if dashboard_dir.exists():
+            console.print("  [dim]Pull failed, building from source...[/]")
+            build_image(project_root, detected_context)
+            console.print("  [green]Image ready.[/]")
+        else:
+            console.print("  [yellow]Dashboard image not available. Install later with:[/]")
+            console.print("    [bold]pocketteam dashboard install[/]")
+            return  # Don't crash, just skip gracefully
 
     # Step 4: Auto-compute paths + validate
     claude_home = Path.home() / ".claude"

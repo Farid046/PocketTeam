@@ -104,12 +104,25 @@ def create_repo(name: str, private: bool = True, cwd: Path | None = None) -> str
         )
     else:
         # No origin — use --source=. for full setup
+        # Before --push, check if commits exist
+        has_commits = subprocess.run(
+            ["git", "log", "--oneline", "-1"],
+            capture_output=True, cwd=cwd,
+        ).returncode == 0
+
+        flags = [visibility, "--source=."]
+        if has_commits:
+            flags.append("--push")
+
         result = subprocess.run(
-            ["gh", "repo", "create", name, visibility, "--source=.", "--push"],
+            ["gh", "repo", "create", name] + flags,
             capture_output=True, text=True, timeout=60, cwd=cwd,
         )
         if result.returncode != 0:
             raise GitHubSetupError(f"Failed to create repo: {result.stderr.strip()}")
+
+        if not has_commits:
+            console.print("  [dim]Repo created on GitHub. Push after your first commit: git push -u origin main[/]")
 
     return full_repo
 
