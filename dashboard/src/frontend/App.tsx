@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useStore } from "./store/useStore";
 import { useWebSocket } from "./ws/useWebSocket";
 import { ConnectionBadge } from "./components/ConnectionBadge";
@@ -37,6 +37,10 @@ const TABS: { id: ActiveTab; label: string }[] = [
 
 export default function App(): React.ReactElement {
   useWebSocket();
+
+  const projectName = document.querySelector<HTMLMetaElement>('meta[name="pt-project"]')?.content ?? "PocketTeam";
+
+  useEffect(() => { document.title = `${projectName} Dashboard`; }, []);
 
   const agents = useStore((s) => s.agents);
   const events = useStore((s) => s.events);
@@ -79,7 +83,7 @@ export default function App(): React.ReactElement {
         {/* Primary row: always-visible chips */}
         <div className="flex items-center flex-wrap gap-2">
           <h1 className="text-sm font-semibold text-gray-200 tracking-tight">
-            PocketTeam Dashboard
+            {projectName} Dashboard
           </h1>
 
           {sessionLabel && (

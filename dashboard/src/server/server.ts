@@ -31,6 +31,7 @@ export interface PocketTeamServer {
 
 export function createServer(config: ServerConfig): PocketTeamServer {
   const { port, authToken, projectDir, pocketteamDir } = config;
+  const projectName = process.env.PROJECT_NAME || "PocketTeam";
 
   const app = express();
 
@@ -219,7 +220,9 @@ export function createServer(config: ServerConfig): PocketTeamServer {
     let cachedIndexHtml: string | null = null;
     try {
       const raw = fs.readFileSync(indexPath, "utf-8");
-      cachedIndexHtml = raw.replace(/%%POCKETTEAM_TOKEN%%/g, authToken);
+      cachedIndexHtml = raw
+        .replace(/%%POCKETTEAM_TOKEN%%/g, authToken)
+        .replace(/%%POCKETTEAM_PROJECT%%/g, projectName);
     } catch (err) {
       console.error("[server] Failed to read index.html at startup:", err instanceof Error ? err.message : String(err));
     }

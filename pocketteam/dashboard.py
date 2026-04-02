@@ -353,6 +353,7 @@ def generate_compose(
     pocketteam_dir: Path,
     env_file_path: Path,
     container_name: str | None = None,
+    project_name: str = "PocketTeam",
 ) -> str:
     """
     Generate a hardened docker-compose.yml with literal paths.
@@ -381,6 +382,7 @@ services:
       - "{pocketteam_dir}:/data/pocketteam:ro"
     environment:
       - PORT={dash.port}
+      - PROJECT_NAME={project_name}
     env_file:
       - "{env_file_path}"
     read_only: true
@@ -597,6 +599,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
         claude_project_dir=claude_project_dir,
         pocketteam_dir=project_root / ".pocketteam",
         env_file_path=env_file_path,
+        project_name=cfg.project_name or project_root.name,
     )
     compose_file.write_text(compose_content)
     os.chmod(compose_file, 0o600)
@@ -910,6 +913,7 @@ def dashboard_configure_cmd(
         claude_project_dir=claude_project_dir,
         pocketteam_dir=pocketteam_dir,
         env_file_path=env_file_path,
+        project_name=cfg.project_name or Path(cfg.dashboard.project_root).name,
     )
     compose_file.write_text(compose_content)
     os.chmod(compose_file, 0o600)
