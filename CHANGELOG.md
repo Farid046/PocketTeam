@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.11] - 2026-04-02
+
+### Added
+
+- **`pocketteam/insights_scheduler.py`**: Cross-platform OS scheduler for Auto-Insights.
+  - macOS: creates a launchd plist at `~/Library/LaunchAgents/com.pocketteam.insights.plist`
+  - Linux: installs a crontab entry with a `# pocketteam-insights` marker for safe removal
+  - Windows: registers a daily task via `schtasks`
+  - Public API: `install_scheduler(project_root, cron)`, `uninstall_scheduler()`, `scheduler_status()`
+
+### Changed
+
+- **`pocketteam insights on`**: Now calls `install_scheduler()` after saving config instead of
+  printing manual `claude /schedule create` instructions.
+- **`pocketteam insights off`**: Now calls `uninstall_scheduler()` after saving config instead of
+  showing a manual removal URL.
+- **`pocketteam insights status`**: Now displays OS scheduler registration status (platform,
+  registered yes/no, detail string).
+
+### Fixed
+
+- **Telegram "Session gestartet" leaks into unrelated projects**: `_launch_claude()` in `cli.py`
+  now requires `cfg.telegram.chat_id` to be non-empty in addition to `bot_token` before adding
+  `--channels plugin:telegram@claude-plugins-official`. Previously, any project with a resolved
+  `TELEGRAM_BOT_TOKEN` env var would activate the Telegram plugin even if that project never
+  configured a `chat_id`.
+
+---
+
 ## [1.0.10] - 2026-04-02
 
 ### Fixed

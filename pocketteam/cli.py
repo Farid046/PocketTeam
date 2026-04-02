@@ -18,6 +18,8 @@ from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.table import Table
 
+from . import insights_scheduler
+
 logger = logging.getLogger(__name__)
 
 console = Console()
@@ -167,6 +169,7 @@ def _launch_claude(
     tg_active = bool(
         cfg.telegram.bot_token
         and not cfg.telegram.bot_token.startswith("$")
+        and cfg.telegram.chat_id  # project must have explicitly configured a chat_id
         and not no_telegram
     )
 
@@ -749,12 +752,14 @@ def insights_on(cron: str | None) -> None:
     cfg.insights.telegram_notify = bool(cfg.telegram.chat_id)
     save_config(cfg)
 
+    ok = insights_scheduler.install_scheduler(Path.cwd(), cfg.insights.schedule)
     console.print(f"[green]✓[/] Insights enabled (schedule: {cfg.insights.schedule})")
+    if ok:
+        console.print("[green]✓[/] OS scheduler registered successfully.")
+    else:
+        console.print("[yellow]![/] OS scheduler registration failed — run manually: pocketteam insights run")
     console.print()
-    console.print("To create the Remote Agent trigger, run:")
-    console.print(f'  claude /schedule create --cron "{cfg.insights.schedule}" --prompt "Run /self-improve for this project"')
-    console.print()
-    console.print("Or use: pocketteam insights run")
+    console.print("Run manually anytime: pocketteam insights run")
 
 
 @insights.command("off")
@@ -766,10 +771,12 @@ def insights_off() -> None:
     cfg.insights.enabled = False
     save_config(cfg)
 
+    ok = insights_scheduler.uninstall_scheduler()
     console.print("[green]✓[/] Insights disabled.")
-    console.print()
-    console.print("Remember to also remove the Remote Agent trigger at:")
-    console.print("  https://claude.ai/code/scheduled")
+    if ok:
+        console.print("[green]✓[/] OS scheduler entry removed.")
+    else:
+        console.print("[dim]No OS scheduler entry found (already removed or never installed).[/]")
 
 
 @insights.command("status")
@@ -780,11 +787,16 @@ def insights_status() -> None:
 
     cfg = load_config(Path.cwd())
 
+    sched_status = insights_scheduler.scheduler_status()
+    registered_label = "Yes" if sched_status["registered"] else "No"
+    platform_label = sched_status.get("platform", "unknown")
+
     console.print(f"Enabled:    {'Yes' if cfg.insights.enabled else 'No'}")
     console.print(f"Schedule:   {cfg.insights.schedule}")
     console.print(f"Last run:   {cfg.insights.last_run or 'Never'}")
     console.print(f"Telegram:   {'Yes' if cfg.insights.telegram_notify else 'No'}")
     console.print("Auto-apply: No (always requires CEO approval)")
+    console.print(f"OS scheduler ({platform_label}): {registered_label} — {sched_status.get('detail', '')}")
     console.print()
 
     # List recent reports
