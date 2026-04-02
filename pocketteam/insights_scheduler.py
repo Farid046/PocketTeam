@@ -3,8 +3,8 @@ Cross-platform OS scheduler for PocketTeam Auto-Insights.
 
 Public API:
   install_scheduler(project_root, cron) -> bool
-  uninstall_scheduler() -> bool
-  scheduler_status() -> dict[str, ...]
+  uninstall_scheduler(project_root) -> bool
+  scheduler_status(project_root) -> dict[str, ...]
 """
 
 from __future__ import annotations
@@ -13,14 +13,37 @@ import platform
 import subprocess
 from pathlib import Path
 
-# Label used across all platforms to identify PocketTeam's scheduler entry.
-_PLIST_LABEL = "com.pocketteam.insights"
-_PLIST_FILENAME = f"{_PLIST_LABEL}.plist"
-_CRONTAB_MARKER = "# pocketteam-insights"
-_SCHTASKS_TASK_NAME = "PocketTeam-Insights"
-
 # The command the scheduler will run.
 _INSIGHTS_CMD = 'claude --continue -p "Run /self-improve for this project"'
+
+
+# ---------------------------------------------------------------------------
+# Project-specific naming helpers
+# ---------------------------------------------------------------------------
+
+def _plist_label(project_root: Path) -> str:
+    """Return a launchd label unique to this project.
+
+    Format: com.pocketteam.insights.<project-name>
+    """
+    name = project_root.name.lower().replace(" ", "-")
+    return f"com.pocketteam.insights.{name}"
+
+
+def _plist_path(project_root: Path) -> Path:
+    """Return the plist file path for this project."""
+    label = _plist_label(project_root)
+    return Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
+
+
+def _cron_marker(project_root: Path) -> str:
+    """Return the crontab comment marker unique to this project."""
+    return f"# pocketteam-insights-{project_root.name}"
+
+
+def _schtasks_name(project_root: Path) -> str:
+    """Return the Windows Scheduled Task name unique to this project."""
+    return f"PocketTeamInsights-{project_root.name}"
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +75,11 @@ def install_scheduler(project_root: Path, cron: str) -> bool:
         return False
 
 
-def uninstall_scheduler() -> bool:
+def uninstall_scheduler(project_root: Path) -> bool:
     """Remove the PocketTeam insights schedule from the OS scheduler.
+
+    Args:
+        project_root: Absolute path to the project directory.
 
     Returns:
         True if something was removed, False if nothing was installed (never raises).
@@ -61,19 +87,22 @@ def uninstall_scheduler() -> bool:
     try:
         system = platform.system()
         if system == "Darwin":
-            return _uninstall_launchd()
+            return _uninstall_launchd(project_root)
         elif system == "Linux":
-            return _uninstall_crontab()
+            return _uninstall_crontab(project_root)
         elif system == "Windows":
-            return _uninstall_schtasks()
+            return _uninstall_schtasks(project_root)
         else:
-            return _uninstall_crontab()
+            return _uninstall_crontab(project_root)
     except Exception:
         return False
 
 
-def scheduler_status() -> dict[str, object]:
+def scheduler_status(project_root: Path) -> dict[str, object]:
     """Return current scheduler registration status.
+
+    Args:
+        project_root: Absolute path to the project directory.
 
     Returns:
         dict with keys:
@@ -84,13 +113,13 @@ def scheduler_status() -> dict[str, object]:
     try:
         system = platform.system()
         if system == "Darwin":
-            return _status_launchd()
+            return _status_launchd(project_root)
         elif system == "Linux":
-            return _status_crontab()
+            return _status_crontab(project_root)
         elif system == "Windows":
-            return _status_schtasks()
+            return _status_schtasks(project_root)
         else:
-            return _status_crontab()
+            return _status_crontab(project_root)
     except Exception:
         return {"platform": platform.system() or "unknown", "registered": False, "detail": "status check failed"}
 
@@ -98,10 +127,6 @@ def scheduler_status() -> dict[str, object]:
 # ---------------------------------------------------------------------------
 # macOS: launchd
 # ---------------------------------------------------------------------------
-
-def _plist_path() -> Path:
-    return Path.home() / "Library" / "LaunchAgents" / _PLIST_FILENAME
-
 
 def _cron_to_launchd_interval(cron: str) -> tuple[int, int]:
     """Parse 'minute hour * * *' cron into (minute, hour)."""
@@ -115,13 +140,14 @@ def _cron_to_launchd_interval(cron: str) -> tuple[int, int]:
 
 def _build_plist(project_root: Path, minute: int, hour: int) -> str:
     """Build a launchd plist XML string."""
+    label = _plist_label(project_root)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>{_PLIST_LABEL}</string>
+    <string>{label}</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/sh</string>
@@ -148,7 +174,7 @@ def _build_plist(project_root: Path, minute: int, hour: int) -> str:
 
 def _install_launchd(project_root: Path, cron: str) -> bool:
     minute, hour = _cron_to_launchd_interval(cron)
-    plist = _plist_path()
+    plist = _plist_path(project_root)
     plist.parent.mkdir(parents=True, exist_ok=True)
     plist.write_text(_build_plist(project_root, minute, hour))
 
@@ -164,8 +190,8 @@ def _install_launchd(project_root: Path, cron: str) -> bool:
     return True
 
 
-def _uninstall_launchd() -> bool:
-    plist = _plist_path()
+def _uninstall_launchd(project_root: Path) -> bool:
+    plist = _plist_path(project_root)
     if not plist.exists():
         return False
     subprocess.run(
@@ -176,8 +202,8 @@ def _uninstall_launchd() -> bool:
     return True
 
 
-def _status_launchd() -> dict[str, object]:
-    plist = _plist_path()
+def _status_launchd(project_root: Path) -> dict[str, object]:
+    plist = _plist_path(project_root)
     registered = plist.exists()
     detail = str(plist) if registered else "launchd plist not installed"
     return {"platform": "macOS", "registered": registered, "detail": detail}
@@ -208,14 +234,17 @@ def _write_crontab(content: str) -> None:
 
 
 def _install_crontab(project_root: Path, cron: str) -> bool:
+    marker = _cron_marker(project_root)
     existing = _read_crontab()
-    # Remove any previous PocketTeam entry first
+    # Remove any previous entry for this project first
     lines = [
         line for line in existing.splitlines()
-        if _CRONTAB_MARKER not in line and "pocketteam" not in line.lower()
+        if marker not in line and not (
+            "pocketteam" in line.lower() and project_root.name.lower() in line.lower()
+        )
     ]
     new_entry = (
-        f"{_CRONTAB_MARKER}\n"
+        f"{marker}\n"
         f"{cron} cd {project_root} && {_INSIGHTS_CMD}\n"
     )
     updated = "\n".join(lines).rstrip("\n") + "\n" + new_entry
@@ -223,14 +252,15 @@ def _install_crontab(project_root: Path, cron: str) -> bool:
     return True
 
 
-def _uninstall_crontab() -> bool:
+def _uninstall_crontab(project_root: Path) -> bool:
+    marker = _cron_marker(project_root)
     existing = _read_crontab()
-    if _CRONTAB_MARKER not in existing:
+    if marker not in existing:
         return False
     lines = []
     skip_next = False
     for line in existing.splitlines():
-        if _CRONTAB_MARKER in line:
+        if marker in line:
             skip_next = True
             continue
         if skip_next and "pocketteam" in line.lower():
@@ -242,10 +272,11 @@ def _uninstall_crontab() -> bool:
     return True
 
 
-def _status_crontab() -> dict[str, object]:
+def _status_crontab(project_root: Path) -> dict[str, object]:
     try:
+        marker = _cron_marker(project_root)
         existing = _read_crontab()
-        registered = _CRONTAB_MARKER in existing
+        registered = marker in existing
         detail = "crontab entry installed" if registered else "no crontab entry"
         return {"platform": "Linux", "registered": registered, "detail": detail}
     except Exception:
@@ -262,13 +293,14 @@ _SCHTASKS_TRIGGER_TIME_FORMAT = "{hour:02d}:{minute:02d}"
 def _install_schtasks(project_root: Path, cron: str) -> bool:
     minute, hour = _cron_to_launchd_interval(cron)
     trigger_time = _SCHTASKS_TRIGGER_TIME_FORMAT.format(hour=hour, minute=minute)
+    task_name = _schtasks_name(project_root)
     cmd = (
         f'cd /d "{project_root}" && {_INSIGHTS_CMD}'
     )
     subprocess.run(
         [
             "schtasks", "/Create", "/F",
-            "/TN", _SCHTASKS_TASK_NAME,
+            "/TN", task_name,
             "/TR", f'cmd /c "{cmd}"',
             "/SC", "DAILY",
             "/ST", trigger_time,
@@ -279,11 +311,12 @@ def _install_schtasks(project_root: Path, cron: str) -> bool:
     return True
 
 
-def _uninstall_schtasks() -> bool:
+def _uninstall_schtasks(project_root: Path) -> bool:
+    task_name = _schtasks_name(project_root)
     subprocess.run(
         [
             "schtasks", "/Delete", "/F",
-            "/TN", _SCHTASKS_TASK_NAME,
+            "/TN", task_name,
         ],
         check=False,
         capture_output=True,
@@ -291,9 +324,10 @@ def _uninstall_schtasks() -> bool:
     return True
 
 
-def _status_schtasks() -> dict[str, object]:
+def _status_schtasks(project_root: Path) -> dict[str, object]:
+    task_name = _schtasks_name(project_root)
     result = subprocess.run(
-        ["schtasks", "/Query", "/TN", _SCHTASKS_TASK_NAME],
+        ["schtasks", "/Query", "/TN", task_name],
         capture_output=True,
         text=True,
     )

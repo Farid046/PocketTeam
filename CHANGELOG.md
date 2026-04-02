@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.13] - 2026-04-02
+
+### Fixed
+
+- **`pocketteam/insights_scheduler.py`**: Each project now gets its own OS scheduler entry.
+  - Added `_plist_label(project_root)` → `com.pocketteam.insights.<name>` (was a single shared label)
+  - Added `_plist_path(project_root)` → project-specific plist path
+  - Added `_cron_marker(project_root)` → `# pocketteam-insights-<name>` (Linux)
+  - Added `_schtasks_name(project_root)` → `PocketTeamInsights-<name>` (Windows)
+  - `uninstall_scheduler()` and `scheduler_status()` now accept `project_root: Path`
+  - Two projects (e.g. PocketTeam and pttest) no longer overwrite each other's plist
+
+### Changed
+
+- **`pocketteam/init.py`**: Auto Dream is now enabled by default.
+  - `_setup_optimal_defaults()` sets `autoDreamEnabled: true` in `.claude/settings.json` (respects existing value)
+  - Removed "Tip: Enable Auto Dream via /memory" — it is now active from the start
+  - Added "Auto Dream: active" to the init summary feature list
+  - Extracted `_build_active_features_summary(cfg, tg_active)` helper for testability
+
+---
+
 ## [1.0.12] - 2026-04-02
 
 ### Changed

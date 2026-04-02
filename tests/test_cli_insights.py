@@ -597,6 +597,11 @@ class TestInsightsOnHHMM:
         _make_project(tmp_path, enabled=False)
         monkeypatch.chdir(tmp_path)
 
+        import pocketteam.insights_scheduler as sched_mod
+        import pocketteam.cli as cli_mod
+        monkeypatch.setattr(sched_mod, "install_scheduler", lambda root, cron: True)
+        monkeypatch.setattr(cli_mod, "insights_scheduler", sched_mod)
+
         runner = CliRunner()
         result = runner.invoke(main, ["insights", "on", "--cron", "14:00"])
 
@@ -610,6 +615,11 @@ class TestInsightsOnHHMM:
         """Output reflects the converted cron, not raw HH:MM."""
         _make_project(tmp_path, enabled=False)
         monkeypatch.chdir(tmp_path)
+
+        import pocketteam.insights_scheduler as sched_mod
+        import pocketteam.cli as cli_mod
+        monkeypatch.setattr(sched_mod, "install_scheduler", lambda root, cron: True)
+        monkeypatch.setattr(cli_mod, "insights_scheduler", sched_mod)
 
         runner = CliRunner()
         result = runner.invoke(main, ["insights", "on", "--cron", "8:00"])

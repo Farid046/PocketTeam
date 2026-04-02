@@ -771,7 +771,7 @@ def insights_off() -> None:
     cfg.insights.enabled = False
     save_config(cfg)
 
-    ok = insights_scheduler.uninstall_scheduler()
+    ok = insights_scheduler.uninstall_scheduler(Path.cwd())
     console.print("[green]✓[/] Insights disabled.")
     if ok:
         console.print("[green]✓[/] OS scheduler entry removed.")
@@ -787,7 +787,7 @@ def insights_status() -> None:
 
     cfg = load_config(Path.cwd())
 
-    sched_status = insights_scheduler.scheduler_status()
+    sched_status = insights_scheduler.scheduler_status(Path.cwd())
     registered_label = "Yes" if sched_status["registered"] else "No"
     platform_label = sched_status.get("platform", "unknown")
 

@@ -167,21 +167,7 @@ async def run_init(
             pass
 
     # Active features summary
-    features = []
-    features.append("  [green]✓[/] Effort: [bold]medium[/] (balanced reasoning quality)")
-    features.append("  [green]✓[/] Remote Control: [bold]active[/] (claude.ai/code + Mobile)")
-    features.append("  [green]✓[/] Auto Memory: [bold]active[/]")
-    features.append("  [green]✓[/] PocketTeam HUD: [bold]configured[/]")
-    features.append("  [green]✓[/] Safety Hooks: [bold]9-Layer Guardian[/]")
-    if tg_active:
-        features.append("  [green]✓[/] Telegram: [bold]configured[/]")
-    if cfg.github.enabled and cfg.github.repo_name:
-        features.append(f"  [green]✓[/] GitHub: [bold]{cfg.github.repo_owner}/{cfg.github.repo_name}[/]")
-    if cfg.dashboard.enabled:
-        features.append(f"  [green]✓[/] Dashboard: [bold cyan]http://localhost:{cfg.dashboard.port}[/]")
-    if cfg.insights.enabled:
-        features.append(f"  [green]✓[/] Auto-Insights: [bold]{cfg.insights.schedule or '0 22 * * *'}[/]")
-    features.append("  [dim]Tip: Enable Auto Dream via /memory[/]")
+    features = _build_active_features_summary(cfg, tg_active)
 
     # Dynamic next steps
     next_steps = []
@@ -667,19 +653,49 @@ exec bun run "{browse_index.resolve()}" "$@"
             )
 
 
+def _build_active_features_summary(cfg: "PocketTeamConfig", tg_active: bool) -> list[str]:
+    """Build the active-features list shown at the end of init.
+
+    Returns a list of Rich-formatted strings, one per feature line.
+    """
+    features: list[str] = []
+    features.append("  [green]✓[/] Effort: [bold]medium[/] (balanced reasoning quality)")
+    features.append("  [green]✓[/] Remote Control: [bold]active[/] (claude.ai/code + Mobile)")
+    features.append("  [green]✓[/] Auto Memory: [bold]active[/]")
+    features.append("  [green]✓[/] Auto Dream: [bold]active[/]")
+    features.append("  [green]✓[/] PocketTeam HUD: [bold]configured[/]")
+    features.append("  [green]✓[/] Safety Hooks: [bold]9-Layer Guardian[/]")
+    if tg_active:
+        features.append("  [green]✓[/] Telegram: [bold]configured[/]")
+    if cfg.github.enabled and cfg.github.repo_name:
+        features.append(f"  [green]✓[/] GitHub: [bold]{cfg.github.repo_owner}/{cfg.github.repo_name}[/]")
+    if cfg.dashboard.enabled:
+        features.append(f"  [green]✓[/] Dashboard: [bold cyan]http://localhost:{cfg.dashboard.port}[/]")
+    if cfg.insights.enabled:
+        features.append(f"  [green]✓[/] Auto-Insights: [bold]{cfg.insights.schedule or '0 22 * * *'}[/]")
+    return features
+
+
 def _setup_optimal_defaults(project_root: Path) -> None:
     """Set optimal Claude Code defaults for PocketTeam.
 
     - effortLevel: medium (COO is a dispatcher, Planner gets Opus for deep thinking)
+    - autoDreamEnabled: true (long-running background memory consolidation)
     - remoteControlAtStartup: true (in ~/.claude.json)
     """
-    # ── Project settings: effortLevel ────────────────────────────────────
+    # ── Project settings: effortLevel + autoDreamEnabled ─────────────────
     settings_path = project_root / CLAUDE_DIR / "settings.json"
     if settings_path.exists():
         try:
             existing = json.loads(settings_path.read_text())
+            changed = False
             if "effortLevel" not in existing:
                 existing["effortLevel"] = "medium"
+                changed = True
+            if "autoDreamEnabled" not in existing:
+                existing["autoDreamEnabled"] = True
+                changed = True
+            if changed:
                 settings_path.write_text(json.dumps(existing, indent=2))
         except (json.JSONDecodeError, OSError):
             pass
