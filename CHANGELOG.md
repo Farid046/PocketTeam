@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.12] - 2026-04-02
+
+### Changed
+
+- **`pocketteam/init.py`**: Updated Telegram onboarding instructions to reflect the current pairing flow.
+  - Removed outdated pairing-code instructions (5 lines) shown after plugin install success.
+  - Updated `next_steps` hint from `/telegram:access pair <code>` to "Send a message to your bot on Telegram to start remote control."
+  - Updated Step 3 panel "How it works" to remove references to `--channels` flag and manual plugin install step; now clearly states that `pocketteam init` handles setup automatically and directs users to get their Chat ID from `@userinfobot`.
+
+---
+
 ## [1.0.11] - 2026-04-02
 
 ### Added
