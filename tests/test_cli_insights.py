@@ -98,8 +98,8 @@ class TestInsightsOn:
         cfg = load_config(tmp_path)
         assert cfg.insights.schedule == "0 8 * * *"
 
-    def test_on_shows_schedule_command_hint(self, tmp_path, monkeypatch):
-        """'insights on' always prints the Remote Agent trigger hint."""
+    def test_on_shows_scheduler_feedback(self, tmp_path, monkeypatch):
+        """'insights on' shows OS scheduler registration feedback."""
         _make_project(tmp_path)
         monkeypatch.chdir(tmp_path)
 
@@ -107,7 +107,14 @@ class TestInsightsOn:
         result = runner.invoke(main, ["insights", "on"])
 
         assert result.exit_code == 0
-        assert "/schedule" in result.output or "pocketteam insights run" in result.output
+        # Should mention scheduler registration or run hint — not manual /schedule create
+        assert (
+            "scheduler" in result.output.lower()
+            or "pocketteam insights run" in result.output
+            or "registered" in result.output.lower()
+        )
+        # Must NOT suggest manual claude /schedule create command
+        assert "claude /schedule create" not in result.output
 
     def test_on_sets_telegram_notify_when_chat_id_present(self, tmp_path, monkeypatch):
         """'insights on' sets telegram_notify=True when telegram.chat_id is configured."""
@@ -154,8 +161,8 @@ class TestInsightsOff:
         cfg = load_config(tmp_path)
         assert cfg.insights.enabled is False
 
-    def test_off_shows_remove_trigger_hint(self, tmp_path, monkeypatch):
-        """'insights off' reminds the user to remove the Remote Agent trigger."""
+    def test_off_shows_scheduler_feedback(self, tmp_path, monkeypatch):
+        """'insights off' shows OS scheduler removal feedback (not manual instructions)."""
         _make_project(tmp_path, enabled=True)
         monkeypatch.chdir(tmp_path)
 
@@ -163,8 +170,14 @@ class TestInsightsOff:
         result = runner.invoke(main, ["insights", "off"])
 
         assert result.exit_code == 0
-        # Should mention removing the trigger or the scheduled page
-        assert "scheduled" in result.output.lower() or "trigger" in result.output.lower() or "claude.ai" in result.output
+        # Should mention scheduler or removal — not manual claude.ai instructions
+        assert (
+            "scheduler" in result.output.lower()
+            or "removed" in result.output.lower()
+            or "disabled" in result.output.lower()
+        )
+        # Must NOT show manual claude.ai/code/scheduled instructions
+        assert "claude.ai/code/scheduled" not in result.output
 
 
 # ---------------------------------------------------------------------------
