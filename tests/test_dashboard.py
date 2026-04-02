@@ -444,6 +444,70 @@ class TestGenerateComposeContainerName:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# generate_compose — top-level name field (Docker Desktop readable name)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestGenerateComposeProjectName:
+    """The compose file must include a top-level `name:` field so Docker Desktop
+    groups the container under a readable name instead of a hash-derived ID."""
+
+    def _minimal_dash(self, container_name: str = "myproject-dashboard") -> DashboardConfig:
+        return DashboardConfig(
+            enabled=True,
+            port=3847,
+            image=DASHBOARD_IMAGE,
+            image_version=DASHBOARD_VERSION,
+            container_name=container_name,
+        )
+
+    def test_compose_has_top_level_name_field(self):
+        dash = self._minimal_dash(container_name="myproject-dashboard")
+        content = generate_compose(
+            dash=dash,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+        )
+        assert "name: myproject-dashboard" in content
+
+    def test_top_level_name_matches_container_name(self):
+        dash = self._minimal_dash(container_name="acme-dashboard")
+        content = generate_compose(
+            dash=dash,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+        )
+        lines = content.splitlines()
+        name_lines = [l for l in lines if l.startswith("name:")]
+        assert len(name_lines) == 1
+        assert name_lines[0] == "name: acme-dashboard"
+
+    def test_top_level_name_uses_fallback_when_container_name_empty(self):
+        dash = self._minimal_dash(container_name="")
+        content = generate_compose(
+            dash=dash,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+        )
+        assert "name: pocketteam-dashboard" in content
+
+    def test_explicit_container_name_sets_top_level_name(self):
+        dash = self._minimal_dash(container_name="default-dashboard")
+        content = generate_compose(
+            dash=dash,
+            claude_project_dir=Path("/a"),
+            pocketteam_dir=Path("/b"),
+            env_file_path=Path("/c/.env"),
+            container_name="override-dashboard",
+        )
+        assert "name: override-dashboard" in content
+        assert "name: default-dashboard" not in content
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # _write_auth_token
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -368,7 +368,8 @@ def generate_compose(
     image_ref = f"{dash.image}:{dash.image_version}"
     cname = container_name or dash.container_name or "pocketteam-dashboard"
 
-    return f"""version: "3.8"
+    return f"""name: {cname}
+version: "3.8"
 services:
   dashboard:
     image: {image_ref}

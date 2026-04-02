@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.4] - 2026-04-01
+
+### Fixed
+
+- `pocketteam uninstall` now stops and removes the dashboard Docker container and its compose directory.
+  The command asks "Stop and remove dashboard container? [y/n]" before taking action (default: yes).
+  Projects without a dashboard configured are not affected.
+
+- Docker Compose project name is now set explicitly via a top-level `name:` field in the generated
+  `docker-compose.yml`. This prevents Docker Desktop from grouping the container under a hash-derived
+  ID — it now shows the readable container name (e.g. `myproject-dashboard`) as the project group.
+
+---
+
 ## [1.0.3] - 2026-04-01
 
 ### Fixed
