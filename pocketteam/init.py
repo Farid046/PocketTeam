@@ -292,17 +292,24 @@ async def _interview(
     has_bun = shutil.which("bun") is not None
 
     console.print(Panel(
-        "[bold]Step 3/6: Telegram via Claude Code Channels[/]\n\n"
-        "Send tasks to your AI team from your phone via Telegram.\n"
-        "Uses Claude Code's native Channel system (research preview).\n\n"
-        "How it works:\n"
-        "  1. Create a Telegram bot via @BotFather\n"
-        "  2. Paste the bot token — pocketteam init does the rest\n"
-        "  3. Get your Chat ID from @userinfobot on Telegram\n"
-        "  4. Messages to your bot go directly into your Claude Code session\n\n"
+        "[bold]Telegram Remote Control[/]\n\n"
+        "Control PocketTeam from your phone via Telegram.\n\n"
+        "[bold]How to set up:[/]\n"
+        "  [bold]Bot Token:[/]\n"
+        "    1. Open Telegram and search for [bold]@BotFather[/]\n"
+        "    2. Send [bold]/newbot[/]\n"
+        "    3. Choose a name (e.g. 'MyApp PocketTeam')\n"
+        "    4. Choose a username (e.g. 'myapp_pocketteam_bot')\n"
+        "    5. BotFather gives you a token like: [dim]7123456789:AAH...[/]\n\n"
+        "  [bold]Chat ID:[/]\n"
+        "    1. Open Telegram and search for [bold]@userinfobot[/]\n"
+        "    2. Send any message to it\n"
+        "    3. It replies with your Chat ID (a number like [dim]123456789[/])\n\n"
+        "[yellow]Important:[/] Create a project-specific bot!\n"
+        "  You need a separate bot for each PocketTeam project.\n\n"
         f"Current: [{'green' if tg_configured else 'yellow'}]{tg_display}[/]\n"
         f"Bun (required): [{'green' if has_bun else 'red'}]{'installed' if has_bun else 'NOT installed'}[/]",
-        title="[cyan]3[/] Telegram",
+        title="Step 3/6: Telegram (optional)",
         border_style="cyan",
     ))
 
@@ -410,13 +417,16 @@ async def _interview(
                         console.print("     [bold]pocketteam start[/]")
                         console.print()
 
-                    # Also save chat_id if user has it
+                    # Chat ID is required for Telegram to work
                     chat_id = Prompt.ask(
-                        "  Paste your Chat ID for alerts (optional, from @userinfobot)",
+                        "  Paste your Chat ID (get it from @userinfobot on Telegram)",
                         default=cfg.telegram.chat_id or "",
                     )
                     if chat_id:
                         cfg.telegram.chat_id = chat_id
+                    else:
+                        console.print("  [yellow]⚠ Without a Chat ID, Telegram won't work.[/]")
+                        console.print("  [yellow]  Get your Chat ID from @userinfobot on Telegram.[/]")
 
                     console.print("  [green]Telegram setup saved![/]")
                 else:
