@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.6] - 2026-04-02
+
+### Fixed
+
+- Hooks now use `sys.executable` instead of the bare `python` command — fixes broken
+  hooks on macOS (where only `python3` exists) and on pipx installations (where
+  `pocketteam` lives in a venv and `PYTHONPATH=.` never resolved the package).
+  Affected: `_setup_settings_json` in `init.py`, `TestRunner.run_pytest` in
+  `test_runner.py`, and `BrowserTool.run_playwright_tests` in `browser_tools.py`.
+
+---
+
 ## [1.0.5] - 2026-04-02
 
 ### Fixed

@@ -405,9 +405,10 @@ class TestRunPlaywrightTests:
                 test_pattern="tests/e2e/test_*.py"
             )
 
+        import sys
         mock_sub.assert_called_once()
         cmd = mock_sub.call_args[0][0]
-        assert cmd[0] == "python"
+        assert cmd[0] == sys.executable
         assert cmd[1] == "-m"
         assert cmd[2] == "pytest"
         assert str(spec) in cmd
