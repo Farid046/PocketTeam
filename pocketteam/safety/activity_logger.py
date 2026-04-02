@@ -4,7 +4,7 @@ Logs every tool call to .pocketteam/artifacts/audit/{date}.jsonl
 Input is hashed (SHA256) — no raw tool input stored (may contain secrets).
 
 Called by Claude Code's PostToolUse hook in .claude/settings.json:
-  cd /project && PYTHONPATH=. python -m pocketteam.safety post
+  python -m pocketteam.safety post
 """
 
 from __future__ import annotations

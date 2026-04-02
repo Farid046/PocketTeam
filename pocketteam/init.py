@@ -612,9 +612,10 @@ def _setup_statusline(project_root: Path) -> None:
 
     # Only add if not already configured
     if "statusLine" not in existing:
+        node_bin = shutil.which("node") or "node"
         existing["statusLine"] = {
             "type": "command",
-            "command": f"node {statusline_script}",
+            "command": f"{node_bin} {statusline_script}",
         }
         settings_path.write_text(json.dumps(existing, indent=2))
         console.print("  [green]PocketTeam HUD configured[/]")
@@ -656,6 +657,18 @@ exec bun run "{browse_index.resolve()}" "$@"
         console.print(f"  [green]✓[/] ptbrowse installed at [dim]{wrapper_path}[/]")
     except OSError as e:
         console.print(f"  [yellow]⚠[/] ptbrowse wrapper: {e}")
+
+    # Install browse dependencies (node_modules) so playwright-core etc. are available
+    browse_dir = Path(__file__).parent / "browse"
+    if browse_dir.exists() and (browse_dir / "package.json").exists():
+        bun_path = shutil.which("bun")
+        if bun_path:
+            subprocess.run(
+                [bun_path, "install"],
+                cwd=str(browse_dir),
+                capture_output=True,
+                timeout=60,
+            )
 
 
 def _setup_optimal_defaults(project_root: Path) -> None:
