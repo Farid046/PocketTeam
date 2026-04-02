@@ -189,7 +189,7 @@ async def run_init(
         next_steps.append("Start:")
         next_steps.append("  [bold]pocketteam start[/]")
         next_steps.append("")
-        next_steps.append("[dim]First time? DM your bot, then run /telegram:access pair <code>[/]")
+        next_steps.append("[dim]Send a message to your bot on Telegram to start remote control.[/]")
     else:
         next_steps.append("Start:")
         next_steps.append("  [bold]pocketteam start[/]")
@@ -310,9 +310,9 @@ async def _interview(
         "Send tasks to your AI team from your phone via Telegram.\n"
         "Uses Claude Code's native Channel system (research preview).\n\n"
         "How it works:\n"
-        "  1. You create a Telegram bot (@BotFather)\n"
-        "  2. Install the Telegram plugin in Claude Code\n"
-        "  3. Start Claude Code with [bold]--channels[/] flag\n"
+        "  1. Create a Telegram bot via @BotFather\n"
+        "  2. Paste the bot token — pocketteam init does the rest\n"
+        "  3. Get your Chat ID from @userinfobot on Telegram\n"
         "  4. Messages to your bot go directly into your Claude Code session\n\n"
         f"Current: [{'green' if tg_configured else 'yellow'}]{tg_display}[/]\n"
         f"Bun (required): [{'green' if has_bun else 'red'}]{'installed' if has_bun else 'NOT installed'}[/]",
@@ -410,12 +410,6 @@ async def _interview(
 
                     if plugin_ok:
                         console.print("  [green]✅ Telegram plugin installed and configured![/]")
-                        console.print()
-                        console.print("  [bold]After starting, DM your bot on Telegram to pair:[/]")
-                        console.print("     1. Send any message to your bot")
-                        console.print("     2. Bot replies with a pairing code")
-                        console.print("     3. In Claude Code, run: [bold]/telegram:access pair <code>[/]")
-                        console.print("     4. Lock down access: [bold]/telegram:access policy allowlist[/]")
                         console.print()
                     else:
                         console.print("  [yellow]⚠️ Auto-setup failed. Follow these manual steps after init:[/]")
