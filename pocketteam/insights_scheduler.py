@@ -20,7 +20,19 @@ from pathlib import Path
 def _get_claude_path() -> str | None:
     """Find the absolute path to the claude binary."""
     import shutil
-    return shutil.which("claude")
+    path = shutil.which("claude")
+    if path:
+        return path
+    # Fallback: check common install locations (launchd/cron have minimal PATH)
+    for candidate in [
+        Path.home() / ".local" / "bin" / "claude",
+        Path.home() / ".npm-global" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+        Path("/opt/homebrew/bin/claude"),
+    ]:
+        if candidate.exists():
+            return str(candidate)
+    return None
 
 
 # ---------------------------------------------------------------------------

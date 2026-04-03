@@ -361,6 +361,9 @@ class TestInsightsRun:
         monkeypatch.chdir(tmp_path)
 
         monkeypatch.setattr(shutil, "which", lambda name: None)
+        # Block fallback path checks so claude is truly not found
+        _orig_exists = Path.exists
+        monkeypatch.setattr(Path, "exists", lambda self: False if "claude" in str(self) else _orig_exists(self))
 
         runner = CliRunner()
         result = runner.invoke(main, ["insights", "run"])
