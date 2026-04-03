@@ -494,6 +494,7 @@ telegram:
 
         import pocketteam.cli as cli_mod
         monkeypatch.setattr(cli_mod, "insights_scheduler", sched_mod)
+        monkeypatch.setattr(cli_mod, "_schedule_wizard", lambda con: "0 22 * * *")
 
         from click.testing import CliRunner
         from pocketteam.cli import main
@@ -534,6 +535,7 @@ telegram:
 
         import pocketteam.cli as cli_mod
         monkeypatch.setattr(cli_mod, "insights_scheduler", sched_mod)
+        monkeypatch.setattr(cli_mod, "_schedule_wizard", lambda con: "0 22 * * *")
 
         from click.testing import CliRunner
         from pocketteam.cli import main

@@ -43,6 +43,53 @@ def _cron_to_time(cron: str) -> str:
         return f"{int(hour):02d}:{int(minute):02d}"
     return cron  # Complex cron, show as-is
 
+
+def _parse_time(time_str: str) -> tuple[int, int]:
+    """Parse HH:MM (or HH) to (hour, minute)."""
+    parts = time_str.strip().split(":")
+    hour = int(parts[0])
+    minute = int(parts[1]) if len(parts) > 1 else 0
+    return hour, minute
+
+
+def _schedule_wizard(con: Console) -> str:
+    """Interactive schedule wizard. Returns a cron string."""
+    from rich.prompt import Prompt as _Prompt
+
+    con.print()
+    con.print("  [bold]Schedule frequency:[/]")
+    con.print("    1. Daily")
+    con.print("    2. Specific weekdays")
+    con.print("    3. Monthly")
+    freq = _Prompt.ask("  Choose", choices=["1", "2", "3"], default="1")
+
+    if freq == "1":
+        time_str = _Prompt.ask("  Time (HH:MM)", default="22:00")
+        hour, minute = _parse_time(time_str)
+        cron = f"{minute} {hour} * * *"
+        summary = f"Daily at {time_str}"
+
+    elif freq == "2":
+        con.print("  [bold]Select days:[/]")
+        con.print("    Mo=1  Tu=2  We=3  Th=4  Fr=5  Sa=6  Su=0")
+        con.print("    Examples: 1-5 (weekdays), 1,3,5 (Mon/Wed/Fri), 2 (Tuesday)")
+        days = _Prompt.ask("  Days", default="1-5")
+        time_str = _Prompt.ask("  Time (HH:MM)", default="22:00")
+        hour, minute = _parse_time(time_str)
+        cron = f"{minute} {hour} * * {days}"
+        summary = f"Weekdays ({days}) at {time_str}"
+
+    else:  # freq == "3"
+        day_of_month = _Prompt.ask("  Day of month (1-28)", default="1")
+        time_str = _Prompt.ask("  Time (HH:MM)", default="22:00")
+        hour, minute = _parse_time(time_str)
+        cron = f"{minute} {hour} {day_of_month} * *"
+        summary = f"Monthly on day {day_of_month} at {time_str}"
+
+    con.print(f"  [green]✓[/] Schedule: {summary} ({cron})")
+    return cron
+
+
 # Rich color names for each agent role used in log output
 AGENT_COLORS: dict[str, str] = {
     "coo": "yellow",
@@ -749,6 +796,8 @@ def insights_on(cron: str | None) -> None:
             click.echo("Error: Invalid schedule. Use HH:MM (e.g. '14:00') or cron (e.g. '0 22 * * *').")
             raise SystemExit(1)
         cfg.insights.schedule = converted
+    else:
+        cfg.insights.schedule = _schedule_wizard(console)
     cfg.insights.telegram_notify = bool(cfg.telegram.chat_id)
     save_config(cfg)
 
