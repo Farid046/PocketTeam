@@ -13,8 +13,14 @@ import platform
 import subprocess
 from pathlib import Path
 
-# The command the scheduler will run.
-_INSIGHTS_CMD = 'claude --continue -p "Run /self-improve for this project"'
+# ---------------------------------------------------------------------------
+# Claude binary resolution
+# ---------------------------------------------------------------------------
+
+def _get_claude_path() -> str | None:
+    """Find the absolute path to the claude binary."""
+    import shutil
+    return shutil.which("claude")
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +56,11 @@ def _schtasks_name(project_root: Path) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _insights_cmd(claude_path: str) -> str:
+    """Build the insights command with absolute claude path."""
+    return f'{claude_path} --continue -p "Run /self-improve for this project"'
+
+
 def install_scheduler(project_root: Path, cron: str) -> bool:
     """Register the insights schedule with the OS scheduler.
 
@@ -61,16 +72,18 @@ def install_scheduler(project_root: Path, cron: str) -> bool:
         True on success, False on failure (never raises).
     """
     try:
+        claude = _get_claude_path()
+        if not claude:
+            return False
         system = platform.system()
         if system == "Darwin":
-            return _install_launchd(project_root, cron)
+            return _install_launchd(project_root, cron, claude)
         elif system == "Linux":
-            return _install_crontab(project_root, cron)
+            return _install_crontab(project_root, cron, claude)
         elif system == "Windows":
-            return _install_schtasks(project_root, cron)
+            return _install_schtasks(project_root, cron, claude)
         else:
-            # Unknown platform — best effort via crontab
-            return _install_crontab(project_root, cron)
+            return _install_crontab(project_root, cron, claude)
     except Exception:
         return False
 
@@ -138,9 +151,10 @@ def _cron_to_launchd_interval(cron: str) -> tuple[int, int]:
     return minute, hour
 
 
-def _build_plist(project_root: Path, minute: int, hour: int) -> str:
+def _build_plist(project_root: Path, minute: int, hour: int, claude_path: str) -> str:
     """Build a launchd plist XML string."""
     label = _plist_label(project_root)
+    cmd = _insights_cmd(claude_path)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -152,7 +166,7 @@ def _build_plist(project_root: Path, minute: int, hour: int) -> str:
     <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>cd {project_root} &amp;&amp; {_INSIGHTS_CMD}</string>
+        <string>cd {project_root} &amp;&amp; {cmd}</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -172,11 +186,11 @@ def _build_plist(project_root: Path, minute: int, hour: int) -> str:
 """
 
 
-def _install_launchd(project_root: Path, cron: str) -> bool:
+def _install_launchd(project_root: Path, cron: str, claude: str) -> bool:
     minute, hour = _cron_to_launchd_interval(cron)
     plist = _plist_path(project_root)
     plist.parent.mkdir(parents=True, exist_ok=True)
-    plist.write_text(_build_plist(project_root, minute, hour))
+    plist.write_text(_build_plist(project_root, minute, hour, claude))
 
     # Unload old entry silently (ignore errors), then load fresh
     subprocess.run(
@@ -233,8 +247,9 @@ def _write_crontab(content: str) -> None:
     )
 
 
-def _install_crontab(project_root: Path, cron: str) -> bool:
+def _install_crontab(project_root: Path, cron: str, claude: str) -> bool:
     marker = _cron_marker(project_root)
+    cmd = _insights_cmd(claude)
     existing = _read_crontab()
     # Remove any previous entry for this project first
     lines = [
@@ -245,7 +260,7 @@ def _install_crontab(project_root: Path, cron: str) -> bool:
     ]
     new_entry = (
         f"{marker}\n"
-        f"{cron} cd {project_root} && {_INSIGHTS_CMD}\n"
+        f"{cron} cd {project_root} && {cmd}\n"
     )
     updated = "\n".join(lines).rstrip("\n") + "\n" + new_entry
     _write_crontab(updated)
@@ -290,12 +305,13 @@ def _status_crontab(project_root: Path) -> dict[str, object]:
 _SCHTASKS_TRIGGER_TIME_FORMAT = "{hour:02d}:{minute:02d}"
 
 
-def _install_schtasks(project_root: Path, cron: str) -> bool:
+def _install_schtasks(project_root: Path, cron: str, claude: str) -> bool:
     minute, hour = _cron_to_launchd_interval(cron)
     trigger_time = _SCHTASKS_TRIGGER_TIME_FORMAT.format(hour=hour, minute=minute)
     task_name = _schtasks_name(project_root)
+    insights = _insights_cmd(claude)
     cmd = (
-        f'cd /d "{project_root}" && {_INSIGHTS_CMD}'
+        f'cd /d "{project_root}" && {insights}'
     )
     subprocess.run(
         [
