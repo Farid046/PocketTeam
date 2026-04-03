@@ -490,16 +490,9 @@ async def _interview(
 
     if enable_insights:
         cfg.insights.enabled = True
-        default_schedule = cfg.insights.schedule or "0 22 * * *"
-        from pocketteam.cli import _cron_to_time, _parse_schedule_input
-        default_display = _cron_to_time(default_schedule)
-        custom = Prompt.ask(
-            "Daily schedule time [dim](e.g. 14:00 or cron: 0 14 * * *)[/dim]",
-            default=default_display,
-        )
-        cfg.insights.schedule = _parse_schedule_input(custom)
+        from pocketteam.cli import _schedule_wizard
+        cfg.insights.schedule = _schedule_wizard(console)
         cfg.insights.telegram_notify = bool(cfg.telegram.chat_id)
-        console.print(f"[green]✓[/green] Insights scheduled: {cfg.insights.schedule}")
 
         # Install the OS scheduler (launchd/crontab/schtasks)
         from pocketteam.insights_scheduler import install_scheduler

@@ -75,6 +75,8 @@ class TestInsightsOn:
         monkeypatch.setattr(sched_mod, "install_scheduler", lambda root, cron: True)
         monkeypatch.setattr(sched_mod, "uninstall_scheduler", lambda root: True)
         monkeypatch.setattr(cli_mod, "insights_scheduler", sched_mod)
+        # Prevent interactive wizard from blocking tests that don't supply input
+        monkeypatch.setattr(cli_mod, "_schedule_wizard", lambda con: "0 22 * * *")
 
     def test_on_enables_insights(self, tmp_path, monkeypatch):
         """'insights on' sets enabled=True in config."""
@@ -645,3 +647,166 @@ class TestInsightsOnHHMM:
         assert result.exit_code == 0
         # The cron string should appear in output (in the schedule hint)
         assert "0 8 * * *" in result.output
+
+
+# ---------------------------------------------------------------------------
+# _parse_time helper
+# ---------------------------------------------------------------------------
+
+class TestParseTime:
+    """Unit tests for the new _parse_time helper."""
+
+    def test_parse_hhmm_returns_tuple(self):
+        """'22:00' → (22, 0)"""
+        from pocketteam.cli import _parse_time
+        assert _parse_time("22:00") == (22, 0)
+
+    def test_parse_with_minutes(self):
+        """'14:30' → (14, 30)"""
+        from pocketteam.cli import _parse_time
+        assert _parse_time("14:30") == (14, 30)
+
+    def test_parse_midnight(self):
+        """'00:00' → (0, 0)"""
+        from pocketteam.cli import _parse_time
+        assert _parse_time("00:00") == (0, 0)
+
+    def test_parse_strips_whitespace(self):
+        """' 09:15 ' → (9, 15)"""
+        from pocketteam.cli import _parse_time
+        assert _parse_time(" 09:15 ") == (9, 15)
+
+    def test_parse_hour_only(self):
+        """'22' (no colon) → (22, 0)"""
+        from pocketteam.cli import _parse_time
+        assert _parse_time("22") == (22, 0)
+
+
+# ---------------------------------------------------------------------------
+# _schedule_wizard helper
+# ---------------------------------------------------------------------------
+
+class TestScheduleWizard:
+    """Unit tests for the _schedule_wizard shared function."""
+
+    def test_wizard_daily_returns_daily_cron(self):
+        """Selecting daily + 22:00 → '0 22 * * *'"""
+        from pocketteam.cli import _schedule_wizard
+        from rich.console import Console
+        from io import StringIO
+
+        # Simulate: freq=1 (daily), time=22:00
+        inputs = "1\n22:00\n"
+        with Console(file=StringIO()) as con:
+            import io
+            from unittest.mock import patch
+            with patch("rich.prompt.Prompt.ask", side_effect=["1", "22:00"]):
+                result = _schedule_wizard(con)
+        assert result == "0 22 * * *"
+
+    def test_wizard_weekdays_returns_weekday_cron(self):
+        """Selecting weekdays + 1-5 + 15:00 → '0 15 * * 1-5'"""
+        from pocketteam.cli import _schedule_wizard
+        from rich.console import Console
+        from io import StringIO
+        from unittest.mock import patch
+
+        with Console(file=StringIO()) as con:
+            with patch("rich.prompt.Prompt.ask", side_effect=["2", "1-5", "15:00"]):
+                result = _schedule_wizard(con)
+        assert result == "0 15 * * 1-5"
+
+    def test_wizard_monthly_returns_monthly_cron(self):
+        """Selecting monthly + day=1 + 20:00 → '0 20 1 * *'"""
+        from pocketteam.cli import _schedule_wizard
+        from rich.console import Console
+        from io import StringIO
+        from unittest.mock import patch
+
+        with Console(file=StringIO()) as con:
+            with patch("rich.prompt.Prompt.ask", side_effect=["3", "1", "20:00"]):
+                result = _schedule_wizard(con)
+        assert result == "0 20 1 * *"
+
+    def test_wizard_specific_weekdays_comma_list(self):
+        """Selecting weekdays + 2,3 + 18:00 → '0 18 * * 2,3'"""
+        from pocketteam.cli import _schedule_wizard
+        from rich.console import Console
+        from io import StringIO
+        from unittest.mock import patch
+
+        with Console(file=StringIO()) as con:
+            with patch("rich.prompt.Prompt.ask", side_effect=["2", "2,3", "18:00"]):
+                result = _schedule_wizard(con)
+        assert result == "0 18 * * 2,3"
+
+    def test_wizard_monday_only(self):
+        """Selecting weekdays + 1 (Monday only) + 18:00 → '0 18 * * 1'"""
+        from pocketteam.cli import _schedule_wizard
+        from rich.console import Console
+        from io import StringIO
+        from unittest.mock import patch
+
+        with Console(file=StringIO()) as con:
+            with patch("rich.prompt.Prompt.ask", side_effect=["2", "1", "18:00"]):
+                result = _schedule_wizard(con)
+        assert result == "0 18 * * 1"
+
+
+# ---------------------------------------------------------------------------
+# insights on — interactive wizard (no --cron)
+# ---------------------------------------------------------------------------
+
+class TestInsightsOnInteractiveWizard:
+    """Integration tests: 'insights on' without --cron triggers the wizard."""
+
+    @pytest.fixture(autouse=True)
+    def mock_scheduler(self, monkeypatch):
+        import pocketteam.insights_scheduler as sched_mod
+        import pocketteam.cli as cli_mod
+        monkeypatch.setattr(sched_mod, "install_scheduler", lambda root, cron: True)
+        monkeypatch.setattr(cli_mod, "insights_scheduler", sched_mod)
+
+    def test_on_no_cron_calls_wizard(self, tmp_path, monkeypatch):
+        """'insights on' without --cron calls _schedule_wizard and saves result."""
+        _make_project(tmp_path, enabled=False)
+        monkeypatch.chdir(tmp_path)
+
+        import pocketteam.cli as cli_mod
+        wizard_calls = []
+
+        def fake_wizard(con):
+            wizard_calls.append(True)
+            return "0 15 * * 1-5"
+
+        monkeypatch.setattr(cli_mod, "_schedule_wizard", fake_wizard)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["insights", "on"])
+
+        assert result.exit_code == 0
+        assert len(wizard_calls) == 1
+
+        from pocketteam.config import load_config
+        cfg = load_config(tmp_path)
+        assert cfg.insights.schedule == "0 15 * * 1-5"
+
+    def test_on_with_cron_skips_wizard(self, tmp_path, monkeypatch):
+        """'insights on --cron 22:00' does NOT call _schedule_wizard."""
+        _make_project(tmp_path, enabled=False)
+        monkeypatch.chdir(tmp_path)
+
+        import pocketteam.cli as cli_mod
+        wizard_calls = []
+
+        def fake_wizard(con):
+            wizard_calls.append(True)
+            return "0 99 * * *"  # Should never be called
+
+        monkeypatch.setattr(cli_mod, "_schedule_wizard", fake_wizard)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["insights", "on", "--cron", "22:00"])
+
+        assert result.exit_code == 0
+        assert len(wizard_calls) == 0  # Wizard not called
