@@ -214,9 +214,7 @@ def _launch_claude(
         os.environ["PATH"] = f"{bun_dir}:{os.environ['PATH']}"
 
     tg_active = bool(
-        cfg.telegram.bot_token
-        and not cfg.telegram.bot_token.startswith("$")
-        and cfg.telegram.chat_id  # project must have explicitly configured a chat_id
+        cfg.telegram.chat_id  # project must have explicitly configured a chat_id
         and not no_telegram
     )
 
