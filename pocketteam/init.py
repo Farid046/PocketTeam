@@ -500,8 +500,18 @@ async def _interview(
         cfg.insights.schedule = _parse_schedule_input(custom)
         cfg.insights.telegram_notify = bool(cfg.telegram.chat_id)
         console.print(f"[green]✓[/green] Insights scheduled: {cfg.insights.schedule}")
+
+        # Install the OS scheduler (launchd/crontab/schtasks)
+        from pocketteam.insights_scheduler import install_scheduler
+        if install_scheduler(project_root, cfg.insights.schedule):
+            console.print("[green]✓[/green] OS scheduler registered")
+        else:
+            console.print("[yellow]⚠[/] OS scheduler could not be registered. Run manually: pocketteam insights run")
     else:
         cfg.insights.enabled = False
+        # Remove any existing scheduler
+        from pocketteam.insights_scheduler import uninstall_scheduler
+        uninstall_scheduler(project_root)
         console.print("[dim]Insights schedule not enabled. Enable later with: pocketteam insights on[/dim]")
 
     # ── Summary ─────────────────────────────────────────────────────────
