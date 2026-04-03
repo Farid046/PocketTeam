@@ -154,8 +154,16 @@ def handle(hook_input: dict) -> dict:
             pass
 
     # Dedup: Only greet once per session (PreCompact triggers SessionStart again)
+    # If the lock file is older than 60 seconds, it's from a stale session — ignore it
     greeted_file = pt_dir / "session-greeted.lock"
-    already_greeted = greeted_file.exists()
+    already_greeted = False
+    if greeted_file.exists():
+        try:
+            import time
+            age = time.time() - greeted_file.stat().st_mtime
+            already_greeted = age < 60  # Only consider fresh locks (< 60s)
+        except OSError:
+            already_greeted = False
 
     if not unread and not is_automated and not already_greeted:
         _notify_telegram(
