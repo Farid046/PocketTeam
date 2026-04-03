@@ -923,6 +923,17 @@ def insights_run() -> None:
 
     claude_path = shutil.which("claude")
     if not claude_path:
+        # Fallback: check common install locations (launchd has minimal PATH)
+        for candidate in [
+            Path.home() / ".local" / "bin" / "claude",
+            Path.home() / ".npm-global" / "bin" / "claude",
+            Path("/usr/local/bin/claude"),
+            Path("/opt/homebrew/bin/claude"),
+        ]:
+            if candidate.exists():
+                claude_path = str(candidate)
+                break
+    if not claude_path:
         console.print("[red]Claude CLI not found in PATH[/]")
         raise SystemExit(1)
 
