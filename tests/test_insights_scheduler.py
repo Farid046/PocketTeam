@@ -132,8 +132,8 @@ class TestMacOSInstall:
         assert "30" in content
         assert "8" in content
 
-    def test_install_plist_contains_claude_command(self, fake_home, tmp_path, monkeypatch):
-        """Plist references claude --continue -p 'Run /self-improve...'."""
+    def test_install_plist_contains_insights_command(self, fake_home, tmp_path, monkeypatch):
+        """Plist references pocketteam insights run (or claude fallback)."""
         project_root = tmp_path / "myproject"
         project_root.mkdir()
         monkeypatch.setattr(platform, "system", lambda: "Darwin")
@@ -149,8 +149,8 @@ class TestMacOSInstall:
         from pocketteam.insights_scheduler import _plist_path
         plist_path = _plist_path(project_root)
         content = plist_path.read_text()
-        assert "--continue" in content
-        assert "self-improve" in content
+        # Should contain either "pocketteam insights run" or "claude --continue" (fallback)
+        assert "pocketteam" in content or "--continue" in content
 
     def test_uninstall_removes_plist(self, fake_home, tmp_path, monkeypatch):
         """On macOS, uninstall_scheduler removes the plist and calls launchctl unload."""

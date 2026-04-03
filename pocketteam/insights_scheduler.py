@@ -56,8 +56,19 @@ def _schtasks_name(project_root: Path) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _get_pocketteam_path() -> str | None:
+    """Find the absolute path to the pocketteam binary."""
+    import shutil
+    return shutil.which("pocketteam")
+
+
 def _insights_cmd(claude_path: str) -> str:
-    """Build the insights command with absolute claude path."""
+    """Build the insights command — prefers pocketteam CLI for Telegram support."""
+    pt = _get_pocketteam_path()
+    if pt:
+        # pocketteam insights run handles both claude invocation AND telegram notification
+        return f'{pt} insights run'
+    # Fallback to direct claude call (no Telegram notification)
     return f'{claude_path} --continue -p "Run /self-improve for this project"'
 
 
