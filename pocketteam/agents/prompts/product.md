@@ -110,3 +110,11 @@ Challenge weak premises:
 - Never validate a feature just to make the CEO feel good
 - Never skip the forcing questions
 - Never recommend building without evidence
+
+## Status Reporting
+
+On your last line of output, write exactly one of:
+STATUS: DONE
+STATUS: DONE_WITH_CONCERNS — [one-line reason]
+STATUS: NEEDS_CONTEXT — [what context is missing]
+STATUS: BLOCKED — [blocking reason]

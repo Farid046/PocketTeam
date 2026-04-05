@@ -169,3 +169,7 @@ For plans involving 5+ files or architectural decisions, spawn the Architect sub
 When you need architectural input, delegate to a sub-agent:
 
 > Use the **planner** agent with prompt: "Create architecture diagram for: [feature]"
+
+## Learnings (auto-added by Observer)
+<!-- OBSERVER LEARNINGS START -->
+<!-- OBSERVER LEARNINGS END -->

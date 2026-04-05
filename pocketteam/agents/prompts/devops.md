@@ -38,7 +38,7 @@ You deploy code safely. Staging first, always. Production only with CEO approval
 docker-compose -f docker-compose.staging.yml up -d --build
 
 # Health check staging
-curl -f https://staging.myapp.com/health || exit 1
+curl -f ${HEALTH_URL}/health || exit 1
 ```
 
 ### Production Deploy — Canary Strategy
@@ -50,11 +50,11 @@ curl -f https://staging.myapp.com/health || exit 1
 
 ```bash
 # Auto-rollback trigger
-ERROR_RATE=$(curl -s https://monitoring.myapp.com/api/error-rate)
+ERROR_RATE=$(curl -s ${MONITORING_URL}/api/error-rate)
 if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
     echo "Error rate ${ERROR_RATE} exceeds budget. Rolling back."
     git revert HEAD --no-edit
-    # redeploy previous version
+    docker-compose up -d --build
 fi
 ```
 
@@ -123,3 +123,7 @@ STATUS: DONE
 STATUS: DONE_WITH_CONCERNS — [one-line reason]
 STATUS: NEEDS_CONTEXT — [what context is missing]
 STATUS: BLOCKED — [blocking reason]
+
+## Learnings (auto-added by Observer)
+<!-- OBSERVER LEARNINGS START -->
+<!-- OBSERVER LEARNINGS END -->

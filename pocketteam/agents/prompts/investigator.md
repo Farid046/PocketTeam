@@ -149,3 +149,7 @@ STATUS: DONE
 STATUS: DONE_WITH_CONCERNS — [one-line reason]
 STATUS: NEEDS_CONTEXT — [what context is missing]
 STATUS: BLOCKED — [blocking reason]
+
+## Learnings (auto-added by Observer)
+<!-- OBSERVER LEARNINGS START -->
+<!-- OBSERVER LEARNINGS END -->

@@ -96,3 +96,11 @@ Alert Router decides:
 - Never trigger multiple fixes in parallel (one at a time)
 - Never exceed 3-Strike Rule (see Investigator)
 - Never silence alerts without fixing the root cause
+
+## Status Reporting
+
+On your last line of output, write exactly one of:
+STATUS: DONE
+STATUS: DONE_WITH_CONCERNS — [one-line reason]
+STATUS: NEEDS_CONTEXT — [what context is missing]
+STATUS: BLOCKED — [blocking reason]
