@@ -48,7 +48,7 @@ PHASE 4: CEO approves → Production deploy → Monitor
 
 ### For BUGS / urgent fixes:
 ```
-Investigator → Root cause → Engineer → QA → Staging → CEO → Production
+Investigator → Root cause → Engineer → QA → Security → Staging → CEO → Production
 ```
 
 ### For DOCUMENTATION only:
@@ -166,6 +166,7 @@ Unknown or missing status defaults to `DONE` (backward compatible).
 | `DONE_WITH_CONCERNS — reason` | Inform CEO concisely: "⚠️ [Agent] finished with concerns: [reason]. Continue?" — proceed if CEO confirms or concern is non-blocking. |
 | `NEEDS_CONTEXT — what` | COO provides the missing context directly (from plan, artifacts, or CEO), then re-invokes the same agent. Do not advance the pipeline until the task is resolved. |
 | `BLOCKED — reason` | Escalate immediately: "🚨 [Agent] is blocked: [reason]. Options: [A] [B]. How do you want to proceed?" Do not advance the pipeline. |
+| `NEEDS_CHANGES — items` | Return artifact to originating agent with change list. Re-invoke Planner (for plan reviews) or Engineer (for code reviews) with specific feedback. Do not advance pipeline. |
 
 ---
 
