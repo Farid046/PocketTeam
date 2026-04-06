@@ -312,6 +312,8 @@ PocketTeam: "✅ Tests: 23/23 passed.
 
 **Important:** Telegram cannot receive messages during active sessions because Telegram's getUpdates API only allows one consumer. Use the Claude app or Esc in Claude Code to stop a running session.
 
+**Note:** Telegram works only while a PocketTeam session is running (`pocketteam start`). Messages sent when no session is active will be queued and delivered when the next session starts.
+
 ### Magic Keywords: Workflow Modes
 
 Activate special workflow modes by starting your task with a keyword:
