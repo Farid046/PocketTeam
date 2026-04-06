@@ -679,7 +679,7 @@ def _build_active_features_summary(cfg: "PocketTeamConfig", tg_active: bool) -> 
     features.append("  [green]✓[/] PocketTeam HUD: [bold]configured[/]")
     features.append("  [green]✓[/] Safety Hooks: [bold]9-Layer Guardian[/]")
     if tg_active:
-        features.append("  [green]✓[/] Telegram: [bold]configured[/]")
+        features.append("  [green]✓[/] Telegram: [bold]active during sessions[/] (start with `pocketteam start`)")
     if cfg.github.enabled and cfg.github.repo_name:
         features.append(f"  [green]✓[/] GitHub: [bold]{cfg.github.repo_owner}/{cfg.github.repo_name}[/]")
     if cfg.dashboard.enabled:

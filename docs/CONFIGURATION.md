@@ -112,6 +112,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 | `persistent_sessions` | bool | true | Save session state to disk for recovery after restarts. |
 | `auto_resume` | bool | true | Automatically resume a paused task when a new message arrives. |
 
+> **Note:** Telegram works only while a PocketTeam session is running (`pocketteam start`). Messages sent when no session is active will be queued and delivered when the next session starts.
+
 Setup Telegram:
 1. Create a bot with @BotFather on Telegram
 2. Get the bot token
