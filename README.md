@@ -1,7 +1,6 @@
 # PocketTeam
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge" />
   <img alt="Agents" src="https://img.shields.io/badge/agents-12-blue?style=for-the-badge" />
   <img alt="Skills" src="https://img.shields.io/badge/skills-59-purple?style=for-the-badge" />
   <img alt="Safety Layers" src="https://img.shields.io/badge/safety-9_layers-red?style=for-the-badge" />
@@ -23,6 +22,10 @@
 </p>
 
 ---
+
+> **Auto-Insights** — Daily self-improvement reports. PocketTeam analyzes its own performance,
+> identifies friction points, and proposes concrete fixes. Delivered to your Telegram.
+> Nothing is applied without your approval.
 
 ### What You Get
 
