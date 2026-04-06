@@ -199,9 +199,9 @@ def _build_plist(project_root: Path, minute: int, hour: int, claude_path: str) -
         <integer>{minute}</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>{Path.home()}/.pocketteam-insights.log</string>
+    <string>{project_root / ".pocketteam" / "logs" / "insights.stdout.log"}</string>
     <key>StandardErrorPath</key>
-    <string>{Path.home()}/.pocketteam-insights.err</string>
+    <string>{project_root / ".pocketteam" / "logs" / "insights.stderr.log"}</string>
     <key>RunAtLoad</key>
     <false/>
 </dict>
@@ -213,6 +213,9 @@ def _install_launchd(project_root: Path, cron: str, claude: str) -> bool:
     minute, hour = _cron_to_launchd_interval(cron)
     plist = _plist_path(project_root)
     plist.parent.mkdir(parents=True, exist_ok=True)
+    # Ensure project-specific log directory exists before launchd opens it
+    log_dir = project_root / ".pocketteam" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
     plist.write_text(_build_plist(project_root, minute, hour, claude))
 
     # Unload old entry silently (ignore errors), then load fresh

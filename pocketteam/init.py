@@ -720,7 +720,7 @@ def _setup_optimal_defaults(project_root: Path) -> None:
             config = json.loads(global_config.read_text())
         else:
             config = {}
-        if not config.get("remoteControlAtStartup"):
+        if "remoteControlAtStartup" not in config:
             config["remoteControlAtStartup"] = True
             global_config.write_text(json.dumps(config, indent=2))
     except (json.JSONDecodeError, OSError):
@@ -1438,7 +1438,7 @@ async def run_uninstall(keep_artifacts: bool) -> None:
     # Remove Telegram auto-session daemon if installed
     try:
         from .telegram_daemon_plist import uninstall_plist
-        if uninstall_plist():
+        if uninstall_plist(project_root):
             console.print("  Removed Telegram auto-session daemon")
     except Exception:
         pass

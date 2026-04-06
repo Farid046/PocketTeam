@@ -255,6 +255,17 @@ def _launch_claude(
 
     console.print("[green]PocketTeam[/] — 9-layer safety hooks active")
     console.print()
+
+    # Write project-specific bot token to global plugin location before launch.
+    # The Telegram plugin only reads from ~/.claude/channels/telegram/.env, so we
+    # copy the project token there to ensure the right token is used.
+    if tg_active:
+        import shutil
+        plugin_env = Path.home() / ".claude" / "channels" / "telegram" / ".env"
+        project_env = root / ".pocketteam" / "telegram.env"
+        if project_env.exists() and plugin_env.parent.exists():
+            shutil.copy2(project_env, plugin_env)
+
     os.execvp(cmd[0], cmd)
 
 
@@ -863,8 +874,9 @@ def insights_status() -> None:
 def _send_insights_telegram(project_root: Path, content: str) -> None:
     """Send an insights report via Telegram Bot API.
 
-    Reads bot token from ~/.claude/channels/telegram/.env and chat_id from
-    ~/.claude/channels/telegram/access.json (first allowFrom entry).
+    Reads bot token from project-specific .pocketteam/telegram.env first,
+    falling back to ~/.claude/channels/telegram/.env.
+    Reads chat_id from the project config.yaml (telegram.chat_id).
     Truncates content to 4000 characters to stay within Telegram's 4096-char limit.
     Silent (no exception) when Telegram is not configured.
     """
@@ -873,10 +885,12 @@ def _send_insights_telegram(project_root: Path, content: str) -> None:
         import urllib.parse
         import urllib.request
 
-        env_file = Path.home() / ".claude" / "channels" / "telegram" / ".env"
-        access_file = Path.home() / ".claude" / "channels" / "telegram" / "access.json"
+        # Try project-specific token first, fall back to global
+        env_file = project_root / ".pocketteam" / "telegram.env"
+        if not env_file.exists():
+            env_file = Path.home() / ".claude" / "channels" / "telegram" / ".env"
 
-        if not env_file.exists() or not access_file.exists():
+        if not env_file.exists():
             return
 
         bot_token = ""
@@ -888,12 +902,12 @@ def _send_insights_telegram(project_root: Path, content: str) -> None:
         if not bot_token:
             return
 
-        access_data = _json.loads(access_file.read_text())
-        allowed = access_data.get("allowFrom", [])
-        if not allowed:
+        # Read chat_id from project config.yaml
+        from .config import load_config
+        cfg = load_config(project_root)
+        chat_id = cfg.telegram.chat_id
+        if not chat_id:
             return
-
-        chat_id = allowed[0]
 
         # Truncate to Telegram's practical limit (leaving room for header)
         MAX_LENGTH = 4000
