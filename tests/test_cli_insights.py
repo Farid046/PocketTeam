@@ -381,24 +381,19 @@ class TestSendInsightsTelegram:
 
     def test_send_telegram_reads_latest_report_and_calls_api(self, tmp_path, monkeypatch):
         """After a successful run, _send_insights_telegram sends the report content."""
-        import shutil
-        import subprocess
         import urllib.request
 
-        # Set up project with insights dir and a report
-        _make_project(tmp_path)
+        # Set up project with insights dir, report, and chat_id configured
+        _make_project(tmp_path, chat_id="99999")
         insights_dir = tmp_path / ".pocketteam" / "artifacts" / "insights"
         insights_dir.mkdir(parents=True)
         report = insights_dir / "report-2026-04-01.md"
         report.write_text("# Insights\nThis is the report content.")
 
-        # Set up Telegram access files in a temp home
-        fake_home = tmp_path / "home"
-        tg_dir = fake_home / ".claude" / "channels" / "telegram"
-        tg_dir.mkdir(parents=True)
-        (tg_dir / ".env").write_text("TELEGRAM_BOT_TOKEN=fake-token\n")
-        (tg_dir / "access.json").write_text('{"allowFrom": ["99999"]}')
+        # Project-specific token (preferred over global)
+        (tmp_path / ".pocketteam" / "telegram.env").write_text("TELEGRAM_BOT_TOKEN=fake-token\n")
 
+        fake_home = tmp_path / "home"
         monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
 
         # Capture HTTP calls
@@ -408,8 +403,6 @@ class TestSendInsightsTelegram:
             def __enter__(self): return self
             def __exit__(self, *a): pass
             def read(self): return b""
-
-        real_urlopen = urllib.request.urlopen
 
         def fake_urlopen(req, timeout=None):
             requests_made.append(req)
@@ -429,12 +422,11 @@ class TestSendInsightsTelegram:
         """Report content longer than 4000 chars is truncated before sending."""
         import urllib.request
 
-        fake_home = tmp_path / "home"
-        tg_dir = fake_home / ".claude" / "channels" / "telegram"
-        tg_dir.mkdir(parents=True)
-        (tg_dir / ".env").write_text("TELEGRAM_BOT_TOKEN=fake-token\n")
-        (tg_dir / "access.json").write_text('{"allowFrom": ["99999"]}')
+        # Project-specific setup: config with chat_id + project telegram.env
+        _make_project(tmp_path, chat_id="99999")
+        (tmp_path / ".pocketteam" / "telegram.env").write_text("TELEGRAM_BOT_TOKEN=fake-token\n")
 
+        fake_home = tmp_path / "home"
         monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
 
         bodies_sent = []

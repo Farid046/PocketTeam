@@ -8,8 +8,6 @@ messages so the COO sees them immediately.
 
 import json
 import os
-import subprocess
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -47,10 +45,12 @@ def _notify_telegram(pt_dir: Path, message: str) -> None:
         if not chat_id_configured:
             return
 
-        env_file = Path.home() / ".claude" / "channels" / "telegram" / ".env"
-        access_file = Path.home() / ".claude" / "channels" / "telegram" / "access.json"
+        # Try project-specific token first, fall back to global
+        env_file = pt_dir / "telegram.env"
+        if not env_file.exists():
+            env_file = Path.home() / ".claude" / "channels" / "telegram" / ".env"
 
-        if not env_file.exists() or not access_file.exists():
+        if not env_file.exists():
             return
 
         bot_token = ""
@@ -62,13 +62,16 @@ def _notify_telegram(pt_dir: Path, message: str) -> None:
         if not bot_token:
             return
 
-        access_data = json.loads(access_file.read_text())
-        allowed = access_data.get("allowFrom", [])
-        if not allowed:
-            return
+        # Read chat_id from project config.yaml (already checked above)
+        chat_id = ""
+        for line in config_text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("chat_id:"):
+                chat_id = stripped[len("chat_id:"):].strip().strip("'\"")
+                break
 
-        # Send to first allowed user (CEO)
-        chat_id = allowed[0]
+        if not chat_id:
+            return
 
         import urllib.request
         import urllib.parse

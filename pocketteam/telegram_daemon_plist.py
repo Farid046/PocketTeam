@@ -7,8 +7,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-PLIST_LABEL = "com.pocketteam.telegram-daemon"
-PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{PLIST_LABEL}.plist"
+_PLIST_LABEL_BASE = "com.pocketteam.telegram-daemon"
+
+
+def _plist_label(project_root: Path) -> str:
+    """Return a launchd label unique to this project."""
+    project_name = project_root.name.lower().replace(" ", "-")
+    return f"{_PLIST_LABEL_BASE}.{project_name}"
+
+
+def _plist_path(project_root: Path) -> Path:
+    """Return the plist file path for this project."""
+    label = _plist_label(project_root)
+    return Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
 
 
 def is_macos() -> bool:
@@ -20,6 +31,7 @@ def generate_plist(project_root: Path) -> str:
     home = str(Path.home())
     log_dir = project_root / ".pocketteam" / "logs"
     python = sys.executable
+    label = _plist_label(project_root)
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -27,7 +39,7 @@ def generate_plist(project_root: Path) -> str:
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>{PLIST_LABEL}</string>
+  <string>{label}</string>
   <key>ProgramArguments</key>
   <array>
     <string>{python}</string>
@@ -64,37 +76,40 @@ def install_plist(project_root: Path) -> bool:
     if not is_macos():
         return False
 
+    plist_path = _plist_path(project_root)
+
     # Ensure log directory exists before launchd tries to open it
     log_dir = project_root / ".pocketteam" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Unload any previously installed version first
-    if PLIST_PATH.exists():
+    if plist_path.exists():
         subprocess.run(
-            ["launchctl", "unload", str(PLIST_PATH)],
+            ["launchctl", "unload", str(plist_path)],
             capture_output=True,
         )
 
     # Write updated plist
-    PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PLIST_PATH.write_text(generate_plist(project_root))
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_text(generate_plist(project_root))
 
     # Load into launchd
     result = subprocess.run(
-        ["launchctl", "load", str(PLIST_PATH)],
+        ["launchctl", "load", str(plist_path)],
         capture_output=True,
     )
     return result.returncode == 0
 
 
-def uninstall_plist() -> bool:
+def uninstall_plist(project_root: Path) -> bool:
     """Unload and remove the launchd plist. Returns True if something was removed."""
-    if not is_macos() or not PLIST_PATH.exists():
+    plist_path = _plist_path(project_root)
+    if not is_macos() or not plist_path.exists():
         return False
 
     subprocess.run(
-        ["launchctl", "unload", str(PLIST_PATH)],
+        ["launchctl", "unload", str(plist_path)],
         capture_output=True,
     )
-    PLIST_PATH.unlink(missing_ok=True)
+    plist_path.unlink(missing_ok=True)
     return True
