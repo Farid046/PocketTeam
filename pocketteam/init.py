@@ -382,10 +382,26 @@ async def _interview(
                 console.print("  [dim]You need a separate bot for each PocketTeam project.[/dim]")
                 console.print()
 
-                bot_token = Prompt.ask(
-                    "  Paste your bot token (or Enter to skip)",
-                    default=cfg.telegram.bot_token if tg_configured else "",
-                )
+                # Read existing token from .pocketteam/telegram.env (gitignored)
+                existing_token = ""
+                telegram_env_path = project_root / ".pocketteam" / "telegram.env"
+                if telegram_env_path.exists():
+                    for _line in telegram_env_path.read_text().splitlines():
+                        if _line.startswith("TELEGRAM_BOT_TOKEN="):
+                            existing_token = _line.split("=", 1)[1].strip()
+
+                if existing_token:
+                    masked = existing_token[:10] + "..." + existing_token[-4:]
+                    _token_input = Prompt.ask(f"  Bot token", default=masked)
+                    if _token_input == masked:
+                        bot_token = existing_token  # User pressed Enter, keep existing
+                    else:
+                        bot_token = _token_input  # User entered new token
+                else:
+                    bot_token = Prompt.ask(
+                        "  Paste your bot token (or Enter to skip)",
+                        default="",
+                    )
 
                 if bot_token:
                     cfg.telegram = TelegramConfig(
@@ -418,10 +434,14 @@ async def _interview(
                         console.print()
 
                     # Chat ID is required for Telegram to work
-                    chat_id = Prompt.ask(
-                        "  Paste your Chat ID (get it from @userinfobot on Telegram)",
-                        default=cfg.telegram.chat_id or "",
-                    )
+                    existing_chat_id = cfg.telegram.chat_id or ""
+                    if existing_chat_id:
+                        chat_id = Prompt.ask("  Chat ID", default=existing_chat_id)
+                    else:
+                        chat_id = Prompt.ask(
+                            "  Paste your Chat ID (get it from @userinfobot on Telegram)",
+                            default="",
+                        )
                     if chat_id:
                         cfg.telegram.chat_id = chat_id
                     else:
