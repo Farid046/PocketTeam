@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.22] - 2026-04-06
+
+### Added
+
+- Interactive schedule wizard (daily, specific weekdays, monthly)
+- Auto-Insights promoted as top feature in README
+
+### Fixed
+
+- Telegram: project-specific token isolation — no more cross-project token overwriting
+- Telegram: `_send_insights_telegram` and `session_start` read project token first
+- Insights logs now project-specific (`.pocketteam/logs/`)
+- Telegram daemon plist is project-specific
+- `remoteControlAtStartup` only set when not already configured
+- Session greeting dedup lock respects age (stale locks ignored after 60s)
+- Telegram channel activation uses `chat_id` as gate (not broken `$TELEGRAM_BOT_TOKEN` check)
+- Claude path fallback for launchd/cron environments (`~/.local/bin/`, `/usr/local/bin/`)
+- Insights scheduler uses `pocketteam insights run` for Telegram delivery
+- Insights scheduler creates project-specific launchd jobs
+- Init now installs OS scheduler automatically when insights are enabled
+- Tests no longer write real launchd plists
+- Self-improve skill verifies findings against current code before reporting
+- Telegram init instructions updated (no manual pairing needed)
+- Auto-Dream enabled by default
+- Schedule wizard with daily/weekdays/monthly options
+
+---
+
 ## [1.0.13] - 2026-04-02
 
 ### Fixed
