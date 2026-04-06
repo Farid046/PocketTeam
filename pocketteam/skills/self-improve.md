@@ -37,6 +37,31 @@ Gather data from these sources (skip any that are unavailable):
 - Compare current findings against previous run
 - If first run, note "N/A (first run)" for all deltas
 
+### 6. Current Agent Files (for finding verification)
+- Path: `.claude/agents/pocketteam/*.md` and `.claude/skills/pocketteam/*.md`
+- READ these files to verify whether issues mentioned in the previous report still exist
+- NEVER assume a finding is still open without checking the current file content
+
+## Verification of Previous Findings
+
+Before reporting any finding from a previous report as "still open":
+1. READ the affected file(s) mentioned in the finding
+2. CHECK if the issue still exists in the CURRENT version of the file
+3. If fixed → mark as "Resolved since last report"
+4. If still open → include in current report with "Days unresolved: N"
+5. NEVER copy findings from a previous report without verifying them against current code
+
+### Event Stream Parsing
+- Parse `.pocketteam/events/stream.jsonl` as newline-delimited JSON (one JSON object per line)
+- Filter by `ts` field for 7-day window (ISO 8601 timestamps)
+- Count `type: "error"` events per agent; count `type: "agent_start"` and `type: "agent_stop"` for durations
+- If the file is missing or empty, note "event stream: no data" and skip this source
+
+### Cost Data Quality
+- Parse `.pocketteam/costs/*.jsonl` as newline-delimited JSON
+- If cost files are absent or all entries have `cost: 0` / `cost: null`, report "cost data quality: insufficient — token costs may not be instrumented yet" and do NOT extrapolate fake totals
+- Only report a real dollar figure if at least one file contains a non-zero numeric cost value
+
 ## Analysis Steps
 
 1. **Aggregate Metrics**: Total sessions, messages, tool calls, errors, agent utilization
@@ -44,6 +69,7 @@ Gather data from these sources (skip any that are unavailable):
 3. **Agent Performance**: Which agents had errors, retries, or high costs?
 4. **Pattern Trends**: Are known patterns improving (count decreasing) or worsening?
 5. **Delta vs Last Run**: What changed since the last insights report?
+6. **Finding Verification**: For every finding carried over from the previous report, read the referenced file and confirm whether the issue still exists
 
 ## Output
 
@@ -62,6 +88,11 @@ Write the report to `.pocketteam/artifacts/insights/YYYY-MM-DD.md` with this str
 1. [Description] — occurred X times
 2. [Description] — occurred X times
 3. [Description] — occurred X times
+
+## Resolved Since Last Report
+| Finding | File Verified | Status |
+|---|---|---|
+| [Description of previously reported finding] | [path checked] | Resolved / Still open (N days) |
 
 ## Delta vs. Previous Run
 - [Metric] improved/worsened by X%
