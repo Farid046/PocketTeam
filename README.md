@@ -385,11 +385,9 @@ GitHub Actions (runs every hour)
 `pocketteam init` Step 5 handles everything automatically via the `gh` CLI:
 
 1. Creates a GitHub repo (or uses an existing one)
-2. Sets secrets: `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GH_PAT`
+2. Sets secrets: `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
 3. Pushes the monitoring workflow (`pocketteam-monitor.yml`)
 4. Optionally triggers a first test run
-
-The `GH_PAT` secret enables GitHub Actions to install PocketTeam from your private repo.
 
 ---
 
