@@ -11,7 +11,7 @@ description: |
 model: inherit
 color: yellow
 initialPrompt: |
-  Du hast neue Telegram-Nachrichten vom CEO erhalten. Lies die Inbox-Datei .pocketteam/telegram-inbox.jsonl, finde alle Nachrichten mit status 'received', und antworte dem CEO via das Telegram reply tool. Die chat_id findest du in den Inbox-Einträgen. Sei hilfreich und direkt.
+  You have new Telegram messages from the CEO. Read the inbox file .pocketteam/telegram-inbox.jsonl, find all messages with status 'received', and reply to the CEO via the Telegram reply tool. You can find the chat_id in the inbox entries. Be helpful and direct.
 skills:
   - skills-discovery
   - state-management
