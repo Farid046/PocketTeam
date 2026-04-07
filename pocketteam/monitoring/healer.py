@@ -63,12 +63,12 @@ async def handle_health_failure(
         f"INCIDENT {incident_id}: Health check failed.\n"
         f"URL: {health_url}\n"
         f"HTTP Status: {http_status}\n\n"
-        f"Aufgaben:\n"
-        f"1. Analysiere das Problem (prüfe Health-Endpoint, Logs, etc.)\n"
-        f"2. Erstelle einen detaillierten Fix-Plan\n"
-        f"3. Benachrichtige den CEO per Telegram mit dem Plan\n"
-        f"4. Warte auf Genehmigung bevor du irgendetwas umsetzt\n\n"
-        f"WICHTIG: Führe KEINE Änderungen durch. Nur analysieren und planen."
+        f"Tasks:\n"
+        f"1. Analyze the problem (check health endpoint, logs, etc.)\n"
+        f"2. Create a detailed fix plan\n"
+        f"3. Notify the CEO via Telegram with the plan\n"
+        f"4. Wait for approval before implementing anything\n\n"
+        f"IMPORTANT: Do NOT make any changes. Analyze and plan only."
     )
 
     await _notify_telegram(bot_token, chat_id, session_prompt)
@@ -118,13 +118,13 @@ async def handle_log_anomaly(
         f"INCIDENT {incident_id}: Log anomaly detected.\n"
         f"Error count: {error_count}\n"
         f"Errors:\n{error_summary[:2000]}\n\n"
-        f"Aufgaben:\n"
-        f"1. Analysiere die Fehler (was ist die Root Cause?)\n"
-        f"2. Bewerte die Severity (critical/high/medium/low)\n"
-        f"3. Erstelle einen detaillierten Fix-Plan (max 5 Schritte)\n"
-        f"4. Benachrichtige den CEO per Telegram mit dem Plan\n"
-        f"5. Warte auf Genehmigung bevor du irgendetwas umsetzt\n\n"
-        f"WICHTIG: Führe KEINE Änderungen durch. Nur analysieren und planen."
+        f"Tasks:\n"
+        f"1. Analyze the errors (what is the root cause?)\n"
+        f"2. Assess severity (critical/high/medium/low)\n"
+        f"3. Create a detailed fix plan (max 5 steps)\n"
+        f"4. Notify the CEO via Telegram with the plan\n"
+        f"5. Wait for approval before implementing anything\n\n"
+        f"IMPORTANT: Do NOT make any changes. Analyze and plan only."
     )
 
     await _notify_telegram(bot_token, chat_id, session_prompt)

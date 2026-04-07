@@ -171,7 +171,7 @@ def handle(hook_input: dict) -> dict:
     if not unread and not is_automated and not already_greeted:
         _notify_telegram(
             pt_dir,
-            "PocketTeam Session gestartet. Wie kann ich helfen?"
+            "PocketTeam session started. How can I help?"
         )
         try:
             greeted_file.write_text(str(os.getpid()))
