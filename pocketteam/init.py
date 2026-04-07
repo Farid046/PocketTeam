@@ -1382,6 +1382,11 @@ async def run_uninstall(keep_artifacts: bool) -> None:
                 if not hooks[event_type]:
                     del hooks[event_type]
             settings["hooks"] = hooks
+            if "pocketteam" in str(settings.get("agent", "")):
+                del settings["agent"]
+            status_line = settings.get("statusLine", {})
+            if "pocketteam" in str(status_line.get("command", "")):
+                del settings["statusLine"]
             settings_path.write_text(json.dumps(settings, indent=2))
             console.print("  ✅ Removed PocketTeam hooks from settings.json")
         except Exception:
