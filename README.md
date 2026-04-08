@@ -32,7 +32,7 @@
 | | Feature | Description |
 |---|---|---|
 | **12 Agents** | COO, Product, Planner, Reviewer, Engineer, QA, Security, DevOps, Investigator, Documentation, Monitor, Observer |
-| **62 Skills** | From market research to OWASP audits, browser automation to deployment rollbacks |
+| **60 Skills** | From market research to OWASP audits, browser automation to deployment rollbacks |
 | **Auto-Insights** | Daily self-analysis with improvement proposals via Telegram | CEO approval required |
 | **Health Monitoring** | GitHub Actions monitors your app 24/7. On failure: sends Telegram alert and (on macOS) auto-starts a Claude session to diagnose and plan a fix |
 | **3D Dashboard** | Real-time isometric office — see your agents work, track costs, audit safety |
@@ -94,7 +94,7 @@ PocketTeam gives you a full autonomous IT team where:
 | **Monitor** | 24/7 health watcher | Haiku | Health checks every 5 min, log analysis, auto-escalation |
 | **Observer** | Team learner | Haiku | Retrospectives, weekly digests, agent improvement proposals |
 
-### 62 Skills Across the Team
+### 60 Skills Across the Team
 
 PocketTeam agents have 62 specialized skills distributed across product, planning, engineering, QA, security, DevOps, investigation, monitoring, and documentation domains. Skills include everything from market research and task breakdown to browser automation, OWASP audits, database diagnostics, and threat modeling. The skill system is extensible—add custom skills via `.claude/skills/`.
 
@@ -435,7 +435,7 @@ Step 7/7: Auto-Insights Schedule ...... Daily self-improvement proposals (option
 
 After init, your project has:
 - `.claude/agents/pocketteam/` — 12 agent prompts, ready to delegate
-- `.claude/skills/pocketteam/` — 62 skills for every task type
+- `.claude/skills/pocketteam/` — 60 skills for every task type
 - `.claude/settings.json` — 9-layer safety hooks (structural, not prompts)
 - `.pocketteam/config.yaml` — your project configuration
 - `.github/workflows/pocketteam-monitor.yml` — 24/7 health monitoring
@@ -709,7 +709,7 @@ ruff format pocketteam/   # Format
 ### Statistics
 
 - **12 agents** with specialized prompts
-- **62 skills** distributed across agents
+- **60 skills** distributed across agents
 - **~13,000 lines of code** across 78 Python files
 - **Tests** across 21 test files
 - **9 safety layers** blocking 32+ security patterns
