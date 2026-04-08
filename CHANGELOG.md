@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.26] - 2026-04-08
+### Fixed
+- fix: correct skill count in README (was 62, actual is 60)
+
+---
+
 ## [1.0.25] - 2026-04-08
 
 ### Added
