@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.25] - 2026-04-08
+
+### Added
+
+- feat: add `clarify:` magic keyword for iterative intent clarification before planning
+- `clarify:` mode: COO asks 2-4 focused questions per cycle (max 10 cycles), writes summary to `.pocketteam/artifacts/clarifications/`, then passes to Planner
+- Stop words updated to include full set: `stop`/`enough`/`go`/`reicht`/`los`/`passt`/`start`/`genug`
+- `clarify` phase (PHASE 0.25) added to COO pipeline for NEW features
+- `discuss` skill added to COO skills frontmatter
+- `.pocketteam/artifacts/clarifications/` directory added
+
+---
+
 ## [1.0.22] - 2026-04-06
 
 ### Added

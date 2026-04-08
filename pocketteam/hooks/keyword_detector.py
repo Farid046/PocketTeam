@@ -8,6 +8,7 @@ workflow instructions into the prompt:
   ralph: <task>      → Persistent mode: verify/fix loops until ALL tests pass
   quick: <task>      → Skip reviews, go straight to implementation
   deep-dive: <topic> → Spawn 3 parallel Explore agents for thorough research
+  clarify: <task>    → Iterative intent clarification (up to 10 cycles) before planning
 """
 
 KEYWORDS = {
@@ -16,6 +17,7 @@ KEYWORDS = {
     "quick:": "quick",
     "deep-dive:": "deep_dive",
     "deepdive:": "deep_dive",
+    "clarify:": "clarify",
 }
 
 WORKFLOW_INSTRUCTIONS = {
@@ -23,6 +25,7 @@ WORKFLOW_INSTRUCTIONS = {
     "ralph": "RALPH: Implement→Test→Fix loop. Keep going until ALL tests pass (max 5 iterations). Not done until QA reports 100%.",
     "quick": "QUICK: Skip planning/review. Engineer implements directly, QA quick test, report results.",
     "deep_dive": "DEEP DIVE: Spawn 3 parallel Explore agents (codebase, external docs, edge cases). Synthesize findings.",
+    "clarify": "CLARIFY: Iterative intent clarification mode. Ask 2-4 focused questions per cycle. Max 10 cycles. Stop when CEO says 'stop'/'enough'/'go'/'reicht'/'los'/'passt'/'start'/'genug' or after 10 cycles. Write summary to .pocketteam/artifacts/clarifications/, then pass to Planner.",
 }
 
 

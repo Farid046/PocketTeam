@@ -2,7 +2,7 @@
 
 <p align="center">
   <img alt="Agents" src="https://img.shields.io/badge/agents-12-blue?style=for-the-badge" />
-  <img alt="Skills" src="https://img.shields.io/badge/skills-59-purple?style=for-the-badge" />
+  <img alt="Skills" src="https://img.shields.io/badge/skills-62-purple?style=for-the-badge" />
   <img alt="Safety Layers" src="https://img.shields.io/badge/safety-9_layers-red?style=for-the-badge" />
   <img alt="Tests" src="https://img.shields.io/badge/tests-passing-brightgreen?style=for-the-badge" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />
@@ -32,14 +32,14 @@
 | | Feature | Description |
 |---|---|---|
 | **12 Agents** | COO, Product, Planner, Reviewer, Engineer, QA, Security, DevOps, Investigator, Documentation, Monitor, Observer |
-| **59 Skills** | From market research to OWASP audits, browser automation to deployment rollbacks |
+| **62 Skills** | From market research to OWASP audits, browser automation to deployment rollbacks |
 | **Auto-Insights** | Daily self-analysis with improvement proposals via Telegram | CEO approval required |
 | **Health Monitoring** | GitHub Actions monitors your app 24/7. On failure: sends Telegram alert and (on macOS) auto-starts a Claude session to diagnose and plan a fix |
 | **3D Dashboard** | Real-time isometric office — see your agents work, track costs, audit safety |
 | **Telegram Control** | Give tasks, approve deploys, receive alerts — all from your phone |
 | **9-Layer Safety** | Structural hooks (not prompts). Survives context compaction. Cannot be bypassed |
 | **Browser Automation** | `ptbrowse` — uses text accessibility tree instead of screenshots (much smaller token footprint) |
-| **4 Workflow Modes** | `autopilot`, `ralph` (persistent), `quick`, `deep-dive` (parallel research) |
+| **5 Workflow Modes** | `autopilot`, `ralph` (persistent), `quick`, `deep-dive` (parallel research), `clarify` (intent clarification) |
 | **Session Control** | Press Esc in Claude Code to stop a running session immediately |
 | **Zero Config** | `pocketteam init` guides you through everything. 7 steps, done |
 | **Platform Notes** | Telegram-driven auto-session starting is macOS-only (launchd daemon). GitHub Actions health monitoring works on all platforms. Linux users can still receive Telegram alerts and start sessions manually |
@@ -94,9 +94,9 @@ PocketTeam gives you a full autonomous IT team where:
 | **Monitor** | 24/7 health watcher | Haiku | Health checks every 5 min, log analysis, auto-escalation |
 | **Observer** | Team learner | Haiku | Retrospectives, weekly digests, agent improvement proposals |
 
-### 59 Skills Across the Team
+### 62 Skills Across the Team
 
-PocketTeam agents have 59 specialized skills distributed across product, planning, engineering, QA, security, DevOps, investigation, monitoring, and documentation domains. Skills include everything from market research and task breakdown to browser automation, OWASP audits, database diagnostics, and threat modeling. The skill system is extensible—add custom skills via `.claude/skills/`.
+PocketTeam agents have 62 specialized skills distributed across product, planning, engineering, QA, security, DevOps, investigation, monitoring, and documentation domains. Skills include everything from market research and task breakdown to browser automation, OWASP audits, database diagnostics, and threat modeling. The skill system is extensible—add custom skills via `.claude/skills/`.
 
 ### Real-Time 3D Isometric Office Dashboard
 
@@ -327,6 +327,7 @@ Activate special workflow modes by starting your task with a keyword:
 | **Ralph** | `ralph: Task` | Implement → Test loop, keeps going until all tests pass (max 5 iterations) |
 | **Quick** | `quick: Task` | Skip planning, implement directly, quick test (for small fixes) |
 | **Deep-Dive** | `deep-dive: Topic` | Spawn 3 parallel research agents for thorough analysis |
+| **Clarify** | `clarify: Task` | Intent clarification — COO asks questions iteratively (max 10 cycles) before planning |
 
 Example:
 ```
@@ -434,7 +435,7 @@ Step 7/7: Auto-Insights Schedule ...... Daily self-improvement proposals (option
 
 After init, your project has:
 - `.claude/agents/pocketteam/` — 12 agent prompts, ready to delegate
-- `.claude/skills/pocketteam/` — 59 skills for every task type
+- `.claude/skills/pocketteam/` — 62 skills for every task type
 - `.claude/settings.json` — 9-layer safety hooks (structural, not prompts)
 - `.pocketteam/config.yaml` — your project configuration
 - `.github/workflows/pocketteam-monitor.yml` — 24/7 health monitoring
@@ -649,7 +650,7 @@ your-project/
 | Feature | PocketTeam | gstack | Oh-My-ClaudeCode | OpenClaw | CrewAI |
 |---|---|---|---|---|---|
 | **Agents** | 12 | 0 | 32 | 5 | Role-based |
-| **Skills** | 59 | 25 | 28 | 0 | Custom |
+| **Skills** | 62 | 25 | 28 | 0 | Custom |
 | **Browser Automation** | ptbrowse (text-based, lower tokens) | /browse | No | No | No |
 | **Real-time Dashboard** | 3D isometric office | No | No | No | No |
 | **Self-Healing Loop** | Yes (via GitHub Actions + Tunnel) | No | No | No | No |
@@ -708,7 +709,7 @@ ruff format pocketteam/   # Format
 ### Statistics
 
 - **12 agents** with specialized prompts
-- **59 skills** distributed across agents
+- **62 skills** distributed across agents
 - **~13,000 lines of code** across 78 Python files
 - **Tests** across 21 test files
 - **9 safety layers** blocking 32+ security patterns
