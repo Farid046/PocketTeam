@@ -1,7 +1,7 @@
 """
 Safety Layer 3: MCP Tool Safety
 Prevents SQL injection, unauthorized mutations, and dangerous MCP operations.
-Lesson from OpenClaw: MCP tools can bypass normal safety if not checked.
+Known failure mode: MCP tools can bypass normal safety if not checked.
 """
 
 from __future__ import annotations
