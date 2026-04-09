@@ -144,7 +144,7 @@ class TestUnknownToolName:
     def test_unknown_tool_name_not_blocked_by_safety_layers(
         self, project_root: Path, monkeypatch
     ) -> None:
-        """An unknown tool name must not be blocked by safety layers 1-5 or 10.
+        """An unknown tool name must not be blocked by safety layers 1-5.
         Layer 6 (allowlist) blocks it for agents with explicit tool lists,
         so use an explicitly permissive unknown agent_id (no registry entry,
         no allowlist) which defaults to read-only — but that still blocks it.
