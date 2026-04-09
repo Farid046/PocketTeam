@@ -2,7 +2,7 @@
 BaseAgent — wraps the Claude Agent SDK for PocketTeam agents.
 
 Each agent is a thin wrapper around the SDK's ClaudeAgentOptions.
-Safety hooks are applied automatically — agents cannot bypass them.
+Safety hooks are applied automatically — agents are subject to these hooks at runtime.
 All agents log events to the activity stream for the dashboard.
 """
 
