@@ -180,7 +180,7 @@ rl.on("line", (rawLine) => {
     }
   }
 
-  line2Parts.push("\x1b[90mModes: autopilot · ralph · quick · deep-dive\x1b[0m");
+  line2Parts.push("\x1b[90mModes: autopilot · ralph · quick · deep-dive · clarify\x1b[0m");
 
   const line2 = line2Parts.join(" \x1b[90m|\x1b[0m ");
 
