@@ -4,12 +4,16 @@
   <img alt="Agents" src="https://img.shields.io/badge/agents-12-blue?style=for-the-badge" />
   <img alt="Skills" src="https://img.shields.io/badge/skills-62-purple?style=for-the-badge" />
   <img alt="Safety Layers" src="https://img.shields.io/badge/safety-9_layers-red?style=for-the-badge" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-passing-brightgreen?style=for-the-badge" />
+  <a href="https://github.com/Farid046/PocketTeam/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Farid046/PocketTeam/actions/workflows/ci.yml/badge.svg" /></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />
 </p>
 
 <p align="center">
   <strong>Your autonomous AI IT team. Plans, codes, reviews, tests, deploys, and self-heals — all inside Claude Code.</strong>
+</p>
+
+<p align="center">
+  An open-source Claude Code agent framework by a solo developer — actively maintained and used in production.
 </p>
 
 <p align="center">
@@ -37,7 +41,7 @@
 | **Health Monitoring** | GitHub Actions monitors your app 24/7. On failure: sends Telegram alert and (on macOS) auto-starts a Claude session to diagnose and plan a fix |
 | **3D Dashboard** | Real-time isometric office — see your agents work, track costs, audit safety |
 | **Telegram Control** | Give tasks, approve deploys, receive alerts — all from your phone |
-| **9-Layer Safety** | Structural hooks (not prompts). Survives context compaction. Cannot be bypassed |
+| **9-Layer Safety** | Structural hooks (not prompts). Survives context compaction. Defense-in-depth — harder to circumvent than prompt-based rules |
 | **Browser Automation** | `ptbrowse` — uses text accessibility tree instead of screenshots (much smaller token footprint) |
 | **5 Workflow Modes** | `autopilot`, `ralph` (persistent), `quick`, `deep-dive` (parallel research), `clarify` (intent clarification) |
 | **Session Control** | Press Esc in Claude Code to stop a running session immediately |
@@ -54,21 +58,21 @@
 
 ## The Problem (Why We Built This)
 
-AI coding agents are powerful but risky. Here's what went wrong with previous systems:
+AI coding agents are powerful but risky. Here's what goes wrong without the right structure:
 
-- **OpenClaw** deleted 200+ emails because safety constraints lived in conversation context—lost during compaction
 - **Single-agent systems** lose context, skip reviews, forget tests, and make catastrophic production mistakes
 - **Autonomous agents** have executed `DROP DATABASE`, force-pushed to production, and leaked secrets
-- **Weak safety** lives in prompts, which can be manipulated or forgotten
+- **Prompt-based safety** gets lost during context compaction — rules injected into conversation context can be summarized away or forgotten mid-session
+- **No specialization** means one agent does planning, coding, testing, and deployment — with no checks between phases
 
-You need a **team with enterprise-grade safety**, not a solo agent and a prayer.
+You need a **team with production-grade safety**, not a solo agent and a prayer.
 
 ## The Solution
 
 PocketTeam gives you a full autonomous IT team where:
 
 1. **Specialization wins**: 12 specialized agents, each with a clear role and permission model
-2. **Safety is structural**: 9 runtime hooks that survive context compaction and cannot be bypassed
+2. **Safety is structural**: 9 runtime hooks that survive context compaction — defense-in-depth, not prompt suggestions
 3. **You stay in control**: 3 human gates, budget limits, audit trail
 4. **Real-time visibility**: 3D isometric office dashboard showing which agents are working, what they're doing, and costs in real-time
 5. **Cost-optimized**: Runs on Claude Code subscription ($20–$200/month flat) with Haiku for cheap tasks and Opus on-demand
@@ -233,7 +237,7 @@ ptbrowse uses text-based accessibility trees instead of screenshots or full DOM,
 | Screenshot (returns file path) | 20 |
 | **Complete 8-step task** | **~820** |
 
-Screenshot-based and DOM-based browser automation tools typically consume **up to 90x more tokens** for the same tasks — a single page snapshot can cost 20,000+ tokens when the full accessibility tree or DOM is inlined into the conversation context.
+On simple HTML pages (e.g. basic forms), screenshot-based tools may use dramatically more tokens — up to 90x in best-case benchmarks. Real-world gains vary significantly with page complexity. A single page snapshot can cost 20,000+ tokens when full image data or DOM is inlined into the conversation context.
 
 **Why ptbrowse is efficient:**
 - **Accessibility trees** — compact text representation (2–5 KB per page)
@@ -286,7 +290,7 @@ Layer  8: AUDIT LOG          ──── Every decision logged with incident pl
 Layer  9: D-SAC PATTERN      ──── Dry-run → Staged → Approval → Commit for destructive ops
 ```
 
-**Why survive context compaction?** OpenClaw's safety rules lived in the conversation and were forgotten during compaction. PocketTeam's safety is implemented as `.claude/settings.json` hooks that are loaded fresh on every Claude Code session. Prompts cannot override them.
+**Why survive context compaction?** Other frameworks that rely on prompt-level instructions lose their safety rules when the context window compacts during long sessions. PocketTeam's safety is implemented as `.claude/settings.json` hooks that are loaded fresh on every Claude Code session. The model never sees these hooks in its context — they run as pre/post-tool callbacks outside the conversation.
 
 ### Telegram Integration
 
@@ -522,14 +526,14 @@ Phase 4: 24/7 MONITORING (via GitHub Actions)
 
 ### Why 9 Layers?
 
-OpenClaw teaches us that **prompts are not safety**. Their safety constraints lived in conversation context, got lost during compaction, and an agent deleted 200+ emails.
+Prompt-based safety approaches inject rules into conversation context — but context windows compact during long sessions, and those rules can be summarized away or dropped entirely. When that happens, there is no safety check left.
 
 To stop a running session, press Esc in Claude Code — this interrupts the agent immediately.
 
 PocketTeam's safety is:
 - **Structural**: Runtime hooks in `.claude/settings.json`, not conversation context
 - **Persistent**: Survives context compaction, session restarts, agent handoffs
-- **Enforced**: Cannot be "convinced" or "jailbroken"—they are code, not suggestions
+- **Defense-in-depth**: Harder to circumvent than prompt-based rules — they are code callbacks, not model instructions
 
 ### The D-SAC Pattern
 
@@ -645,34 +649,23 @@ your-project/
 
 ---
 
-## Comparison: PocketTeam vs Alternatives
+## Design Choices
 
-| Feature | PocketTeam | gstack | Oh-My-ClaudeCode | OpenClaw | CrewAI |
-|---|---|---|---|---|---|
-| **Agents** | 12 | 0 | 32 | 5 | Role-based |
-| **Skills** | 62 | 25 | 28 | 0 | Custom |
-| **Browser Automation** | ptbrowse (text-based, lower tokens) | /browse | No | No | No |
-| **Real-time Dashboard** | 3D isometric office | No | No | No | No |
-| **Self-Healing Loop** | Yes (via GitHub Actions + Tunnel) | No | No | No | No |
-| **Safety Layers** | 9 (runtime hooks) | 0 | 0 | 8 (context-only) | None |
-| **Safety Architecture** | Runtime hooks (survives compaction) | Prompt-based | Prompt-based | Prompt-based (lost on compaction) | None |
-| **Kill Switch** | < 1 second out-of-band | No | No | Missing | No |
-| **Telegram Integration** | Full control + approvals | No | No | No | No |
-| **Terminal HUD** | 2-line statusline | No | No | No | No |
-| **Magic Keywords** | autopilot/ralph/quick | No | autopilot | No | No |
-| **Session Persistence** | Full transcripts + artifacts | Limited | No | No | No |
-| **Audit Trail** | Every action logged | No | No | No | No |
-| **Open Source** | MIT | MIT | MIT | MIT (insecure) | MIT |
+PocketTeam is one of several Claude Code agent frameworks. Rather than claim feature-by-feature superiority, here is what makes PocketTeam's design distinct:
 
-**OpenClaw footnote:** OpenClaw's 8 safety "layers" were implemented as system-prompt instructions. When Claude's context window compacted during a long session, those instructions were summarized or dropped. An agent proceeded to delete 200+ emails with no safety check triggering. This is a known failure mode of prompt-based safety — it cannot survive context compaction.
+**Runtime safety hooks (not prompt-based rules)**
+Safety is implemented as `.claude/settings.json` hooks that Claude Code loads and executes as pre/post-tool callbacks — outside the model's context window. This means they survive context compaction. Frameworks that rely on prompt-level instructions lose those rules when the context compacts during long sessions. PocketTeam's approach is defense-in-depth: harder to circumvent, though not a complete security guarantee.
 
-**Comparison disclaimer:** Numbers in the table above are approximate and based on publicly available documentation as of March 2026. Feature availability may vary with updates.
+**Text-based browser automation via accessibility trees**
+`ptbrowse` uses Playwright's accessibility tree instead of screenshots. This produces compact text representations of pages (2–5 KB) rather than image data (often 20,000+ tokens per screenshot). The token savings are real but vary significantly with page complexity — simple forms show the largest gains.
 
-### Production Safety: The Critical Difference
+**Structured multi-agent pipeline with human approval gates**
+Rather than a single agent doing everything, PocketTeam routes work through specialized agents (Planner, Reviewer, Engineer, QA, Security, DevOps) with explicit human approval gates before code is written and before deployment. This adds latency but reduces the risk of silent mistakes.
 
-Most agent frameworks treat safety as a conversation concern: they inject rules into the system prompt and hope the model follows them. This works until it doesn't.
+**Observable by design**
+The 3D dashboard, audit log, and Telegram integration are not add-ons — they are core to the design. Every tool call is logged with the agent, decision, and reason. You can see what your AI team is doing in real time.
 
-PocketTeam treats safety as an infrastructure concern. Every tool call — regardless of which agent makes it, regardless of context window state — passes through `.claude/settings.json` runtime hooks before execution. These hooks are loaded fresh by Claude Code on every session start and run as pre/post-tool callbacks outside the model's context. The model cannot read, modify, or reason about them.
+These are trade-offs, not universal wins. If you want a simpler setup or different priorities, other frameworks in the ecosystem (gstack, Oh-My-ClaudeCode, CrewAI) may be a better fit.
 
 ---
 
@@ -817,21 +810,6 @@ Then remove the Remote Agent trigger at [claude.ai/code/scheduled](https://claud
 - Never modifies agent prompts directly
 - Never accesses data outside the project scope
 - `auto_apply` is hard-coded to `False` and cannot be overridden
-
----
-
-## Self-Improvement: PocketTeam Builds Itself
-
-PocketTeam was designed to improve itself. Run `pocketteam init` in its own repo and watch:
-
-1. **Planner** creates a plan to improve test coverage
-2. **Engineer** implements the changes
-3. **QA** verifies nothing broke
-4. **Security** audits for new vulnerabilities
-5. **Observer** learns from the process and improves agent prompts
-6. Next task, the agents are better
-
-Auto-Insights automates this loop — every day, without you having to ask.
 
 ---
 
