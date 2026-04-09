@@ -16,7 +16,8 @@ venv/
 # When bootstrapping, they live here but are never committed.
 .pocketteam/
 .claude/
-.github/
+# .github/ is needed for CI (GitHub Actions) — do NOT ignore it
+# User projects get their own .gitignore via `pocketteam init`
 .mcp.json
 
 # Node / Dashboard
