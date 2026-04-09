@@ -369,6 +369,15 @@ def generate_compose(
     image_ref = f"{dash.image}:{dash.image_version}"
     cname = container_name or dash.container_name or "pocketteam-dashboard"
 
+    # Use the current user's UID/GID so the container can read bind-mounted
+    # directories that have restrictive permissions (e.g. ~/.claude/projects/
+    # which is drwx------ on macOS).  Falls back to 1001:1001 if lookup fails.
+    try:
+        host_uid = os.getuid()
+        host_gid = os.getgid()
+    except AttributeError:
+        host_uid, host_gid = 1001, 1001
+
     return f"""name: {cname}
 version: "3.8"
 services:
@@ -388,7 +397,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    user: "1001:1001"
+    user: "{host_uid}:{host_gid}"
     security_opt:
       - no-new-privileges:true
     cap_drop:

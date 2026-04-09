@@ -27,17 +27,43 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
     }
   }
 
+  // Ensure all 12 roles are always visible (idle placeholder if not spawned)
+  const ALL_ROLES = [
+    "product", "planner", "reviewer", "engineer", "qa", "security",
+    "investigator", "documentation", "devops", "monitor", "observer",
+    "researcher",
+  ];
+  const zeroTokens = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
+  for (const role of ALL_ROLES) {
+    if (!agentsByRole.has(role)) {
+      agentsByRole.set(role, {
+        id: `placeholder-${role}`,
+        role,
+        agentType: role,
+        description: role.charAt(0).toUpperCase() + role.slice(1),
+        status: "idle",
+        startedAt: new Date(0).toISOString(),
+        lastActivity: new Date(0).toISOString(),
+        toolCallCount: 0,
+        messageCount: 0,
+        sessionId: "",
+        sessionActive: false,
+        tokenUsage: { ...zeroTokens },
+        model: "",
+        gitBranch: "",
+      });
+    }
+  }
+
   const hasAnyActive = agents.some(
     (a) => a.status === "working" || a.status === "done"
-  );
+  ) || agents.length > 0 || agentsByRole.size > 0;
 
   // COO is the main session — use real activity from main session JSONL
-  if (hasAnyActive && !agentsByRole.has("coo")) {
+  if (!agentsByRole.has("coo")) {
     const anySubagentWorking = agents.some((a) => a.status === "working");
-    // COO is "working" when main session JSONL written in last 60s OR a subagent is working
     const cooIsActive = (cooActivity?.isActive ?? false) || anySubagentWorking;
-    const cooStatus = cooIsActive ? "working" : "done";
-    const zeroTokens = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
+    const cooStatus = cooIsActive ? "working" : agents.length > 0 ? "done" : "idle";
 
     agentsByRole.set("coo", {
       id: "coo-main-session",
@@ -51,7 +77,7 @@ export function OfficeView({ agents, events }: Props): React.ReactElement {
       messageCount: cooActivity?.messageCount ?? 0,
       sessionId: agents[0]?.sessionId ?? "",
       sessionActive: cooActivity?.isActive ?? false,
-      tokenUsage: cooActivity?.tokenUsage ?? zeroTokens,
+      tokenUsage: cooActivity?.tokenUsage ?? { ...zeroTokens },
       model: cooActivity?.model ?? "",
       gitBranch: cooActivity?.gitBranch ?? "",
     });
