@@ -15,7 +15,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from ..utils import append_jsonl
+from ..jsonl import append_jsonl
 
 
 def _find_project_root() -> Path | None:

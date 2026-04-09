@@ -9,7 +9,7 @@ restarts, context compression, or plan mode.
 import os
 from datetime import UTC, datetime
 
-from ..utils import append_jsonl
+from ..jsonl import append_jsonl
 from ._utils import _find_pocketteam_dir
 
 

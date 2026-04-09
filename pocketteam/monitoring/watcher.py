@@ -25,7 +25,7 @@ from ..constants import (
     RESPONSE_TIME_THRESHOLD,
 )
 from ..tools.health_check import HealthChecker, HealthResult, LogAnalyzer
-from ..utils import append_jsonl
+from ..jsonl import append_jsonl
 
 logger = logging.getLogger(__name__)
 

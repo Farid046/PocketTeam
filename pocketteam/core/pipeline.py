@@ -350,7 +350,7 @@ class Pipeline:
         import time
         try:
             from ..constants import EVENTS_FILE
-            from ..utils import append_jsonl
+            from ..jsonl import append_jsonl
             events_path = self.context.project_root / EVENTS_FILE
             event = {
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),

@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 
-from ..utils import append_jsonl
+from ..jsonl import append_jsonl
 
 
 def log_activity(
