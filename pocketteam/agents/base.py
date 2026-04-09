@@ -170,7 +170,7 @@ class BaseAgent(ABC):
         - Requires ANTHROPIC_API_KEY (costs per token)
 
         Wires in: model, budget, turn limits, system prompt, per-agent tool
-        allowlist (Layer 6), safety guardian via can_use_tool (Layers 1-6, 10).
+        allowlist (Layer 6), safety guardian via can_use_tool (Layers 1-9).
         """
         from claude_agent_sdk import (  # type: ignore[import]
             AssistantMessage,

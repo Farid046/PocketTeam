@@ -2,7 +2,7 @@
 
 <p align="center">
   <img alt="Agents" src="https://img.shields.io/badge/agents-12-blue?style=for-the-badge" />
-  <img alt="Skills" src="https://img.shields.io/badge/skills-62-purple?style=for-the-badge" />
+  <img alt="Skills" src="https://img.shields.io/badge/skills-60-purple?style=for-the-badge" />
   <img alt="Safety Layers" src="https://img.shields.io/badge/safety-9_layers-red?style=for-the-badge" />
   <a href="https://github.com/Farid046/PocketTeam/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Farid046/PocketTeam/actions/workflows/ci.yml/badge.svg" /></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" />

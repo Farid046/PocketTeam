@@ -27,7 +27,7 @@ OpenClaw failures we must NEVER repeat:
 PocketTeam countermeasures:
 - Safety lives in settings.json hooks (runtime, not conversation)
 - MCP tools checked BEFORE execution (Layer 3)
-- Kill switch is a file-watch thread, not a chat command (Layer 10)
+- Layer 10 (file-watch kill switch) was removed — sessions are stopped via Esc in Claude Code
 - No skill marketplace (no external skill installation)
 - Domain allowlist blocks exfiltration (Layer 4)
 - D-SAC pattern for all destructive ops (Layer 9)
