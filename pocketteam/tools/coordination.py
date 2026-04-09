@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from ..constants import EVENTS_FILE
-from ..utils import append_jsonl
+from ..jsonl import append_jsonl
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data structures

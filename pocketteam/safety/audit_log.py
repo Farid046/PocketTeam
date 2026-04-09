@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from ..constants import AUDIT_DIR
-from ..utils import append_jsonl
+from ..jsonl import append_jsonl
 
 
 class SafetyDecision(StrEnum):

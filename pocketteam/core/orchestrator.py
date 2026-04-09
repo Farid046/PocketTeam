@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..constants import EVENTS_FILE
-from ..utils import append_jsonl
+from ..jsonl import append_jsonl
 from .context import SharedContext
 from .pipeline import Pipeline
 

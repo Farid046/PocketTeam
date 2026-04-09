@@ -33,7 +33,7 @@ def _write_event(event: dict) -> None:
     if not stream:
         return
     # Import here to avoid circular imports; this module is used as a standalone hook
-    from ..utils import append_jsonl
+    from ..jsonl import append_jsonl
     append_jsonl(stream, event, default=str)
 
 

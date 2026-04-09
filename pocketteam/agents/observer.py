@@ -292,7 +292,7 @@ class ObserverAgent(BaseAgent):
 
     def _emit_finding_event(self, patterns: list[dict]) -> None:
         """Write an observer observation event to the event stream."""
-        from ..utils import append_jsonl
+        from ..jsonl import append_jsonl
 
         events_path = self.project_root / EVENTS_FILE
         summary = "; ".join(p.get("pattern", "")[:40] for p in patterns[:5])
