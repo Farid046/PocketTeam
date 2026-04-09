@@ -861,7 +861,7 @@ If CEO says no → ask what to change. Never proceed without approval.
 
 ## Safety Rules (ABSOLUTE — enforced by hooks, not prompts)
 - Safety hooks in `.claude/settings.json` run on EVERY tool call automatically
-- You cannot bypass them — they are runtime hooks, not conversation instructions
+- These hooks run on every tool call and are enforced at runtime, not via conversation instructions. They provide defense-in-depth — harder to circumvent than prompt-based rules, but not a hard guarantee against all possible workarounds.
 - Never write to .env, .ssh, .aws, *.pem, *.key files
 - Never run: rm -rf /, DROP DATABASE, TRUNCATE, fork bombs
 - Always staging-first for production fixes
