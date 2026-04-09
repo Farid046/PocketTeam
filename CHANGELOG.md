@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.27] - 2026-04-09
+### Fixed
+- README overhaul: removed dishonest marketing claims, OpenClaw fear-selling, biased comparison table
+- Replaced "cannot be bypassed" safety claims with honest "defense-in-depth" language (6 locations)
+- Qualified ptbrowse "90x" benchmark claim (best-case on simple HTML, not universal)
+- Skills badge corrected (62 → 60)
+- Stale Layer 10 references removed from tests and agent docstrings
+- Static CI badge replaced with dynamic GitHub Actions badge
+- Dashboard: fixed Docker container UID mismatch (host UID instead of hardcoded 1001:1001)
+- Dashboard: all 12 agent roles now always visible (idle placeholders when not yet spawned)
+- Statusline: added `clarify` to magic keywords display
+
+### Changed
+- Renamed `pocketteam/utils.py` → `pocketteam/jsonl.py` (backwards-compat shim kept)
+- Deleted empty stub test `test_safety_layer10.py`
+
+### Added
+- `.github/workflows/ci.yml` — real CI with pytest on Python 3.11 and 3.12
+
+---
+
 ## [1.0.26] - 2026-04-08
 ### Fixed
 - fix: correct skill count in README (was 62, actual is 60)
