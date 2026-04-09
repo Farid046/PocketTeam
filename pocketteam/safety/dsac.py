@@ -3,8 +3,8 @@ Safety Layer 9: D-SAC Pattern
 Dry-run -> Staged -> Approval -> Commit
 
 For ALL destructive operations that are plan-approved (Layer 2 passed).
-Prevents the OpenClaw email-deletion scenario:
-  "200+ emails deleted because there was no dry-run step"
+Prevents the prompt-based-safety failure mode:
+  "Destructive action executed with no dry-run step because safety constraints were lost"
 
 Approval tokens are:
   - Time-limited (5 min)

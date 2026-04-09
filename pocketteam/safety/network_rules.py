@@ -1,7 +1,7 @@
 """
 Safety Layer 4: Network Safety
 Domain allowlist — prevents data exfiltration via WebFetch/HTTP requests.
-Lesson from OpenClaw CVE-2026-25253: token exfiltration via gateway.
+Known failure mode (token exfiltration via HTTP gateway): block outbound requests to non-allowlisted domains.
 """
 
 from __future__ import annotations
