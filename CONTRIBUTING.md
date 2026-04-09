@@ -79,7 +79,6 @@ tests/
 ├── test_guardian.py
 ├── test_hooks_coverage.py
 ├── test_init.py
-├── test_safety_layer10.py
 ├── test_safety_openclaw.py
 ├── test_telegram_daemon.py
 └── sdk_integration/
