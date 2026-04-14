@@ -111,8 +111,32 @@ def detect_container_runtime() -> str:
         console.print("Or OrbStack (Mac, lightweight): https://orbstack.dev")
         sys.exit(1)
 
-    # Probe known contexts — never mutates state
-    for ctx in ["orbstack", "desktop-linux", "default"]:
+    # Dynamically discover contexts — prefer current, fallback to default, then ls
+    probe_contexts: list[str] = []
+    seen: set[str] = set()
+
+    def _add(ctx: str) -> None:
+        ctx = ctx.strip()
+        if ctx and ctx not in seen:
+            seen.add(ctx)
+            probe_contexts.append(ctx)
+
+    current = subprocess.run(
+        ["docker", "context", "show"],
+        capture_output=True, text=True, check=False,
+    )
+    if current.returncode == 0:
+        _add(current.stdout.strip())
+    _add("default")
+    ls = subprocess.run(
+        ["docker", "context", "ls", "--format", "{{.Name}}"],
+        capture_output=True, text=True, check=False,
+    )
+    if ls.returncode == 0:
+        for name in ls.stdout.splitlines():
+            _add(name)
+
+    for ctx in probe_contexts:
         result = subprocess.run(
             ["docker", "--context", ctx, "info"],
             capture_output=True,
@@ -496,7 +520,7 @@ def setup_dashboard(cfg: PocketTeamConfig) -> None:
     check_disk_space(min_mb=600)
 
     # Step 3: Try to pull pre-built image first (works for pipx installations)
-    image_ref = f"{DASHBOARD_REGISTRY_IMAGE}:latest"
+    image_ref = f"{DASHBOARD_REGISTRY_IMAGE}:{DASHBOARD_VERSION}"
     console.print(f"  Pulling dashboard image...")
     pull_result = subprocess.run(
         ["docker", "--context", detected_context, "pull", image_ref],

@@ -116,19 +116,37 @@ async def run_init(
         # Safety net: ensure plugin is installed even on re-init without reconfigure
         _setup_telegram_plugin(cfg.telegram.bot_token)
 
-    # Telegram auto-session daemon (macOS launchd)
+    # Telegram auto-session daemon (platform dispatch)
     if tg_active:
         try:
-            from .telegram_daemon_plist import install_plist, is_macos
-            if is_macos():
-                daemon_ok = install_plist(project_root)
-                if daemon_ok:
-                    console.print("  [green]✓[/] Telegram auto-session daemon installed")
-                    console.print(
-                        "    [dim]Messages while Claude is offline will auto-start a session[/]"
-                    )
+            if sys.platform == "darwin":
+                from .telegram_daemon_plist import install_plist, is_macos
+                if is_macos():
+                    daemon_ok = install_plist(project_root)
+                    if daemon_ok:
+                        console.print("  [green]✓[/] Telegram auto-session daemon installed")
+                        console.print(
+                            "    [dim]Messages while Claude is offline will auto-start a session[/]"
+                        )
+                    else:
+                        console.print("  [yellow]⚠[/] Telegram daemon setup failed (check launchctl logs)")
+            elif sys.platform == "linux":
+                from .telegram_daemon_systemd import install_systemd_service, is_systemd_available
+                available, reason = is_systemd_available()
+                if not available:
+                    console.print(f"  [yellow]⚠[/] Telegram daemon: {reason}")
+                    console.print("  [dim]Manual: python -m pocketteam.telegram_daemon --project-root .[/]")
                 else:
-                    console.print("  [yellow]⚠[/] Telegram daemon setup failed (check launchctl logs)")
+                    ok, msg = install_systemd_service(project_root)
+                    if ok:
+                        console.print(f"  [green]✓[/] {msg}")
+                        console.print(
+                            "    [dim]Messages while Claude is offline will auto-start a session[/]"
+                        )
+                    else:
+                        console.print(f"  [yellow]⚠[/] Telegram daemon setup failed: {msg}")
+            else:
+                console.print(f"  [yellow]⚠[/] Telegram daemon not supported on {sys.platform}")
         except Exception as e:
             console.print(f"  [yellow]⚠[/] Telegram daemon skipped: {e}")
 
@@ -347,14 +365,24 @@ async def _interview(
 
                 if not has_bun:
                     console.print()
-                    console.print("  [yellow]Bun is required for Claude Code Channels.[/]")
+                    console.print("  [yellow]Bun is required for ptbrowse (browser automation).[/]")
+                    console.print("  [dim]Note: The Telegram daemon does NOT require Bun.[/]")
                     console.print()
-                    install_bun = Confirm.ask("  Install Bun now?", default=True)
+
+                    install_bun = True
+                    if sys.platform == "linux" and not shutil.which("unzip"):
+                        console.print("  [yellow]⚠[/] 'unzip' is required to install Bun.")
+                        console.print("  Install it first: [bold]sudo apt install unzip[/] (Debian/Ubuntu)")
+                        console.print("                 or [bold]sudo yum install unzip[/] (RHEL/CentOS)")
+                        install_bun = False
+
+                    if install_bun:
+                        install_bun = Confirm.ask("  Install Bun now?", default=True)
+
                     if install_bun:
                         console.print("  Installing Bun...")
                         result = subprocess.run(
                             ["bash", "-c", "curl -fsSL https://bun.sh/install | bash"],
-                            capture_output=True, text=True,
                         )
                         if result.returncode == 0:
                             # Bun installs to ~/.bun/bin/ — add to PATH immediately
@@ -366,7 +394,8 @@ async def _interview(
                         else:
                             console.print("  [red]Install failed.[/]")
                             console.print("  Run manually: [bold]curl -fsSL https://bun.sh/install | bash[/]")
-                            console.print("  Then: [bold]source ~/.zshrc && pocketteam init[/]")
+                            shell_rc = _detect_shell_rc()
+                            console.print(f"  Then: [bold]source {shell_rc} && pocketteam init[/]")
 
                 console.print()
                 console.print("  [bold]Step 3a:[/] Create your Telegram bot")
@@ -1320,6 +1349,16 @@ jobs:
 """
 
     workflow_path.write_text(workflow)
+
+
+def _detect_shell_rc() -> str:
+    """Return the shell RC file path based on $SHELL environment variable."""
+    shell = os.environ.get("SHELL", "")
+    if "zsh" in shell:
+        return "~/.zshrc"
+    if "fish" in shell:
+        return "~/.config/fish/config.fish"
+    return "~/.bashrc"
 
 
 def _create_gitignore(project_root: Path) -> None:
