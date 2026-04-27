@@ -12,8 +12,11 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shlex
+import shutil
 import signal
+import subprocess
 import sys
 import time
 from datetime import datetime, UTC
@@ -24,6 +27,14 @@ import httpx
 logger = logging.getLogger("pocketteam.telegram_daemon")
 
 LAUNCH_COOLDOWN_SECONDS = 300.0
+
+
+def _slugify(name: str) -> str:
+    """Convert a project name to a safe slug for use in service/session names."""
+    raw = name.lower()
+    slug = re.sub(r"[^a-z0-9-]", "-", raw)
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    return slug or "project"
 
 
 class TelegramDaemon:
@@ -182,7 +193,17 @@ class TelegramDaemon:
             pass
         logger.info("Wrote message to inbox: %.60s", text)
 
-    async def _launch_session(self, message_text: str):  # noqa: ARG002 — kept for API compatibility; inbox prompt is now in COO initialPrompt
+    async def _launch_session(self, message_text: str) -> bool:
+        """Dispatcher: launch a Claude session via the appropriate mechanism."""
+        if sys.platform == "darwin":
+            return await self._launch_via_osascript(message_text)
+        elif sys.platform == "linux":
+            return await self._launch_via_tmux(message_text)
+        else:
+            logger.warning("Session auto-launch not supported on %s", sys.platform)
+            return False
+
+    async def _launch_via_osascript(self, message_text: str):  # noqa: ARG002 — kept for API compatibility; inbox prompt is now in COO initialPrompt
         claude_path = self._find_claude()
         if not claude_path:
             logger.error("claude CLI not found in PATH")
@@ -252,8 +273,6 @@ class TelegramDaemon:
 
     def _find_claude(self) -> str | None:
         """Find the claude CLI binary in PATH and known install locations."""
-        import shutil
-
         candidates = [
             shutil.which("claude"),
             os.path.expanduser("~/.claude/local/claude"),
@@ -265,13 +284,85 @@ class TelegramDaemon:
                 return path
         return None
 
+    def _find_tmux(self) -> str | None:
+        """Find the tmux binary in PATH and known install locations."""
+        candidates = [
+            "/usr/bin/tmux",
+            "/usr/local/bin/tmux",
+            "/opt/homebrew/bin/tmux",
+            shutil.which("tmux"),
+        ]
+        for path in candidates:
+            if path and os.path.isfile(path):
+                return path
+        return None
+
+    def _tmux_session_name(self, project_root: Path) -> str:
+        """Return a tmux session name unique to this project."""
+        return f"pocketteam-{_slugify(project_root.name)}"
+
+    async def _launch_via_tmux(self, message_text: str) -> bool:  # noqa: ARG002
+        """Launch a Claude session via tmux (Linux path)."""
+        tmux_path = self._find_tmux()
+        if not tmux_path:
+            logger.error("tmux not found — install tmux to enable session auto-launch on Linux")
+            return False
+
+        claude_path = self._find_claude()
+        if not claude_path:
+            logger.error("claude CLI not found in PATH")
+            return False
+
+        session_name = self._tmux_session_name(self.project_root)
+
+        # Reuse an existing session if one is already running
+        check = subprocess.run(
+            [tmux_path, "has-session", "-t", session_name],
+            capture_output=True,
+        )
+        if check.returncode == 0:
+            logger.info("Reusing existing tmux session: %s", session_name)
+            return True
+
+        self.sessions_launched += 1
+        self._write_state("launching")
+
+        # Write launching lock atomically
+        self.launching_lock.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.launching_lock.parent / f".launching.lock.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps({"ts": time.time(), "pid": os.getpid()}))
+        os.replace(tmp, self.launching_lock)
+
+        claude_quoted = shlex.quote(claude_path)
+        cmd = f"{claude_quoted} --continue || {claude_quoted}"
+
+        try:
+            result = subprocess.run(
+                [
+                    tmux_path, "new-session", "-d",
+                    "-s", session_name,
+                    "-c", str(self.project_root),
+                    "sh", "-c", cmd,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+            if result.returncode != 0:
+                logger.error("tmux new-session failed: %s", result.stderr.decode())
+                return False
+            logger.info("tmux session '%s' started for %s", session_name, self.project_root)
+            return True
+        except Exception:
+            logger.exception("Failed to launch tmux session")
+            return False
+        finally:
+            self.launching_lock.unlink(missing_ok=True)
+
     def _is_claude_running(self) -> bool:
         """Check if any Claude Code session is already running."""
-        import subprocess as sp
-
         # Method 1: Check for Claude CLI processes
         try:
-            result = sp.run(
+            result = subprocess.run(
                 ["pgrep", "-f", "claude.*--dangerously-skip-permissions"],
                 capture_output=True, text=True, timeout=5,
             )
