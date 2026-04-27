@@ -86,8 +86,8 @@ class TestHealerHealthFailure:
         # Second call: session prompt with analysis instructions
         session_msg = mock_tg.call_args_list[1].args[2]
         assert "INCIDENT" in session_msg
-        assert "Fix-Plan" in session_msg
-        assert "KEINE Änderungen" in session_msg
+        assert "fix plan" in session_msg.lower()
+        assert "Do NOT make any changes" in session_msg
 
     @pytest.mark.asyncio
     async def test_no_telegram_without_credentials(
@@ -129,7 +129,7 @@ class TestHealerLogAnomaly:
         assert mock_tg.call_count == 2
         session_msg = mock_tg.call_args_list[1].args[2]
         assert "Connection refused" in session_msg
-        assert "Root Cause" in session_msg
+        assert "root cause" in session_msg.lower()
 
     @pytest.mark.asyncio
     async def test_truncates_long_error_summary(
