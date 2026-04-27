@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.28] - 2026-04-10
+
+### Added
+- **Linux systemd support** — `pocketteam/telegram_daemon_systemd.py`: user-level systemd unit
+  (`~/.config/systemd/user/`) for the Telegram auto-session daemon. No sudo required.
+  Supports degraded systemd (Hetzner cloud-init). Enables linger for daemon persistence
+  after logout. Rejects project paths with spaces. Idempotent on re-init.
+- **tmux session launch on Linux** — `_launch_via_tmux` in `telegram_daemon.py`:
+  launches Claude via tmux when no existing session is found. Uses `shlex.quote` for
+  safe argument handling. Atomic `launching_lock` write. Parity with macOS path.
+- **Multi-arch Docker image** — `.github/workflows/docker-release.yml`: buildx + QEMU,
+  builds `linux/amd64` + `linux/arm64`. Conditional `:latest` tag (historical rebuilds
+  without overwriting `:latest`). Triggered by `v*` tags and `workflow_dispatch`.
+- **`_detect_shell_rc()` helper** in `init.py` — detects zsh/fish/bash from `$SHELL` for
+  correct shell RC file in error messages.
+
+### Fixed
+- **Dashboard image pinned to `:{DASHBOARD_VERSION}`** — was hardcoded `:latest`, now
+  tracks the installed version (`1.0.28`). `DASHBOARD_VERSION` constant updated accordingly.
+- **Dynamic Docker context detection** — replaces hardcoded `["orbstack", "desktop-linux",
+  "default"]` probe with dynamic discovery via `docker context show` + `docker context ls`.
+  Prefers current context, falls back to `default`, then all known contexts.
+- **Bun install UX on Linux** — preflight check for `unzip` (required by Bun installer).
+  Removed `capture_output=True` so output streams live. Updated messaging to correctly
+  attribute Bun to `ptbrowse` (not Telegram daemon). Uses `_detect_shell_rc()` instead
+  of hardcoded `~/.zshrc`.
+- **Telegram daemon init dispatch** — `init.py` now dispatches to `install_plist` (macOS),
+  `install_systemd_service` (Linux), or a warning (other platforms). Previously silently
+  skipped on Linux.
+
+---
+
 ## [1.0.27] - 2026-04-09
 ### Fixed
 - README overhaul: removed dishonest marketing claims, OpenClaw fear-selling, biased comparison table
