@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.29] - 2026-04-27
+
+### Security
+- Patch 5 dashboard npm CVEs (vite, lodash, postcss): vite 6.4.2 (Arbitrary File Read via Dev Server WebSocket HIGH, Path Traversal in Optimized Deps Moderate), lodash 4.18.1 (Code Injection via `_.template` HIGH, Prototype Pollution via `_.unset`/`_.omit` Moderate), postcss 8.5.12 (XSS via Unescaped `</style>` Moderate)
+
+---
+
 ## [1.0.28] - 2026-04-10
 
 ### Added
