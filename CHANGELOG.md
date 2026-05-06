@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.30] - 2026-04-27
+
+### Privacy
+- Anonymize all author email metadata to GitHub noreply (privacy)
+
+---
+
 ## [1.0.29] - 2026-04-27
 
 ### Security
