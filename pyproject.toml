@@ -8,7 +8,7 @@ version = "1.0.29"
 description = "Your autonomous AI IT team. 12 agents. 59 skills. 9 safety layers. Self-healing via GitHub Actions."
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{name = "Farid", email = "186043479+Farid046@users.noreply.github.com"}]
+authors = [{name = "Farid046", email = "186043479+Farid046@users.noreply.github.com"}]
 requires-python = ">=3.11"
 keywords = ["ai-agent", "agent-framework", "autonomous-agents", "multi-agent", "claude-code", "agentic-ai", "self-healing", "developer-tools", "devops", "monitoring"]
 classifiers = [
