@@ -36,7 +36,7 @@
     "@types/three": "^0.183.1",
     "@types/ws": "^8.5.0",
     "@vitejs/plugin-react": "^4.3.0",
-    "concurrently": "^9.0.0",
+    "concurrently": "^9.2.4",
     "eslint": "^9.0.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^7.0.1",
